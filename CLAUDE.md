@@ -95,6 +95,16 @@ The $500 Anthropic credits fund the product's runtime API calls. Budget aggressi
 
 Do not artificially downgrade to Sonnet to save credits on quality-critical agents.
 
+### Rule 9 — Telegram-native affordances must match the demo promise
+
+Two affordances are not optional polish — they are architectural:
+
+1. **Streaming Phase 1 progress.** The `forward_job` handler MUST use `asyncio.as_completed` (not `gather`) and edit the in-progress Telegram message each time a sub-agent resolves. The bot's `bot/progress_stream.py` module wraps this with a 1.2s debounce for Telegram's edit rate limit. A batch-complete "here are all 8 results at once" response is a regression — the demo video promises progressive reveals and the real bot must deliver them.
+
+2. **File generation for CV and cover letter.** `handle_draft_cv` and `handle_draft_cover_letter` MUST produce both a `.docx` (via `python-docx`) and a `.pdf` (via `reportlab`) through the `renderers/` package, and the bot MUST send both via `send_document` alongside any chat-bubble preview. In-chat Markdown is a preview, not the deliverable. The user's goal is to attach a real file to a real application — the product must close that loop.
+
+No file generation for `LikelyQuestionsOutput` or `SalaryRecommendation` — those live better as scrollable chat content.
+
 ---
 
 ## Stack
@@ -111,6 +121,7 @@ Do not artificially downgrade to Sonnet to save credits on quality-critical agen
 | Embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`) + `faiss-cpu` | Local, fast, 384-dim |
 | Validation | `pydantic` v2 | Every LLM I/O goes through it |
 | Dashboard | `streamlit` | Single-page history view, fast to ship |
+| File rendering | `python-docx` + `reportlab` | CV/cover letter as downloadable .docx and .pdf |
 | Tests | `pytest` + `pytest-asyncio` | Light — demo first |
 
 **No LangChain.** Raw SDK + `asyncio.gather` gives full control over sub-agent prompts and is cleaner for the Opus 4.7 parallel pattern.
@@ -191,7 +202,15 @@ trajectory/
 │   │   ├── app.py                  # python-telegram-bot entry point
 │   │   ├── handlers.py             # message handlers per intent
 │   │   ├── onboarding.py           # conversational onboarding flow
-│   │   └── formatting.py           # render structured outputs as Telegram messages
+│   │   ├── formatting.py           # render structured outputs as Telegram messages
+│   │   └── progress_stream.py      # streams Phase 1 sub-agent completion via message edits
+│   │
+│   ├── renderers/                  # structured output -> downloadable file
+│   │   ├── __init__.py
+│   │   ├── cv_docx.py              # python-docx renderer for CVOutput
+│   │   ├── cv_pdf.py               # reportlab renderer for CVOutput
+│   │   ├── cover_letter_docx.py    # python-docx renderer for CoverLetterOutput
+│   │   └── cover_letter_pdf.py     # reportlab renderer for CoverLetterOutput
 │   │
 │   ├── validators/
 │   │   ├── citations.py            # citation resolution & verification

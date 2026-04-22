@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     sqlite_db_path: Path = Path("./data/trajectory.db")
     faiss_index_path: Path = Path("./data/embeddings.faiss")
+    generated_dir: Path = Path("./data/generated")  # CV/cover-letter files
 
     # --- credit budget
     credits_budget_usd: float = 500.0

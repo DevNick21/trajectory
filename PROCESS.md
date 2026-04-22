@@ -368,6 +368,43 @@ Covered in Entry 4. Right call to broaden.
 
 Covered in Entry 11. Philosophical moat — never revisit.
 
+### Rejected: Telegram inline mode, Threaded Mode, Mini Apps
+
+Covered in Entry 21. Inline mode fails the 10-second deadline. Threaded Mode duplicates SQLite session organisation. Mini Apps are a scope nuclear option.
+
+---
+
+## Entry 21 — Telegram-native affordances: streaming + file generation
+
+Wednesday morning, post-planning, pre-build. Re-read the Telegram Bot Platform docs to confirm nothing was left on the table.
+
+**What was on the table before:** Phase 1 runs for ~30 seconds with a placeholder message while the user waits. CV and cover letter outputs arrive as Markdown-formatted chat messages.
+
+**What changed:**
+
+1. **Streaming Phase 1 progress updates.** As each of the 8 sub-agents completes, the bot edits its in-progress message to reflect a tick. User sees the parallel fan-out happening in real time.
+
+2. **File generation for CV and cover letter.** When a Phase 4 generator completes, the bot emits a real `.docx` (python-docx) and `.pdf` (reportlab) and sends both via `send_document`. The chat bubble shows tappable files the user downloads, opens in Word or Preview, and actually uses.
+
+**Why:**
+
+1. *Streaming aligns the real product with the video's visual promise.* The animated narrative shows checkmarks appearing progressively. If the real bot dumps all 8 at once after a 30-second wait, judges spot the gap between demo theatre and product reality. Streaming closes that gap.
+
+2. *File output closes the last-mile loop.* Without it, the "CV" feature is chat-bubble text the user must copy, paste, and reformat. With it, the output is a deliverable they can attach to an application within seconds. This is the difference between "impressive chatbot" and "product I'd use tomorrow."
+
+**Explicitly rejected in the same review:**
+
+- **Inline mode** (`@trajectory` in other chats). Rejected — Telegram's 10-second inline query deadline is incompatible with a 30-second Phase 1 pipeline. Forcing a two-tier inline/private split to work around it is complexity without much win.
+- **Threaded Mode** (per-job topics in the private chat). Rejected — session-per-job already works via SQLite. Threaded Mode mostly adds UI organisation at ~4-5 hours of handler refactoring cost.
+- **Mini Apps** (full JS web app inside Telegram). Rejected — scope nuclear option. Would double build time.
+- **Business Mode, Telegram Stars, affiliate programs.** Rejected — post-hackathon monetization.
+
+**Cost:** ~5 hours of Saturday build, split across streaming (~2–3h, uses `asyncio.as_completed` + edited messages with 1.2s rate-limit buffer) and file generation (~2–3h, python-docx + reportlab templates rendering the structured Pack outputs).
+
+**Unlock:** Two demo moments. The streaming moment is the most visible "Opus 4.7 parallelism" beat in the entire video. The file-generation moment is the most visible "this is a product" beat.
+
+**Risk noted:** Telegram's message-edit rate limit is approximately 1 edit/second per chat. Mitigation: debounce updates to at most 1 every 1.2 seconds; batch any sub-agents completing inside that window into the next edit.
+
 ---
 
 ## Post-hackathon roadmap (noted, not built)

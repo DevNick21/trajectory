@@ -103,6 +103,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("./data")
     sqlite_db_path: Path = Path("./data/trajectory.db")
     faiss_index_path: Path = Path("./data/embeddings.faiss")
+    generated_dir: Path = Path("./data/generated")   # CV/cover letter files
 
     # budget
     credits_budget_usd: float = 500.0
@@ -496,13 +497,141 @@ def format_verdict(v: Verdict) -> list[str]:
     """Telegram has 4096-char limit per message; split if needed."""
 
 def format_cv_output(cv: CVOutput) -> list[str]:
-    """Render as inline Markdown (Telegram supports)."""
+    """Render as inline Markdown (Telegram supports).
+    Note: for CV, the docx/pdf files are the primary deliverable.
+    This formatter produces a brief in-chat preview + 'see attached'."""
 
 def format_cover_letter(cl: CoverLetterOutput) -> list[str]: ...
 def format_likely_questions(lq: LikelyQuestionsOutput) -> list[str]: ...
 def format_salary_recommendation(s: SalaryRecommendation) -> list[str]: ...
 def format_citation(c: Citation) -> str: ...
+
+def format_phase1_progress(
+    completed_agents: list[str],
+    all_agents: list[str],
+) -> str:
+    """Render the current Phase 1 status list. Completed agents show
+    as '✓ Agent'; pending show as '○ Agent'. Used by progress_stream
+    to edit the in-progress message."""
 ```
+
+### `bot/progress_stream.py`
+
+Streams Phase 1 sub-agent completion back to the user in near-real-time by editing a single in-progress Telegram message.
+
+```python
+from telegram import Bot
+from telegram.error import RetryAfter, TimedOut
+
+class PhaseOneProgressStreamer:
+    """
+    Edits a single Telegram message to reflect sub-agent completion
+    as asyncio tasks resolve. Respects Telegram's ~1 edit/sec rate
+    limit by debouncing to max 1 edit every 1.2 seconds.
+
+    Usage:
+        streamer = PhaseOneProgressStreamer(bot, chat_id, message_id,
+                                             all_agents=[...])
+        async for agent_name in streamer.watch(asyncio.as_completed(tasks)):
+            # each iteration yields the name of the just-finished agent
+            pass
+    """
+
+    def __init__(
+        self,
+        bot: Bot,
+        chat_id: int,
+        message_id: int,
+        all_agents: list[str],
+        debounce_seconds: float = 1.2,
+    ): ...
+
+    async def mark_complete(self, agent_name: str) -> None:
+        """Mark an agent done; schedule an edit if outside debounce window."""
+
+    async def flush(self) -> None:
+        """Final edit showing all-complete state."""
+
+    async def _edit_with_backoff(self, text: str) -> None:
+        """Swallows RetryAfter + TimedOut. Re-raises on anything else."""
+```
+
+**Integration point:** `orchestrator.handle_forward_job` sends the initial "Running 8 checks..." message, captures the `message_id`, constructs a `PhaseOneProgressStreamer`, and wraps the `asyncio.as_completed` loop. Each resolved sub-agent triggers a debounced edit.
+
+**Why `as_completed` vs `gather`:** `gather` returns all at once. `as_completed` yields per-task as they finish — ideal for streaming. The Phase 1 bundle assembly still waits for all tasks (or their timeouts) before the verdict call.
+
+---
+
+## `src/trajectory/renderers/`
+
+New package. Converts structured Phase 4 outputs into downloadable files sent via Telegram's `send_document`.
+
+### `renderers/__init__.py`
+
+```python
+from .cv_docx import render_cv_docx
+from .cv_pdf import render_cv_pdf
+from .cover_letter_docx import render_cover_letter_docx
+from .cover_letter_pdf import render_cover_letter_pdf
+
+__all__ = [
+    "render_cv_docx",
+    "render_cv_pdf",
+    "render_cover_letter_docx",
+    "render_cover_letter_pdf",
+]
+```
+
+### `renderers/cv_docx.py`
+
+Uses `python-docx`. Renders a `CVOutput` into a Word document. UK-convention layout (reverse-chron, 2-page max, simple type hierarchy). Citation markers are stripped during rendering.
+
+```python
+from pathlib import Path
+from docx import Document
+from trajectory.schemas import CVOutput
+
+def render_cv_docx(cv: CVOutput, out_dir: Path) -> Path:
+    """
+    Produces {user_name}_CV_{company}_{timestamp}.docx in out_dir.
+    Returns the path. Caller sends via bot.send_document.
+    """
+```
+
+### `renderers/cv_pdf.py`
+
+Uses `reportlab` to emit a matching PDF from the same `CVOutput`. Some recruiters prefer PDF; some ATS prefer docx. Ship both.
+
+```python
+def render_cv_pdf(cv: CVOutput, out_dir: Path) -> Path: ...
+```
+
+### `renderers/cover_letter_docx.py` + `renderers/cover_letter_pdf.py`
+
+Same pattern for `CoverLetterOutput`. Address block top-left; paragraphs; signoff; date.
+
+```python
+def render_cover_letter_docx(cl: CoverLetterOutput, out_dir: Path) -> Path: ...
+def render_cover_letter_pdf(cl: CoverLetterOutput, out_dir: Path) -> Path: ...
+```
+
+**Output directory:** `./data/generated/{user_id}/` — git-ignored, auto-cleaned for files >30 days old on bot startup.
+
+**Design note:** no file generation for `LikelyQuestionsOutput` or `SalaryRecommendation` — those live better as in-chat content the user scrolls through. Files only for things the user will actually attach to an application.
+
+**Orchestrator handler update:**
+
+```python
+# orchestrator.handle_draft_cv — updated sketch
+async def handle_draft_cv(user, session_ref, extra) -> tuple[CVOutput, Path, Path]:
+    cv_output = await cv_tailor.generate(...)
+    # audit + retries as before
+    docx_path = render_cv_docx(cv_output, settings.generated_dir / user.user_id)
+    pdf_path = render_cv_pdf(cv_output, settings.generated_dir / user.user_id)
+    return cv_output, docx_path, pdf_path
+```
+
+The bot handler then calls `send_document(docx_path)` and `send_document(pdf_path)` in sequence alongside the chat-bubble preview.
 
 ---
 
@@ -626,6 +755,8 @@ dependencies = [
     "pydantic-settings>=2.2.0",
     "streamlit>=1.35.0",
     "python-jobspy>=1.1.0",
+    "python-docx>=1.1.0",       # renderers/*_docx.py
+    "reportlab>=4.1.0",         # renderers/*_pdf.py
 ]
 
 [project.optional-dependencies]
@@ -657,6 +788,7 @@ data/raw/
 data/processed/
 data/trajectory.db
 data/embeddings.faiss
+data/generated/
 *.log
 .pytest_cache/
 .ruff_cache/

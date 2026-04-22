@@ -9,6 +9,7 @@ data/processed/
 data/trajectory.db
 data/trajectory.db-journal
 data/embeddings.faiss
+data/generated/
 *.log
 .pytest_cache/
 .ruff_cache/
