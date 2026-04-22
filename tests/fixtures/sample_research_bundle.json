@@ -111,14 +111,35 @@
     "age_days": 5
   },
   "salary_signals": {
-    "posted_band": {"min": 70000, "max": 90000, "currency": "GBP"},
-    "glassdoor_range": null,
-    "levels_fyi_range": null,
-    "market_p10": 52000,
-    "market_p50": 72000,
-    "market_p90": 95000,
-    "sources_consulted": ["jd_posted_band"],
+    "ashe": {
+      "granularity": "soc4_region",
+      "soc_code": "2136",
+      "region": "London",
+      "p10": 42000,
+      "p25": 55000,
+      "p50": 70000,
+      "p75": 88000,
+      "p90": 110000,
+      "sample_year": 2024
+    },
+    "posted_band": {
+      "min_gbp": 70000,
+      "max_gbp": 90000,
+      "period": "annual",
+      "source_url": "https://acmetech.io/careers",
+      "verbatim_snippet": "£70,000 - £90,000"
+    },
+    "aggregated_postings": null,
+    "sources_consulted": ["ashe_soc4_region", "posted_jd"],
     "data_citations": [
+      {
+        "kind": "gov_data",
+        "url": null,
+        "verbatim_snippet": null,
+        "data_field": "ashe.soc4_region.2136.p50",
+        "data_value": "70000",
+        "entry_id": null
+      },
       {
         "kind": "url_snippet",
         "url": "https://acmetech.io/careers",

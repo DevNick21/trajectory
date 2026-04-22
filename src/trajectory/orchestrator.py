@@ -31,7 +31,7 @@ from .schemas import (
     WritingStyleProfile,
 )
 from .storage import Storage
-from .validators.citations import validate_citations
+from .validators.citations import validate_output as validate_citations  # noqa: F401
 
 log = logging.getLogger(__name__)
 
@@ -130,10 +130,10 @@ async def handle_forward_job(
     async def run_salary():
         try:
             result = await sal_agent.fetch(
-                role_title=jd.role_title,
+                role=jd.role_title,
                 location=jd.location,
-                jd=jd,
-                session_id=session.session_id,
+                soc_code=jd.soc_code_guess,
+                posted_band=dict(jd.salary_band) if jd.salary_band else None,
             )
             await mark("salary_data")
             return result
@@ -355,13 +355,13 @@ async def handle_draft_cv(
     company_name = bundle.company_research.company_name if bundle else "the company"
 
     async def generator():
-        return await cv_tailor.tailor(
+        return await cv_tailor.generate(
+            jd=bundle.extracted_jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
             style_profile=style_profile,
-            star_polishes=star_polishes,
-            session_id=session.session_id,
+            star_material=star_polishes,
         )
 
     cv = await generator()
@@ -394,13 +394,13 @@ async def handle_draft_cover_letter(
     company_name = bundle.company_research.company_name if bundle else "the company"
 
     async def generator():
-        return await cover_letter.write(
+        return await cover_letter.generate(
+            jd=bundle.extracted_jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
             style_profile=style_profile,
-            star_polishes=star_polishes,
-            session_id=session.session_id,
+            star_material=star_polishes,
         )
 
     cl = await generator()
@@ -430,11 +430,11 @@ async def handle_predict_questions(
     company_name = bundle.company_research.company_name if bundle else "the company"
 
     async def generator():
-        return await likely_questions.predict(
+        return await likely_questions.generate(
+            jd=bundle.extracted_jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
-            session_id=session.session_id,
         )
 
     lq = await generator()
@@ -456,16 +456,12 @@ async def handle_salary_advice(
     if not bundle:
         raise ValueError("No research bundle — forward a job first")
 
-    return await salary_strategist.strategise(
+    return await salary_strategist.generate(
         jd=bundle.extracted_jd,
-        company_research=bundle.company_research,
-        salary_signals=bundle.salary_signals,
+        research_bundle=bundle,
         user=user,
-        job_search_context=ctx,
+        context=ctx,
         style_profile=style_profile,
-        companies_house=bundle.companies_house,
-        soc_check=bundle.soc_check,
-        session_id=session.session_id,
     )
 
 
@@ -528,13 +524,12 @@ async def handle_draft_reply(
         user_id=user.user_id, query=incoming_message[:200], k=5
     )
 
-    return await draft_reply.draft(
+    return await draft_reply.generate(
         incoming_message=incoming_message,
-        user_intent=user_intent,  # type: ignore[arg-type]
+        user_intent_hint=user_intent,
         user=user,
         style_profile=style_profile,
         relevant_entries=relevant,
-        session_id=session_id,
     )
 
 

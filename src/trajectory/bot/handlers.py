@@ -350,7 +350,6 @@ async def _handle_full_prep(update, context, user, storage, last_session):
     if pack.cv:
         for chunk in format_cv_output(pack.cv):
             await update.message.reply_html(chunk)
-        out_dir = __import__("pathlib").Path(str(pack.session_id))
 
     if pack.cover_letter:
         for chunk in format_cover_letter(pack.cover_letter):

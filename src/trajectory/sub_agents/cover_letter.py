@@ -14,6 +14,7 @@ from ..llm import call_agent
 from ..schemas import (
     CareerEntry,
     CoverLetterOutput,
+    ExtractedJobDescription,
     ResearchBundle,
     STARPolish,
     UserProfile,
@@ -80,15 +81,14 @@ def _post_validate(cl: CoverLetterOutput) -> list[str]:
     return failures
 
 
-async def write(
+async def generate(
+    jd: ExtractedJobDescription,
     research_bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
     style_profile: WritingStyleProfile,
-    star_polishes: Optional[list[STARPolish]] = None,
-    session_id: Optional[str] = None,
+    star_material: Optional[list[STARPolish]] = None,
 ) -> CoverLetterOutput:
-    jd = research_bundle.extracted_jd
     company = research_bundle.company_research
 
     style_hint = (
@@ -105,8 +105,8 @@ async def write(
     )
 
     polishes_summary = []
-    if star_polishes:
-        for p in star_polishes:
+    if star_material:
+        for p in star_material:
             polishes_summary.append(
                 {
                     "question": p.question,
@@ -155,6 +155,5 @@ async def write(
         output_schema=CoverLetterOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        session_id=session_id,
         post_validate=_post_validate,
     )

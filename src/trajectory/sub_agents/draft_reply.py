@@ -78,14 +78,12 @@ def _post_validate(reply: DraftReplyOutput) -> list[str]:
     return failures
 
 
-async def draft(
+async def generate(
     incoming_message: str,
-    user_intent: UserIntent,
+    user_intent_hint: str,
     user: UserProfile,
     style_profile: WritingStyleProfile,
     relevant_entries: Optional[list[CareerEntry]] = None,
-    session_context: Optional[str] = None,
-    session_id: Optional[str] = None,
 ) -> DraftReplyOutput:
     style_hint = (
         f"tone={style_profile.tone}, "
@@ -103,7 +101,7 @@ async def draft(
     user_input = json.dumps(
         {
             "incoming_message": incoming_message,
-            "user_intent": user_intent,
+            "user_intent": user_intent_hint,
             "user_name": user.name,
             "salary_floor": user.salary_floor,
             "current_employment": user.current_employment,
@@ -114,7 +112,6 @@ async def draft(
                 "examples": style_profile.examples[:3],
             },
             "relevant_entries": entries_summary,
-            "session_context": session_context or "",
         },
         default=str,
     )
@@ -126,6 +123,5 @@ async def draft(
         output_schema=DraftReplyOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        session_id=session_id,
         post_validate=_post_validate,
     )

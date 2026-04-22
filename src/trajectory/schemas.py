@@ -313,13 +313,38 @@ class GhostJobAssessment(BaseModel):
     age_days: Optional[int] = None
 
 
+class AshePercentiles(BaseModel):
+    granularity: Literal["soc4_region", "soc2_region", "soc2_national"]
+    soc_code: str
+    region: Optional[str] = None
+    p10: Optional[int] = None
+    p25: Optional[int] = None
+    p50: Optional[int] = None
+    p75: Optional[int] = None
+    p90: Optional[int] = None
+    sample_year: int
+
+
+class PostedBand(BaseModel):
+    min_gbp: int
+    max_gbp: int
+    period: Literal["annual", "hourly", "daily"]
+    source_url: str
+    verbatim_snippet: str
+
+
+class AggregatedPostings(BaseModel):
+    listings_count: int
+    p25_gbp: Optional[int] = None
+    p50_gbp: Optional[int] = None
+    p75_gbp: Optional[int] = None
+    sample_urls: list[str] = Field(default_factory=list)
+
+
 class SalarySignals(BaseModel):
-    posted_band: Optional[dict] = None
-    glassdoor_range: Optional[dict] = None
-    levels_fyi_range: Optional[dict] = None
-    market_p10: Optional[int] = None
-    market_p50: Optional[int] = None
-    market_p90: Optional[int] = None
+    ashe: Optional[AshePercentiles] = None
+    posted_band: Optional[PostedBand] = None
+    aggregated_postings: Optional[AggregatedPostings] = None
     sources_consulted: list[str]
     data_citations: list[Citation]
 

@@ -95,12 +95,15 @@ All LLM outputs are Pydantic-validated JSON. No free-form prose from sub-agents.
 - **Anthropic SDK** — Opus 4.7 (quality-critical reasoning) + Sonnet 4.6 (extraction)
 - **python-telegram-bot v21** — async long-polling
 - **Playwright + trafilatura + BeautifulSoup** — web scraping
-- **pandas + pyarrow** — Sponsor Register, going rates, SOC codes (parquet)
+- **python-jobspy** — public-page job listing aggregation (Indeed, LinkedIn)
+- **pandas + pyarrow** — Sponsor Register, going rates, SOC codes, ASHE Tables 2/3/15 (parquet)
 - **SQLite + aiosqlite** — sessions, career entries, cost log
 - **sentence-transformers + FAISS** — semantic retrieval over career history
 - **python-docx + reportlab** — CV and cover letter file generation
 - **Streamlit** — session history dashboard
 - **Pydantic v2** — every LLM input and output
+
+No RapidAPI. No closed-source API marketplace wrappers. All salary data from ONS (ASHE) and open public sources.
 
 ---
 
@@ -112,7 +115,6 @@ All LLM outputs are Pydantic-validated JSON. No free-form prose from sub-agents.
 - A Telegram bot token ([BotFather](https://t.me/botfather))
 - Anthropic API key
 - Companies House API key (free — [register here](https://developer.company-information.service.gov.uk/))
-- RapidAPI key (Glassdoor salary data — optional, degrades gracefully)
 
 ### Install
 
@@ -136,7 +138,6 @@ cp .env.example .env
 ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=...
 COMPANIES_HOUSE_API_KEY=...
-RAPIDAPI_KEY=...
 ```
 
 ### Fetch UK government data
@@ -145,7 +146,7 @@ RAPIDAPI_KEY=...
 python scripts/fetch_gov_data.py
 ```
 
-Downloads the Sponsor Register, Skilled Worker going rates, Appendix Skilled Occupations, and SOC 2020 codes. Takes ~60 seconds. Rerun whenever you want fresh data.
+Downloads the Sponsor Register, Skilled Worker going rates, Appendix Skilled Occupations, SOC 2020 codes, and ASHE Tables 2/3/15 (ONS annual earnings percentiles). Takes ~2 minutes on first run. Rerun to refresh data.
 
 ### Run
 

@@ -7,18 +7,14 @@ System prompt verbatim from AGENTS.md §11.
 from __future__ import annotations
 
 import json
-from typing import Optional
 
 from ..config import settings
 from ..llm import call_agent
 from ..schemas import (
-    ExtractedJobDescription,
-    CompanyResearch,
-    CompaniesHouseSnapshot,
     JobSearchContext,
+    ExtractedJobDescription,
+    ResearchBundle,
     SalaryRecommendation,
-    SalarySignals,
-    SocCheckResult,
     UserProfile,
     WritingStyleProfile,
 )
@@ -106,16 +102,12 @@ def _post_validate(rec: SalaryRecommendation) -> list[str]:
     return failures
 
 
-async def strategise(
+async def generate(
     jd: ExtractedJobDescription,
-    company_research: CompanyResearch,
-    salary_signals: SalarySignals,
+    research_bundle: ResearchBundle,
     user: UserProfile,
-    job_search_context: JobSearchContext,
+    context: JobSearchContext,
     style_profile: WritingStyleProfile,
-    companies_house: Optional[CompaniesHouseSnapshot] = None,
-    soc_check: Optional[SocCheckResult] = None,
-    session_id: Optional[str] = None,
 ) -> SalaryRecommendation:
     style_hint = (
         f"tone={style_profile.tone}, "
@@ -124,20 +116,33 @@ async def strategise(
     )
 
     ch_summary: dict = {}
-    if companies_house:
+    if research_bundle.companies_house:
+        ch = research_bundle.companies_house
         ch_summary = {
-            "status": companies_house.status,
-            "accounts_overdue": companies_house.accounts_overdue,
-            "no_filings_in_years": companies_house.no_filings_in_years,
+            "status": ch.status,
+            "accounts_overdue": ch.accounts_overdue,
+            "no_filings_in_years": ch.no_filings_in_years,
         }
 
     soc_summary: dict = {}
-    if soc_check:
+    if research_bundle.soc_check:
+        soc = research_bundle.soc_check
         soc_summary = {
-            "going_rate_gbp": soc_check.going_rate_gbp,
-            "new_entrant_rate_gbp": soc_check.new_entrant_rate_gbp,
-            "below_threshold": soc_check.below_threshold,
-            "shortfall_gbp": soc_check.shortfall_gbp,
+            "going_rate_gbp": soc.going_rate_gbp,
+            "new_entrant_rate_gbp": soc.new_entrant_rate_gbp,
+            "below_threshold": soc.below_threshold,
+            "shortfall_gbp": soc.shortfall_gbp,
+        }
+
+    sal = research_bundle.salary_signals
+    ashe_summary: dict = {}
+    if sal.ashe:
+        ashe_summary = {
+            "granularity": sal.ashe.granularity,
+            "p10": sal.ashe.p10,
+            "p50": sal.ashe.p50,
+            "p90": sal.ashe.p90,
+            "sample_year": sal.ashe.sample_year,
         }
 
     user_input = json.dumps(
@@ -148,17 +153,15 @@ async def strategise(
             "user_floor": user.salary_floor,
             "user_target": user.salary_target,
             "user_type": user.user_type,
-            "urgency": job_search_context.urgency_level,
-            "recent_rejections": job_search_context.recent_rejections_count,
-            "months_until_visa_expiry": job_search_context.months_until_visa_expiry,
-            "search_duration_months": job_search_context.search_duration_months,
+            "urgency": context.urgency_level,
+            "recent_rejections": context.recent_rejections_count,
+            "months_until_visa_expiry": context.months_until_visa_expiry,
+            "search_duration_months": context.search_duration_months,
             "salary_signals": {
-                "posted_band": salary_signals.posted_band,
-                "glassdoor_range": salary_signals.glassdoor_range,
-                "market_p10": salary_signals.market_p10,
-                "market_p50": salary_signals.market_p50,
-                "market_p90": salary_signals.market_p90,
-                "sources_consulted": salary_signals.sources_consulted,
+                "ashe": ashe_summary,
+                "posted_band": sal.posted_band.model_dump() if sal.posted_band else None,
+                "aggregated_postings": sal.aggregated_postings.model_dump() if sal.aggregated_postings else None,
+                "sources_consulted": sal.sources_consulted,
             },
             "companies_house": ch_summary,
             "soc_check": soc_summary,
@@ -175,6 +178,5 @@ async def strategise(
         output_schema=SalaryRecommendation,
         model=settings.opus_model_id,
         effort="xhigh",
-        session_id=session_id,
         post_validate=_post_validate,
     )
