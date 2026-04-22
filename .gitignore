@@ -1,22 +1,69 @@
+# Internal design docs — keep README.md only
+*.md
+!README.md
+
+# Environment
 .env
+.env.local
+
+# Python
 .venv/
 venv/
+env/
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+MANIFEST
+
+# Data — runtime, auto-generated, never commit
 data/raw/
 data/processed/
 data/trajectory.db
 data/trajectory.db-journal
+data/trajectory.db-shm
+data/trajectory.db-wal
 data/embeddings.faiss
+data/embeddings.faiss.ids.json
 data/generated/
+
+# Logs
 *.log
+logs/
+
+# Test / lint caches
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Build artefacts
 dist/
 build/
-*.egg-info/
+
+# Playwright
+playwright-report/
+test-results/
+
+# OS
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/secrets.toml
