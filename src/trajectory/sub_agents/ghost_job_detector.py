@@ -100,8 +100,13 @@ async def _score_jd(
 # ---------------------------------------------------------------------------
 
 
-def _stale_signal(jd: ExtractedJobDescription) -> Optional[GhostSignal]:
+def _stale_signal(
+    jd: ExtractedJobDescription, job_url: str
+) -> Optional[GhostSignal]:
     if jd.posted_date is None:
+        return None
+    if not job_url:
+        # No defensible citation without the JD URL.
         return None
     age_days = (date.today() - jd.posted_date).days
     if age_days < 30:
@@ -112,7 +117,7 @@ def _stale_signal(jd: ExtractedJobDescription) -> Optional[GhostSignal]:
         evidence=f"Posted {age_days} days ago ({jd.posted_date.isoformat()}).",
         citation=Citation(
             kind="url_snippet",
-            url="",  # JD URL stitched in at caller if available
+            url=job_url,
             verbatim_snippet=f"Posted {jd.posted_date.isoformat()}",
         ),
         severity=severity,
@@ -122,7 +127,12 @@ def _stale_signal(jd: ExtractedJobDescription) -> Optional[GhostSignal]:
 def _careers_page_signal(cr: CompanyResearch) -> Optional[GhostSignal]:
     if not cr.not_on_careers_page:
         return None
-    careers_url = cr.careers_page_url or ""
+    # Need a real URL for the citation to resolve. If the scraper flagged
+    # not_on_careers_page without identifying the careers page URL, the
+    # signal isn't defensible — drop it rather than emit an unresolvable
+    # citation.
+    if not cr.careers_page_url:
+        return None
     return GhostSignal(
         type="NOT_ON_CAREERS_PAGE",
         evidence=(
@@ -131,7 +141,7 @@ def _careers_page_signal(cr: CompanyResearch) -> Optional[GhostSignal]:
         ),
         citation=Citation(
             kind="url_snippet",
-            url=careers_url,
+            url=cr.careers_page_url,
             verbatim_snippet="not_on_careers_page=true",
         ),
         severity="HARD",
@@ -139,9 +149,11 @@ def _careers_page_signal(cr: CompanyResearch) -> Optional[GhostSignal]:
 
 
 def _vague_jd_signal(
-    jd: ExtractedJobDescription, score: GhostJobJDScore
+    jd: ExtractedJobDescription, score: GhostJobJDScore, job_url: str
 ) -> Optional[GhostSignal]:
     if score.specificity_score >= 2.5:
+        return None
+    if not job_url:
         return None
     severity = "HARD" if score.specificity_score < 1.5 else "SOFT"
     return GhostSignal(
@@ -152,7 +164,7 @@ def _vague_jd_signal(
         ),
         citation=Citation(
             kind="url_snippet",
-            url="",
+            url=job_url,
             verbatim_snippet=(score.vagueness_signals[:1] or [jd.role_title])[0],
         ),
         severity=severity,
@@ -227,15 +239,16 @@ async def score(
     jd: ExtractedJobDescription,
     company_research: CompanyResearch,
     companies_house: Optional[CompaniesHouseSnapshot] = None,
+    job_url: str = "",
     session_id: Optional[str] = None,
 ) -> GhostJobAssessment:
     jd_score = await _score_jd(jd, session_id=session_id)
 
     signals: list[GhostSignal] = []
     for s in (
-        _stale_signal(jd),
+        _stale_signal(jd, job_url),
         _careers_page_signal(company_research),
-        _vague_jd_signal(jd, jd_score),
+        _vague_jd_signal(jd, jd_score, job_url),
         _distress_signal(companies_house),
     ):
         if s is not None:

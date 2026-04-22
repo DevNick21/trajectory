@@ -7,6 +7,7 @@ System prompt verbatim from AGENTS.md §11.
 from __future__ import annotations
 
 import json
+from typing import Optional
 
 from ..config import settings
 from ..llm import call_agent
@@ -19,6 +20,7 @@ from ..schemas import (
     WritingStyleProfile,
 )
 from ..validators.banned_phrases import contains_banned
+from ..validators.citations import ValidationContext, validate_output
 
 SYSTEM_PROMPT = """\
 You are a salary negotiation advisor for a UK candidate.
@@ -90,16 +92,21 @@ OUTPUT: Valid JSON matching SalaryRecommendation schema.
 """
 
 
-def _post_validate(rec: SalaryRecommendation) -> list[str]:
-    failures: list[str] = []
-    if not (rec.floor <= rec.opening_number <= rec.ceiling):
-        failures.append(
-            f"opening_number {rec.opening_number} not in [{rec.floor}, {rec.ceiling}]"
-        )
-    all_scripts = " ".join(rec.scripts.values())
-    for phrase in contains_banned(all_scripts):
-        failures.append(f"Banned phrase in salary script: '{phrase}'")
-    return failures
+def _make_post_validate(citation_ctx: Optional[ValidationContext]):
+    def _post_validate(rec: SalaryRecommendation) -> list[str]:
+        failures: list[str] = []
+        if not (rec.floor <= rec.opening_number <= rec.ceiling):
+            failures.append(
+                f"opening_number {rec.opening_number} not in [{rec.floor}, {rec.ceiling}]"
+            )
+        all_scripts = " ".join(rec.scripts.values())
+        for phrase in contains_banned(all_scripts):
+            failures.append(f"Banned phrase in salary script: '{phrase}'")
+        if citation_ctx is not None:
+            failures.extend(validate_output(rec, citation_ctx))
+        return failures
+
+    return _post_validate
 
 
 async def generate(
@@ -108,6 +115,7 @@ async def generate(
     user: UserProfile,
     context: JobSearchContext,
     style_profile: WritingStyleProfile,
+    citation_ctx: Optional[ValidationContext] = None,
 ) -> SalaryRecommendation:
     style_hint = (
         f"tone={style_profile.tone}, "
@@ -134,6 +142,9 @@ async def generate(
             "shortfall_gbp": soc.shortfall_gbp,
         }
 
+    # Rule 3: writing style must flow into every generator — salary scripts
+    # are voice-sensitive, so pass the full style fingerprint, not just a
+    # short hint string.
     sal = research_bundle.salary_signals
     ashe_summary: dict = {}
     if sal.ashe:
@@ -165,8 +176,12 @@ async def generate(
             },
             "companies_house": ch_summary,
             "soc_check": soc_summary,
-            "writing_style": style_hint,
-            "signature_patterns": style_profile.signature_patterns[:5],
+            "writing_style": {
+                "hint": style_hint,
+                "signature_patterns": style_profile.signature_patterns[:5],
+                "avoided_patterns": style_profile.avoided_patterns[:5],
+                "examples": style_profile.examples[:3],
+            },
         },
         default=str,
     )
@@ -178,5 +193,5 @@ async def generate(
         output_schema=SalaryRecommendation,
         model=settings.opus_model_id,
         effort="xhigh",
-        post_validate=_post_validate,
+        post_validate=_make_post_validate(citation_ctx),
     )

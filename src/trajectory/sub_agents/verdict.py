@@ -222,6 +222,19 @@ def _make_post_validate(ctx: ValidationContext):
                 f"verdict.reasoning has {len(v.reasoning)} points; "
                 "at least 3 required."
             )
+        # CLAUDE.md Rule 2: a GO verdict with any hard blocker is an error.
+        # Reject here so call_agent retries with feedback rather than
+        # forcing us to flip post-hoc (the flip is still applied by
+        # _enforce_no_go_with_blockers as a belt-and-braces guard in case
+        # all retries return the same inconsistent decision).
+        if v.decision == "GO" and v.hard_blockers:
+            blocker_types = [b.type for b in v.hard_blockers]
+            failures.append(
+                "Verdict.decision is GO but hard_blockers is non-empty "
+                f"({blocker_types}); a GO with any hard blocker is not "
+                "permitted. Either remove the blocker (if it does not apply) "
+                "or switch decision to NO_GO."
+            )
         return failures
 
     return _post_validate

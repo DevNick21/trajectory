@@ -60,10 +60,28 @@ async def route(
     last_session: Optional[Session] = None,
     session_id: Optional[str] = None,
 ) -> IntentRouterOutput:
-    context_lines = [f"USER MESSAGE: {user_message}"]
-    if recent_messages:
+    # CLAUDE.md Rule 10: user messages are untrusted — Tier 1 only (the
+    # router only decides a label, so residual risk is capped).
+    from ..validators.content_shield import shield as shield_content
+
+    cleaned_msg, _ = await shield_content(
+        content=user_message,
+        source_type="user_message",
+        downstream_agent="intent_router",
+    )
+    cleaned_recent: list[str] = []
+    for m in recent_messages[-4:]:
+        c, _ = await shield_content(
+            content=m,
+            source_type="user_message",
+            downstream_agent="intent_router",
+        )
+        cleaned_recent.append(c)
+
+    context_lines = [f"USER MESSAGE: {cleaned_msg}"]
+    if cleaned_recent:
         context_lines.append("RECENT CONTEXT (last 4 messages):")
-        context_lines.extend(f"  {m}" for m in recent_messages[-4:])
+        context_lines.extend(f"  {m}" for m in cleaned_recent)
     if last_session:
         verdict_status = "NO_GO"
         if last_session.verdict:

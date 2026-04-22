@@ -123,7 +123,7 @@ git clone https://github.com/yourusername/trajectory.git
 cd trajectory
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+pip install -r requirements-dev.txt
 playwright install chromium
 ```
 

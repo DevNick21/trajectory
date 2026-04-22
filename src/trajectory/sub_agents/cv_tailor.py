@@ -22,6 +22,7 @@ from ..schemas import (
     WritingStyleProfile,
 )
 from ..validators.banned_phrases import contains_banned
+from ..validators.citations import ValidationContext, validate_output
 
 SYSTEM_PROMPT = """\
 Produce a CV tailored to a specific UK job.
@@ -75,18 +76,22 @@ that render to Markdown/PDF downstream).
 _CE_MARKER = re.compile(r"\[ce:[^\]]+\]")
 
 
-def _post_validate(cv: CVOutput) -> list[str]:
-    failures: list[str] = []
-    all_text_parts = [cv.professional_summary]
-    for role in cv.experience:
-        for b in role.bullets:
-            all_text_parts.append(b.text)
-    all_text = " ".join(all_text_parts)
-    # Strip cite markers before banned-phrase check
-    clean = _CE_MARKER.sub("", all_text)
-    for phrase in contains_banned(clean):
-        failures.append(f"Banned phrase in CV: '{phrase}'")
-    return failures
+def _make_post_validate(citation_ctx: Optional[ValidationContext]):
+    def _post_validate(cv: CVOutput) -> list[str]:
+        failures: list[str] = []
+        all_text_parts = [cv.professional_summary]
+        for role in cv.experience:
+            for b in role.bullets:
+                all_text_parts.append(b.text)
+        all_text = " ".join(all_text_parts)
+        clean = _CE_MARKER.sub("", all_text)
+        for phrase in contains_banned(clean):
+            failures.append(f"Banned phrase in CV: '{phrase}'")
+        if citation_ctx is not None:
+            failures.extend(validate_output(cv, citation_ctx))
+        return failures
+
+    return _post_validate
 
 
 async def generate(
@@ -96,6 +101,7 @@ async def generate(
     retrieved_entries: list[CareerEntry],
     style_profile: WritingStyleProfile,
     star_material: Optional[list[STARPolish]] = None,
+    citation_ctx: Optional[ValidationContext] = None,
 ) -> CVOutput:
     style_hint = (
         f"tone={style_profile.tone}, "
@@ -155,5 +161,5 @@ async def generate(
         output_schema=CVOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        post_validate=_post_validate,
+        post_validate=_make_post_validate(citation_ctx),
     )

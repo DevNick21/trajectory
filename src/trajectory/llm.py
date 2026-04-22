@@ -255,18 +255,31 @@ async def _call_via_messages_api(
     client = _get_anthropic_client()
     tool = _schema_to_tool(output_schema)
 
+    max_tokens = 4096
     extra_kwargs: dict[str, Any] = {}
-    if effort == "xhigh":
-        # Extended thinking budget — engage for Opus on quality-critical calls.
-        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
+    thinking_enabled = effort == "xhigh"
+    if thinking_enabled:
+        # Extended thinking requires `budget_tokens < max_tokens` and
+        # forbids `tool_choice` in {"tool", "any"} — we therefore allow the
+        # model to choose the single-tool and bump max_tokens to leave room
+        # for the final answer on top of the thinking budget.
+        budget_tokens = 8000
+        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
+        max_tokens = budget_tokens + 4096
+
+    tool_choice: dict[str, Any]
+    if thinking_enabled:
+        tool_choice = {"type": "auto"}
+    else:
+        tool_choice = {"type": "tool", "name": tool["name"]}
 
     resp = await client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
         tools=[tool],
-        tool_choice={"type": "tool", "name": tool["name"]},
+        tool_choice=tool_choice,
         **extra_kwargs,
     )
 
@@ -318,17 +331,30 @@ async def _call_via_managed_agents(
     )
     tool = _schema_to_tool(output_schema)
 
+    max_tokens = 4096
     extra_kwargs: dict[str, Any] = {}
-    if effort == "xhigh":
-        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": 8000}
+    thinking_enabled = effort == "xhigh"
+    if thinking_enabled:
+        # Same constraints as the plain Messages backend: budget_tokens must
+        # be strictly less than max_tokens, and tool_choice cannot pin a
+        # single tool when extended thinking is enabled.
+        budget_tokens = 8000
+        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
+        max_tokens = budget_tokens + 4096
+
+    tool_choice: dict[str, Any]
+    if thinking_enabled:
+        tool_choice = {"type": "auto"}
+    else:
+        tool_choice = {"type": "tool", "name": tool["name"]}
 
     resp = await client.messages.create(
         model=model,
-        max_tokens=4096,
+        max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
         tools=[tool],
-        tool_choice={"type": "tool", "name": tool["name"]},
+        tool_choice=tool_choice,
         metadata={"agent_name": agent_name},
         **extra_kwargs,
     )

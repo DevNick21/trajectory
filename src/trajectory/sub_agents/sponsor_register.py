@@ -12,6 +12,7 @@ Returned `SponsorStatus.status`:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from datetime import date, datetime
@@ -80,7 +81,10 @@ def _map_status(rating: str) -> str:
         return "B_RATED"
     if r.startswith("a"):
         return "LISTED"
-    return "LISTED"  # conservative default
+    # Unrecognised rating: safer to flag NOT_LISTED than to greenlight a
+    # visa holder against unknown status. The verdict agent treats NOT_LISTED
+    # as a hard blocker, which is the conservative outcome here.
+    return "NOT_LISTED"
 
 
 def _last_updated(df, col: Optional[str]) -> Optional[date]:
@@ -95,7 +99,7 @@ def _last_updated(df, col: Optional[str]) -> Optional[date]:
     return None
 
 
-async def lookup(company_name: str) -> SponsorStatus:
+def _lookup_sync(company_name: str) -> SponsorStatus:
     try:
         df = _load_df()
     except FileNotFoundError as e:
@@ -137,3 +141,10 @@ async def lookup(company_name: str) -> SponsorStatus:
         visa_routes=visa_routes,
         last_register_update=_last_updated(df, cols["last_updated"]),
     )
+
+
+async def lookup(company_name: str) -> SponsorStatus:
+    # The lookup is a parquet load + pandas filter + rapidfuzz scan — all
+    # CPU-bound and synchronous. Offload to a thread so the event loop is
+    # not blocked while the register is scanned.
+    return await asyncio.to_thread(_lookup_sync, company_name)

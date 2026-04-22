@@ -19,6 +19,7 @@ from ..schemas import (
     UserProfile,
 )
 from ..validators.banned_phrases import contains_banned
+from ..validators.citations import ValidationContext, validate_output
 
 SYSTEM_PROMPT = """\
 Predict interview questions the user is likely to face for this
@@ -69,16 +70,25 @@ OUTPUT: Valid JSON matching LikelyQuestionsOutput schema.
 """
 
 
-def _post_validate(lq: LikelyQuestionsOutput) -> list[str]:
-    failures: list[str] = []
-    if not (8 <= len(lq.questions) <= 12):
-        failures.append(
-            f"Expected 8-12 questions, got {len(lq.questions)}"
-        )
-    for q in lq.questions:
-        for phrase in contains_banned(q.strategy_note):
-            failures.append(f"Banned phrase in strategy_note: '{phrase}'")
-    return failures
+def _make_post_validate(citation_ctx: Optional[ValidationContext]):
+    def _post_validate(lq: LikelyQuestionsOutput) -> list[str]:
+        failures: list[str] = []
+        if not (8 <= len(lq.questions) <= 12):
+            failures.append(
+                f"Expected 8-12 questions, got {len(lq.questions)}"
+            )
+        for q in lq.questions:
+            for phrase in contains_banned(q.strategy_note):
+                failures.append(f"Banned phrase in strategy_note: '{phrase}'")
+            # Banned phrases in the question text itself matter too — the
+            # user pastes this into prep and cliché phrasing wastes space.
+            for phrase in contains_banned(q.question):
+                failures.append(f"Banned phrase in question text: '{phrase}'")
+        if citation_ctx is not None:
+            failures.extend(validate_output(lq, citation_ctx))
+        return failures
+
+    return _post_validate
 
 
 async def generate(
@@ -86,6 +96,7 @@ async def generate(
     research_bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
+    citation_ctx: Optional[ValidationContext] = None,
 ) -> LikelyQuestionsOutput:
     company = research_bundle.company_research
 
@@ -120,5 +131,5 @@ async def generate(
         output_schema=LikelyQuestionsOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        post_validate=_post_validate,
+        post_validate=_make_post_validate(citation_ctx),
     )

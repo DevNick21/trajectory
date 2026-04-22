@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -33,11 +33,30 @@ class Citation(BaseModel):
     # career_entry fields
     entry_id: Optional[str] = None
 
-    @field_validator("kind")
-    @classmethod
-    def kind_has_required_fields(cls, v, info):
-        # Cross-field validation lives in validators/citations.py.
-        return v
+    @model_validator(mode="after")
+    def _kind_requires_its_fields(self) -> "Citation":
+        # Enforce at schema level that the per-kind required fields are
+        # present. Deeper resolution (does the snippet actually exist in
+        # the scraped bundle? does the entry_id exist in the career store?)
+        # stays in validators/citations.py because it needs runtime state.
+        if self.kind == "url_snippet":
+            if not self.url or not self.verbatim_snippet:
+                raise ValueError(
+                    "Citation(kind='url_snippet') requires both url and "
+                    "verbatim_snippet to be non-empty."
+                )
+        elif self.kind == "gov_data":
+            if not self.data_field or self.data_value is None:
+                raise ValueError(
+                    "Citation(kind='gov_data') requires data_field and "
+                    "data_value to be provided."
+                )
+        elif self.kind == "career_entry":
+            if not self.entry_id:
+                raise ValueError(
+                    "Citation(kind='career_entry') requires entry_id."
+                )
+        return self
 
 
 class VisaStatus(BaseModel):
@@ -140,18 +159,6 @@ class JobSearchContext(BaseModel):
     search_duration_months: int
 
 
-class Session(BaseModel):
-    session_id: str
-    user_id: str
-    intent: str
-    job_url: Optional[str] = None
-    phase1_output: Optional[dict] = None
-    verdict: Optional["Verdict"] = None
-    generated_components: dict = Field(default_factory=dict)
-    telegram_messages: list[dict] = Field(default_factory=list)
-    created_at: datetime
-
-
 # ---------------------------------------------------------------------------
 # Intent routing
 # ---------------------------------------------------------------------------
@@ -170,6 +177,18 @@ Intent = Literal[
     "recent",
     "chitchat",
 ]
+
+
+class Session(BaseModel):
+    session_id: str
+    user_id: str
+    intent: Intent
+    job_url: Optional[str] = None
+    phase1_output: Optional[dict] = None
+    verdict: Optional["Verdict"] = None
+    generated_components: dict = Field(default_factory=dict)
+    telegram_messages: list[dict] = Field(default_factory=list)
+    created_at: datetime
 
 
 class IntentRouterOutput(BaseModel):
@@ -405,6 +424,10 @@ StretchConcernType = Literal[
     "EXPERIENCE_GAP",
     "CULTURE_SIGNAL_MISMATCH",
     "NATIONALITY_GRANT_RATE_CONTEXT",
+    # AGENTS.md §18 — Content Shield Tier 2 returned REJECT or
+    # SUSPICIOUS for the bundle backing this verdict. Surfaces as a
+    # stretch concern so the user can see why the verdict downgraded.
+    "CONTENT_INTEGRITY_CONCERN",
 ]
 
 
@@ -630,6 +653,49 @@ class SelfAuditReport(BaseModel):
     flags: list[AuditFlag]
     hard_reject: bool
     overall_style_conformance: int = Field(ge=0, le=10)
+
+
+# ---------------------------------------------------------------------------
+# Content Shield (AGENTS.md §18)
+# ---------------------------------------------------------------------------
+
+
+class ContentShieldVerdict(BaseModel):
+    classification: Literal["SAFE", "SUSPICIOUS", "MALICIOUS"]
+    reasoning: str
+    residual_patterns_detected: list[str] = Field(default_factory=list)
+    recommended_action: Literal["PASS_THROUGH", "PASS_WITH_WARNING", "REJECT"]
+
+
+# ---------------------------------------------------------------------------
+# Prompt Auditor (AGENTS.md §17, build-time)
+# ---------------------------------------------------------------------------
+
+
+class ChecklistResult(BaseModel):
+    item: str
+    result: Literal["PASS", "FAIL", "WEAK", "N/A"]
+    note: str
+
+
+class ConcreteWeakness(BaseModel):
+    severity: Literal["HIGH", "MEDIUM", "LOW"]
+    description: str
+    proposed_patch: str
+
+
+class InjectionStressTest(BaseModel):
+    attempted_payload: str
+    predicted_behaviour: Literal["REJECTS", "COMPLIES", "UNCLEAR"]
+    reasoning: str
+
+
+class PromptAuditReport(BaseModel):
+    audited_agent_name: str
+    overall_assessment: Literal["STRONG", "ADEQUATE", "WEAK", "UNSAFE"]
+    checklist: list[ChecklistResult]
+    concrete_weaknesses: list[ConcreteWeakness] = Field(default_factory=list)
+    injection_stress_test: InjectionStressTest
 
 
 # ---------------------------------------------------------------------------

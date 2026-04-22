@@ -106,14 +106,14 @@ def test_gov_data_wrong_value_fails(ctx: ValidationContext):
 
 def test_career_entry_exists():
     """A career entry that exists in the store should validate."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     entry = CareerEntry(
         entry_id="entry-abc-123",
         user_id="user1",
         kind="cv_bullet",
         raw_text="Built a thing",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     ctx = ValidationContext(
         research_bundle=None,

@@ -6,6 +6,8 @@ where each element is a separate message. Use HTML parse_mode.
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from ..schemas import (
     Citation,
     CoverLetterOutput,
@@ -14,6 +16,24 @@ from ..schemas import (
     SalaryRecommendation,
     Verdict,
 )
+
+# Telegram HTML anchors may only point at http(s) URLs. Anything else
+# (javascript:, data:, vbscript:, file:, tel:) must be stripped — otherwise
+# a scraped URL flowing through a citation could render a clickable
+# non-http scheme.
+_ALLOWED_URL_SCHEMES = {"http", "https"}
+
+
+def _safe_url(raw: str) -> str | None:
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return None
+    if parsed.scheme.lower() not in _ALLOWED_URL_SCHEMES:
+        return None
+    if not parsed.netloc:
+        return None
+    return raw
 
 _TG_LIMIT = 4096
 
@@ -40,9 +60,13 @@ def _esc(s: str) -> str:
 
 def format_citation(c: Citation) -> str:
     if c.kind == "url_snippet":
-        url = _esc(c.url or "")
         snippet = _esc((c.verbatim_snippet or "")[:120])
-        return f'<a href="{url}">source</a>: <i>"{snippet}"</i>'
+        safe = _safe_url(c.url or "")
+        if safe is None:
+            # Unsupported scheme — render as plain text so the bad URL
+            # does not become a clickable anchor.
+            return f'source (blocked link): <i>"{snippet}"</i>'
+        return f'<a href="{_esc(safe)}">source</a>: <i>"{snippet}"</i>'
     if c.kind == "gov_data":
         return f"<code>{_esc(c.data_field or '')} = {_esc(c.data_value or '')}</code>"
     if c.kind == "career_entry":
