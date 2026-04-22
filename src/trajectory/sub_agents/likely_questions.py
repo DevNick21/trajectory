@@ -13,6 +13,7 @@ from ..config import settings
 from ..llm import call_agent
 from ..schemas import (
     CareerEntry,
+    ExtractedJobDescription,
     LikelyQuestionsOutput,
     ResearchBundle,
     UserProfile,
@@ -80,13 +81,12 @@ def _post_validate(lq: LikelyQuestionsOutput) -> list[str]:
     return failures
 
 
-async def predict(
+async def generate(
+    jd: ExtractedJobDescription,
     research_bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
-    session_id: Optional[str] = None,
 ) -> LikelyQuestionsOutput:
-    jd = research_bundle.extracted_jd
     company = research_bundle.company_research
 
     entries_summary = [
@@ -120,6 +120,5 @@ async def predict(
         output_schema=LikelyQuestionsOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        session_id=session_id,
         post_validate=_post_validate,
     )

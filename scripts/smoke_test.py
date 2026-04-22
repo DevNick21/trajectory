@@ -81,7 +81,7 @@ async def run_smoke_test() -> None:
 
     log.info("Running verdict agent…")
     try:
-        verdict = await verdict_agent.decide(
+        verdict = await verdict_agent.generate(
             user=user,
             research_bundle=bundle,
             retrieved_entries=[],

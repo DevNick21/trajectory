@@ -17,7 +17,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     telegram_bot_token: str = ""
     companies_house_api_key: str = ""
-    rapidapi_key: str = ""
 
     # --- feature flags
     use_managed_agents: bool = True

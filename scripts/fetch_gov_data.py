@@ -4,6 +4,9 @@ Sources:
 - Sponsor Register (XLSX from gov.uk)
 - SOC 2020 going rates (gov.uk immigration salary list)
 - Appendix Skilled Occupations (immigration rules)
+- ASHE Table 15 (4-digit SOC × region, ONS)  → ashe_soc4_region.parquet
+- ASHE Table 3  (2-digit SOC × region, ONS)  → ashe_soc2_region.parquet
+- ASHE Table 2  (2-digit SOC national, ONS)  → ashe_soc2_national.parquet
 
 Usage: python scripts/fetch_gov_data.py
 """
@@ -14,6 +17,7 @@ import io
 import logging
 import re
 import sys
+import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -149,11 +153,266 @@ def fetch_soc_codes() -> None:
     log.info("Saved soc_codes.parquet (%d rows)", len(df))
 
 
+# ---------------------------------------------------------------------------
+# ASHE (Annual Survey of Hours and Earnings) — ONS
+# ---------------------------------------------------------------------------
+
+# ONS publishes ASHE results as .zip files containing .xlsx workbooks.
+# Table 15 = gross annual pay by occupation (4-digit SOC) and region.
+# Table 3  = gross annual pay by occupation (2-digit SOC) and region.
+# Table 2  = gross annual pay by occupation (2-digit SOC) national.
+#
+# The canonical download page is:
+#   https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/
+#   earningsandworkinghours/datasets/annualsurveyofhoursandearnings
+#
+# The asset IDs below resolve as of the 2024 ASHE release (provisional
+# results published Oct 2024). Update the URLs when ONS releases 2025.
+
+_ASHE_BASE = (
+    "https://www.ons.gov.uk/file?uri=/employmentandlabourmarket/peopleinwork/"
+    "earningsandworkinghours/datasets/annualsurveyofhoursandearnings/"
+)
+
+ASHE_TABLE15_URL = _ASHE_BASE + "2024provisional/table152024provisional.zip"
+ASHE_TABLE3_URL  = _ASHE_BASE + "2024provisional/table32024provisional.zip"
+ASHE_TABLE2_URL  = _ASHE_BASE + "2024provisional/table22024provisional.zip"
+
+_ASHE_YEAR = 2024
+
+# Percentile column mappings inside the ASHE xlsx sheets
+_PCT_COLS = {
+    "10": "p10",
+    "25": "p25",
+    "50": "p50",
+    "75": "p75",
+    "90": "p90",
+}
+
+
+def _download_ashe_zip(url: str, label: str) -> bytes | None:
+    try:
+        return _get(url)
+    except Exception as exc:
+        log.warning("Could not fetch ASHE %s (%s): %s", label, url, exc)
+        return None
+
+
+def _extract_xlsx_from_zip(content: bytes) -> bytes | None:
+    """Return the first .xlsx file found in a zip archive."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            for name in zf.namelist():
+                if name.lower().endswith(".xlsx"):
+                    return zf.read(name)
+    except Exception as exc:
+        log.warning("ZIP extraction failed: %s", exc)
+    return None
+
+
+def _parse_ashe_table(xlsx_bytes: bytes, by_region: bool) -> pd.DataFrame | None:
+    """Parse an ASHE xlsx workbook into a tidy DataFrame.
+
+    Expected sheet structure (ONS ASHE standard layout):
+      - Row ~5 onwards: data rows with SOC code, description, region (if Table 15/3),
+        and percentile columns (10, 25, 50, 75, 90).
+
+    Returns a DataFrame with columns:
+      soc_code, region (if by_region), p10, p25, p50, p75, p90, sample_year
+    or None if parsing fails.
+    """
+    try:
+        xl = pd.ExcelFile(io.BytesIO(xlsx_bytes), engine="openpyxl")
+        # ASHE workbooks have one sheet per pay statistic; "Annual pay - Gross"
+        # is the one we want. Fall back to first sheet.
+        target_sheet = None
+        for sh in xl.sheet_names:
+            if "gross" in sh.lower() and "annual" in sh.lower():
+                target_sheet = sh
+                break
+        if target_sheet is None:
+            target_sheet = xl.sheet_names[0]
+
+        df_raw = pd.read_excel(
+            io.BytesIO(xlsx_bytes),
+            sheet_name=target_sheet,
+            header=None,
+            engine="openpyxl",
+        )
+    except Exception as exc:
+        log.warning("ASHE xlsx parse failed: %s", exc)
+        return None
+
+    # Find header row: look for a row containing "10" or "25" (percentile headers)
+    header_row = None
+    for i, row in df_raw.iterrows():
+        vals = [str(v).strip() for v in row.values]
+        if "10" in vals and "25" in vals and "50" in vals:
+            header_row = i
+            break
+    if header_row is None:
+        log.warning("ASHE: could not find header row in sheet %s", target_sheet)
+        return None
+
+    df_raw.columns = [str(v).strip() for v in df_raw.iloc[header_row]]
+    df = df_raw.iloc[header_row + 1 :].copy().reset_index(drop=True)
+
+    # Identify SOC code column (first numeric-ish column or labelled "Code")
+    soc_col = None
+    for col in df.columns:
+        if "code" in col.lower() or col in ("Code", "SOC"):
+            soc_col = col
+            break
+    if soc_col is None:
+        # Heuristic: first column whose values look like 4-digit numbers
+        for col in df.columns:
+            sample = df[col].dropna().astype(str).str.strip()
+            if sample.str.match(r"^\d{2,4}$").mean() > 0.3:
+                soc_col = col
+                break
+    if soc_col is None:
+        log.warning("ASHE: could not identify SOC code column")
+        return None
+
+    region_col = None
+    if by_region:
+        for col in df.columns:
+            if "region" in col.lower() or "geography" in col.lower():
+                region_col = col
+                break
+
+    rows = []
+    for _, row in df.iterrows():
+        soc = str(row.get(soc_col, "")).strip()
+        if not re.match(r"^\d{2,4}$", soc):
+            continue
+        region = str(row.get(region_col, "")).strip() if region_col else None
+
+        p_vals: dict = {}
+        for raw_pct, field in _PCT_COLS.items():
+            col_match = next((c for c in df.columns if str(c).strip() == raw_pct), None)
+            if col_match:
+                try:
+                    v = float(str(row.get(col_match, "")).replace(",", "").strip())
+                    # ASHE publishes weekly pay; convert to annual (×52)
+                    # or annual if the value is already large
+                    if v < 2000:
+                        v = v * 52
+                    p_vals[field] = int(v)
+                except (ValueError, TypeError):
+                    p_vals[field] = None
+
+        entry = {"soc_code": soc, "sample_year": _ASHE_YEAR, **p_vals}
+        if by_region and region:
+            entry["region"] = region
+        rows.append(entry)
+
+    if not rows:
+        log.warning("ASHE: no rows parsed from %s", target_sheet)
+        return None
+
+    result = pd.DataFrame(rows)
+    # Drop rows where all percentiles are null
+    pct_cols = list(_PCT_COLS.values())
+    result = result.dropna(subset=pct_cols, how="all")
+    return result
+
+
+def fetch_ashe_table15() -> None:
+    """ASHE Table 15 — annual gross pay by 4-digit SOC and region."""
+    out = DATA_PROCESSED / "ashe_soc4_region.parquet"
+    if out.exists():
+        log.info("ashe_soc4_region.parquet exists — skipping")
+        return
+
+    content = _download_ashe_zip(ASHE_TABLE15_URL, "Table15")
+    if content is None:
+        _write_empty_ashe(out, region=True)
+        return
+
+    xlsx = _extract_xlsx_from_zip(content)
+    if xlsx is None:
+        _write_empty_ashe(out, region=True)
+        return
+
+    df = _parse_ashe_table(xlsx, by_region=True)
+    if df is None or df.empty:
+        _write_empty_ashe(out, region=True)
+        return
+
+    df.to_parquet(out, index=False)
+    log.info("Saved ashe_soc4_region.parquet (%d rows)", len(df))
+
+
+def fetch_ashe_table3() -> None:
+    """ASHE Table 3 — annual gross pay by 2-digit SOC and region."""
+    out = DATA_PROCESSED / "ashe_soc2_region.parquet"
+    if out.exists():
+        log.info("ashe_soc2_region.parquet exists — skipping")
+        return
+
+    content = _download_ashe_zip(ASHE_TABLE3_URL, "Table3")
+    if content is None:
+        _write_empty_ashe(out, region=True)
+        return
+
+    xlsx = _extract_xlsx_from_zip(content)
+    if xlsx is None:
+        _write_empty_ashe(out, region=True)
+        return
+
+    df = _parse_ashe_table(xlsx, by_region=True)
+    if df is None or df.empty:
+        _write_empty_ashe(out, region=True)
+        return
+
+    df.to_parquet(out, index=False)
+    log.info("Saved ashe_soc2_region.parquet (%d rows)", len(df))
+
+
+def fetch_ashe_table2() -> None:
+    """ASHE Table 2 — annual gross pay by 2-digit SOC, national."""
+    out = DATA_PROCESSED / "ashe_soc2_national.parquet"
+    if out.exists():
+        log.info("ashe_soc2_national.parquet exists — skipping")
+        return
+
+    content = _download_ashe_zip(ASHE_TABLE2_URL, "Table2")
+    if content is None:
+        _write_empty_ashe(out, region=False)
+        return
+
+    xlsx = _extract_xlsx_from_zip(content)
+    if xlsx is None:
+        _write_empty_ashe(out, region=False)
+        return
+
+    df = _parse_ashe_table(xlsx, by_region=False)
+    if df is None or df.empty:
+        _write_empty_ashe(out, region=False)
+        return
+
+    df.to_parquet(out, index=False)
+    log.info("Saved ashe_soc2_national.parquet (%d rows)", len(df))
+
+
+def _write_empty_ashe(out: Path, region: bool) -> None:
+    cols = ["soc_code", "p10", "p25", "p50", "p75", "p90", "sample_year"]
+    if region:
+        cols.insert(1, "region")
+    df = pd.DataFrame(columns=cols)
+    df.to_parquet(out, index=False)
+    log.info("Wrote empty skeleton %s (ASHE download failed)", out.name)
+
+
 def main() -> None:
     log.info("Fetching UK government data…")
     fetch_sponsor_register()
     fetch_going_rates()
     fetch_soc_codes()
+    fetch_ashe_table15()
+    fetch_ashe_table3()
+    fetch_ashe_table2()
     log.info("Done. Parquet files in %s", DATA_PROCESSED)
 
 

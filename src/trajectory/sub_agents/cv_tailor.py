@@ -16,7 +16,6 @@ from ..schemas import (
     CareerEntry,
     CVOutput,
     ExtractedJobDescription,
-    CompanyResearch,
     ResearchBundle,
     STARPolish,
     UserProfile,
@@ -90,15 +89,14 @@ def _post_validate(cv: CVOutput) -> list[str]:
     return failures
 
 
-async def tailor(
+async def generate(
+    jd: ExtractedJobDescription,
     research_bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
     style_profile: WritingStyleProfile,
-    star_polishes: Optional[list[STARPolish]] = None,
-    session_id: Optional[str] = None,
+    star_material: Optional[list[STARPolish]] = None,
 ) -> CVOutput:
-    jd = research_bundle.extracted_jd
     style_hint = (
         f"tone={style_profile.tone}, "
         f"formality={style_profile.formality_level}/10, "
@@ -108,8 +106,8 @@ async def tailor(
         style_hint += " (low confidence — directional only)"
 
     polishes_summary = []
-    if star_polishes:
-        for p in star_polishes:
+    if star_material:
+        for p in star_material:
             polishes_summary.append(
                 {
                     "question": p.question,
@@ -157,6 +155,5 @@ async def tailor(
         output_schema=CVOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        session_id=session_id,
         post_validate=_post_validate,
     )
