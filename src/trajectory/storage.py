@@ -514,3 +514,143 @@ async def total_cost_usd() -> float:
         async with db.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM llm_cost_log") as cur:
             row = await cur.fetchone()
     return float(row[0]) if row else 0.0
+
+
+async def get_all_career_entries_for_user(user_id: str) -> list[CareerEntry]:
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload FROM career_entries WHERE user_id = ? ORDER BY created_at",
+            (user_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [CareerEntry.model_validate_json(r[0]) for r in rows]
+
+
+async def get_all_career_entries() -> list[CareerEntry]:
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload FROM career_entries ORDER BY created_at"
+        ) as cur:
+            rows = await cur.fetchall()
+    return [CareerEntry.model_validate_json(r[0]) for r in rows]
+
+
+async def rebuild_faiss_index(entries: list[CareerEntry]) -> None:
+    """Rebuild the in-memory FAISS index from a list of career entries.
+
+    Useful after bulk imports or when the index file is deleted.
+    """
+    import numpy as np
+
+    global _faiss_index, _faiss_id_map
+
+    if not entries:
+        return
+
+    embeddings = []
+    ids: list[str] = []
+    for entry in entries:
+        emb = await _embed(entry.raw_text)
+        embeddings.append(emb)
+        ids.append(entry.entry_id)
+
+    import faiss as _faiss_lib
+
+    dim = len(embeddings[0])
+    index = _faiss_lib.IndexFlatIP(dim)
+    arr = np.array(embeddings, dtype="float32")
+    _faiss_lib.normalize_L2(arr)
+    index.add(arr)
+
+    _faiss_index = index
+    _faiss_id_map = ids
+    _faiss_save()
+
+
+# ---------------------------------------------------------------------------
+# Storage class — thin wrapper for dependency injection
+# ---------------------------------------------------------------------------
+
+
+class Storage:
+    """Thin class wrapper around module-level storage functions.
+
+    Passed through orchestrator and bot handlers so they can be tested
+    without touching a real DB. For the single-user demo, one instance
+    is created at bot startup and stored in bot_data["storage"].
+    """
+
+    def __init__(self, db_path: Optional[str] = None) -> None:
+        if db_path and db_path != ":memory:":
+            settings.sqlite_db_path = Path(db_path)
+
+    async def initialise(self) -> None:
+        await _ensure_db()
+
+    async def close(self) -> None:
+        pass  # connections are per-request; nothing to close
+
+    # ── User profiles ──────────────────────────────────────────────────────
+
+    async def get_user_profile(self, user_id: str) -> Optional[UserProfile]:
+        return await get_user_profile(user_id)
+
+    async def save_user_profile(self, profile: UserProfile) -> None:
+        await upsert_user_profile(profile)
+
+    # ── Career entries ─────────────────────────────────────────────────────
+
+    async def insert_career_entry(self, entry: CareerEntry) -> None:
+        await insert_career_entry(entry)
+
+    async def retrieve_relevant_entries(
+        self, user_id: str, query: str, k: int = 8
+    ) -> list[CareerEntry]:
+        return await retrieve_relevant_entries(user_id=user_id, query=query, k=k)
+
+    async def get_all_career_entries(self) -> list[CareerEntry]:
+        return await get_all_career_entries()
+
+    async def rebuild_index(self, entries: list[CareerEntry]) -> None:
+        await rebuild_faiss_index(entries)
+
+    # ── Writing style profiles ─────────────────────────────────────────────
+
+    async def get_writing_style_profile(
+        self, profile_id_or_user_id: str
+    ) -> Optional[WritingStyleProfile]:
+        return await get_writing_style_profile(profile_id_or_user_id)
+
+    async def save_writing_style_profile(self, profile: WritingStyleProfile) -> None:
+        await upsert_writing_style_profile(profile)
+
+    # ── Sessions ───────────────────────────────────────────────────────────
+
+    async def save_session(self, session: Session) -> None:
+        await insert_session(session)
+
+    async def get_session(self, session_id: str) -> Optional[Session]:
+        return await get_session(session_id)
+
+    async def get_recent_sessions(self, user_id: str, limit: int = 5) -> list[Session]:
+        return await get_recent_sessions(user_id=user_id, n=limit)
+
+    async def save_phase1_output(self, session_id: str, bundle) -> None:
+        session = await get_session(session_id)
+        if session:
+            session.phase1_output = bundle.model_dump(mode="json")
+            await update_session(session)
+
+    async def save_verdict(self, session_id: str, verdict) -> None:
+        session = await get_session(session_id)
+        if session:
+            session.verdict = verdict
+            await update_session(session)
+
+    # ── Scraped pages ──────────────────────────────────────────────────────
+
+    async def cache_scraped_page(self, url: str, text: str, fetched_at: datetime) -> None:
+        await cache_scraped_page(url=url, text=text, fetched_at=fetched_at)
+
+    async def get_cached_page(self, url: str, max_age_hours: int = 24) -> Optional[str]:
+        return await get_cached_page(url=url, max_age_hours=max_age_hours)
