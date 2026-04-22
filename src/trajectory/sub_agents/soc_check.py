@@ -16,6 +16,7 @@ New-entrant eligibility heuristic (Home Office rules, simplified):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from typing import Optional
@@ -92,7 +93,7 @@ def _new_entrant_eligible(user: UserProfile) -> bool:
     return False
 
 
-async def verify(
+def _verify_sync(
     jd: ExtractedJobDescription,
     user: UserProfile,
 ) -> SocCheckResult:
@@ -173,3 +174,12 @@ async def verify(
         shortfall_gbp=shortfall,
         new_entrant_eligible=ne_eligible,
     )
+
+
+async def verify(
+    jd: ExtractedJobDescription,
+    user: UserProfile,
+) -> SocCheckResult:
+    # Parquet reads + pandas filtering — sync. Offload to a worker so the
+    # event loop is free for the parallel Phase 1 fan-out.
+    return await asyncio.to_thread(_verify_sync, jd, user)

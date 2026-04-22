@@ -21,6 +21,7 @@ from ..schemas import (
     WritingStyleProfile,
 )
 from ..validators.banned_phrases import contains_banned
+from ..validators.citations import ValidationContext, validate_output
 
 SYSTEM_PROMPT = """\
 Write a cover letter for a specific UK job.
@@ -69,16 +70,21 @@ OUTPUT: Valid JSON matching CoverLetterOutput schema.
 """
 
 
-def _post_validate(cl: CoverLetterOutput) -> list[str]:
-    failures: list[str] = []
-    all_text = " ".join(cl.paragraphs)
-    for phrase in contains_banned(all_text):
-        failures.append(f"Banned phrase in cover letter: '{phrase}'")
-    if cl.word_count < 250 or cl.word_count > 380:
-        failures.append(
-            f"Cover letter word count {cl.word_count} outside 250-380 range"
-        )
-    return failures
+def _make_post_validate(citation_ctx: Optional[ValidationContext]):
+    def _post_validate(cl: CoverLetterOutput) -> list[str]:
+        failures: list[str] = []
+        all_text = " ".join(cl.paragraphs)
+        for phrase in contains_banned(all_text):
+            failures.append(f"Banned phrase in cover letter: '{phrase}'")
+        if cl.word_count < 250 or cl.word_count > 380:
+            failures.append(
+                f"Cover letter word count {cl.word_count} outside 250-380 range"
+            )
+        if citation_ctx is not None:
+            failures.extend(validate_output(cl, citation_ctx))
+        return failures
+
+    return _post_validate
 
 
 async def generate(
@@ -88,6 +94,7 @@ async def generate(
     retrieved_entries: list[CareerEntry],
     style_profile: WritingStyleProfile,
     star_material: Optional[list[STARPolish]] = None,
+    citation_ctx: Optional[ValidationContext] = None,
 ) -> CoverLetterOutput:
     company = research_bundle.company_research
 
@@ -155,5 +162,5 @@ async def generate(
         output_schema=CoverLetterOutput,
         model=settings.opus_model_id,
         effort="xhigh",
-        post_validate=_post_validate,
+        post_validate=_make_post_validate(citation_ctx),
     )

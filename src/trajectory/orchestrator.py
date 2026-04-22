@@ -8,30 +8,40 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from .config import settings
 from .schemas import (
     CareerEntry,
+    Citation,
+    ContentShieldVerdict,
     CoverLetterOutput,
     CVOutput,
     DraftReplyOutput,
     ExtractedJobDescription,
+    HardBlocker,
     JobSearchContext,
     LikelyQuestionsOutput,
+    MotivationFitReport,
     Pack,
+    ReasoningPoint,
     ResearchBundle,
     SalaryRecommendation,
     Session,
     STARPolish,
+    StretchConcern,
     UserProfile,
     Verdict,
     WritingStyleProfile,
 )
 from .storage import Storage
-from .validators.citations import validate_output as validate_citations  # noqa: F401
+from .validators.citations import build_context
+from .validators.content_shield import (
+    ContentIntegrityRejected,
+    shield as shield_content,
+)
 
 log = logging.getLogger(__name__)
 
@@ -115,16 +125,25 @@ async def handle_forward_job(
     # ── Phase 1C: remaining agents in parallel ─────────────────────────────
     log.info("Phase 1C: parallel agents")
 
+    # red_flags depends on reviews; we share a single coroutine via a Future
+    # so reviews still runs concurrently with the rest of the fan-out but
+    # red_flags can await its actual result instead of being given [].
+    reviews_future: asyncio.Future = asyncio.get_running_loop().create_future()
+
     async def run_reviews():
         try:
             result = await rev_agent.fetch(
                 company_name=company_research.company_name,
             )
             await mark("reviews")
+            if not reviews_future.done():
+                reviews_future.set_result(result)
             return result
         except Exception as exc:
             log.warning("reviews failed: %s", exc)
             await mark("reviews")
+            if not reviews_future.done():
+                reviews_future.set_result([])
             return []
 
     async def run_salary():
@@ -177,6 +196,7 @@ async def handle_forward_job(
                 jd=jd,
                 company_research=company_research,
                 companies_house=ch_snapshot,
+                job_url=job_url,
                 session_id=session.session_id,
             )
             await mark("phase_1_ghost_job_jd_scorer")
@@ -188,10 +208,12 @@ async def handle_forward_job(
 
     async def run_red_flags():
         try:
+            # Wait for reviews to complete (or fail to []) before scoring.
+            reviews_for_flags = await reviews_future
             result = await rf_agent.detect(
                 company_research=company_research,
                 companies_house=ch_snapshot,
-                reviews=[],
+                reviews=reviews_for_flags,
                 session_id=session.session_id,
             )
             await mark("phase_1_red_flags")
@@ -232,13 +254,30 @@ async def handle_forward_job(
         ghost_job=ghost_assessment,
         salary_signals=salary_signals,
         red_flags=red_flags_report,
-        bundle_completed_at=datetime.utcnow(),
+        bundle_completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     await storage.save_phase1_output(session.session_id, bundle)
 
     # ── Phase 2: Verdict ───────────────────────────────────────────────────
     log.info("Phase 2: verdict")
+
+    # CLAUDE.md Rule 10: every piece of scraped content must go through
+    # the Content Shield before reaching a high-stakes agent. The verdict
+    # agent is the highest-stakes call in the pipeline — Tier 2 runs when
+    # Tier 1 flags anything. A REJECT short-circuits to a minimal fallback
+    # verdict instead of shipping an agent-steered decision.
+    shielded_bundle, shield_verdict = await _shield_bundle(bundle, "verdict")
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        log.warning(
+            "Content shield rejected scraped content for session %s: %s",
+            session.session_id,
+            shield_verdict.reasoning,
+        )
+        fallback = _build_shielded_fallback_verdict(bundle, shield_verdict)
+        await storage.save_verdict(session.session_id, fallback)
+        return bundle, fallback
+
     retrieved = await storage.retrieve_relevant_entries(
         user_id=user.user_id,
         query=f"{jd.role_title} {' '.join(jd.required_skills[:5])}",
@@ -246,7 +285,7 @@ async def handle_forward_job(
     )
 
     verdict = await verdict_agent.generate(
-        research_bundle=bundle,
+        research_bundle=shielded_bundle,
         user=user,
         retrieved_entries=retrieved,
         session_id=session.session_id,
@@ -273,6 +312,162 @@ async def _get_style_profile(
     user: UserProfile, storage: Storage
 ) -> Optional[WritingStyleProfile]:
     return await storage.get_writing_style_profile(user.user_id)
+
+
+# ---------------------------------------------------------------------------
+# Content Shield — bundle-wide wrapper (CLAUDE.md Rule 10, AGENTS.md §18)
+# ---------------------------------------------------------------------------
+
+
+_CLASSIFICATION_RANK = {"SAFE": 0, "SUSPICIOUS": 1, "MALICIOUS": 2}
+
+
+def _worse(
+    a: Optional[ContentShieldVerdict], b: Optional[ContentShieldVerdict]
+) -> Optional[ContentShieldVerdict]:
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return (
+        a
+        if _CLASSIFICATION_RANK[a.classification]
+        >= _CLASSIFICATION_RANK[b.classification]
+        else b
+    )
+
+
+async def _shield_bundle(
+    bundle: ResearchBundle, downstream_agent: str
+) -> tuple[ResearchBundle, Optional[ContentShieldVerdict]]:
+    """Shield every untrusted string field in the research bundle before
+    it's serialised into a downstream agent prompt.
+
+    Untrusted fields:
+      - extracted_jd.jd_text_full
+      - company_research.scraped_pages[].text
+      - company_research.values[].snippet (verbatim scrape)
+
+    Tier 1 always runs; Tier 2 runs only when Tier 1 flagged AND the
+    `downstream_agent` is high-stakes (see content_shield.HIGH_STAKES_AGENTS).
+    The returned bundle holds the cleaned strings; callers should pass it
+    to both `build_context` and the agent so citation resolution stays
+    consistent with what the model actually saw.
+    """
+    worst: Optional[ContentShieldVerdict] = None
+
+    cleaned_jd_text, jd_v = await shield_content(
+        content=bundle.extracted_jd.jd_text_full,
+        source_type="scraped_jd",
+        downstream_agent=downstream_agent,
+    )
+    worst = _worse(worst, jd_v)
+
+    cleaned_pages = []
+    for p in bundle.company_research.scraped_pages:
+        cleaned_text, page_v = await shield_content(
+            content=p.text,
+            source_type="scraped_company_page",
+            downstream_agent=downstream_agent,
+        )
+        cleaned_pages.append(p.model_copy(update={"text": cleaned_text}))
+        worst = _worse(worst, page_v)
+
+    cleaned_claims = []
+    for claim in bundle.company_research.culture_claims:
+        cleaned_snippet, val_v = await shield_content(
+            content=claim.verbatim_snippet,
+            source_type="scraped_company_page",
+            downstream_agent=downstream_agent,
+        )
+        cleaned_claims.append(
+            claim.model_copy(update={"verbatim_snippet": cleaned_snippet})
+        )
+        worst = _worse(worst, val_v)
+
+    new_bundle = bundle.model_copy(
+        update={
+            "extracted_jd": bundle.extracted_jd.model_copy(
+                update={"jd_text_full": cleaned_jd_text}
+            ),
+            "company_research": bundle.company_research.model_copy(
+                update={
+                    "scraped_pages": cleaned_pages,
+                    "culture_claims": cleaned_claims,
+                }
+            ),
+        }
+    )
+    return new_bundle, worst
+
+
+def _build_shielded_fallback_verdict(
+    bundle: ResearchBundle, verdict: ContentShieldVerdict
+) -> Verdict:
+    """Minimal NO_GO verdict produced when the Content Shield rejects the
+    research bundle. AGENTS.md §18 specifies "minimal verdict with
+    'content integrity concern' as a stretch concern" — modelled here as
+    a NO_GO with a single stretch concern + one reasoning point.
+    """
+    role = bundle.extracted_jd.role_title or "this role"
+    citation = Citation(
+        kind="gov_data",
+        data_field="content_shield.recommended_action",
+        data_value=verdict.recommended_action,
+    )
+    return Verdict(
+        decision="NO_GO",
+        confidence_pct=40,
+        headline="Don't apply — page content failed integrity check.",
+        reasoning=[
+            ReasoningPoint(
+                claim=(
+                    f"Could not safely produce a verdict for {role} — the "
+                    "scraped page tripped the content shield."
+                ),
+                supporting_evidence=verdict.reasoning,
+                citation=citation,
+            )
+        ],
+        hard_blockers=[],
+        stretch_concerns=[
+            StretchConcern(
+                type="CONTENT_INTEGRITY_CONCERN",
+                detail=(
+                    "Tier 2 classifier returned "
+                    f"{verdict.classification} / {verdict.recommended_action}. "
+                    "The job URL may be compromised or the page was modified."
+                ),
+                citations=[citation],
+            )
+        ],
+        motivation_fit=MotivationFitReport(
+            motivation_evaluations=[],
+            deal_breaker_evaluations=[],
+            good_role_signal_evaluations=[],
+        ),
+    )
+
+
+def _apply_rewrites_to_strings(obj, rewrites: list[tuple[str, str]]):
+    """Walk a nested JSON-ish structure, applying (find, replace) substitutions
+    to every string leaf. Model is revalidated after.
+
+    This replaces the prior `json.dumps → str.replace → json.loads` approach,
+    which corrupted payloads whenever an offending_substring contained
+    quotes, backslashes, or other JSON-significant bytes.
+    """
+    if isinstance(obj, str):
+        out = obj
+        for find, replace in rewrites:
+            if find and find in out:
+                out = out.replace(find, replace, 1)
+        return out
+    if isinstance(obj, list):
+        return [_apply_rewrites_to_strings(x, rewrites) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _apply_rewrites_to_strings(v, rewrites) for k, v in obj.items()}
+    return obj
 
 
 async def _audit_and_ship(
@@ -306,25 +501,28 @@ async def _audit_and_ship(
             log.error("Generator re-run failed: %s", exc)
             return generated
 
-    # Non-fatal flags: apply rewrites to text fields
     log.info("Self-audit: %d flags — applying rewrites", len(audit.flags))
+    rewrites = [
+        (f.offending_substring, f.proposed_rewrite)
+        for f in audit.flags
+        if f.offending_substring and f.proposed_rewrite
+    ]
+    if not rewrites:
+        return generated
     try:
-        import json as _json
-        raw = _json.dumps(generated.model_dump(mode="json"))
-        for flag in audit.flags:
-            if flag.offending_substring and flag.proposed_rewrite:
-                raw = raw.replace(flag.offending_substring, flag.proposed_rewrite, 1)
-        patched = generated.__class__.model_validate_json(raw)
-        return patched
+        patched_dict = _apply_rewrites_to_strings(
+            generated.model_dump(mode="json"), rewrites
+        )
+        return generated.__class__.model_validate(patched_dict)
     except Exception as exc:
         log.warning("Rewrite application failed: %s — shipping original", exc)
         return generated
 
 
-def _make_output_paths(session_id: str, kind: str) -> tuple[Path, Path]:
+def _output_dir(session_id: str) -> Path:
     out_dir = settings.generated_dir / session_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir / f"{kind}.docx", out_dir / f"{kind}.pdf"
+    return out_dir
 
 
 # ---------------------------------------------------------------------------
@@ -339,37 +537,55 @@ async def handle_draft_cv(
     star_polishes: Optional[list[STARPolish]] = None,
 ) -> tuple[CVOutput, Path, Path]:
     from .sub_agents import cv_tailor
-    from .renderers.cv_docx import render as render_docx
-    from .renderers.cv_pdf import render as render_pdf
+    from .renderers import render_cv_docx, render_cv_pdf
 
     bundle = await _load_session_bundle(session, storage)
-    style_profile = await _get_style_profile(user, storage)
+    if bundle is None:
+        raise ValueError(
+            "No research bundle on session — forward a job URL before requesting a CV."
+        )
+    # CLAUDE.md Rule 10: every Phase 4 generator is a high-stakes agent.
+    # Shield the bundle before build_context so citation resolution uses
+    # the same (redacted) text the model sees.
+    bundle, shield_verdict = await _shield_bundle(bundle, "cv_tailor")
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
 
-    jd = bundle.extracted_jd if bundle else None
-    query = f"{jd.role_title} {' '.join((jd.required_skills or [])[:5])}" if jd else user.motivations[0] if user.motivations else "software engineer"
-    retrieved = await storage.retrieve_relevant_entries(user_id=user.user_id, query=query, k=12)
+    style_profile = await _get_style_profile(user, storage) or _fallback_style()
 
-    if style_profile is None:
-        style_profile = _fallback_style()
+    jd = bundle.extracted_jd
+    query = f"{jd.role_title} {' '.join((jd.required_skills or [])[:5])}"
+    retrieved = await storage.retrieve_relevant_entries(
+        user_id=user.user_id, query=query, k=12
+    )
 
-    company_name = bundle.company_research.company_name if bundle else "the company"
+    company_name = bundle.company_research.company_name
+
+    citation_ctx = await build_context(
+        research_bundle=bundle,
+        user_id=user.user_id,
+        career_entries=retrieved,
+    )
 
     async def generator():
         return await cv_tailor.generate(
-            jd=bundle.extracted_jd,
+            jd=jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
             style_profile=style_profile,
             star_material=star_polishes,
+            citation_ctx=citation_ctx,
         )
 
     cv = await generator()
-    cv = await _audit_and_ship(cv, bundle, style_profile, company_name, generator, session.session_id)
+    cv = await _audit_and_ship(
+        cv, bundle, style_profile, company_name, generator, session.session_id
+    )
 
-    docx_path, pdf_path = _make_output_paths(session.session_id, "cv")
-    render_docx(cv, docx_path)
-    render_pdf(cv, pdf_path)
+    out_dir = _output_dir(session.session_id)
+    docx_path = render_cv_docx(cv, out_dir, company=company_name)
+    pdf_path = render_cv_pdf(cv, out_dir, company=company_name)
 
     return cv, docx_path, pdf_path
 
@@ -381,34 +597,52 @@ async def handle_draft_cover_letter(
     star_polishes: Optional[list[STARPolish]] = None,
 ) -> tuple[CoverLetterOutput, Path, Path]:
     from .sub_agents import cover_letter
-    from .renderers.cover_letter_docx import render as render_docx
-    from .renderers.cover_letter_pdf import render as render_pdf
+    from .renderers import render_cover_letter_docx, render_cover_letter_pdf
 
     bundle = await _load_session_bundle(session, storage)
+    if bundle is None:
+        raise ValueError(
+            "No research bundle on session — forward a job URL before requesting a cover letter."
+        )
+    bundle, shield_verdict = await _shield_bundle(bundle, "cover_letter")
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
+
     style_profile = await _get_style_profile(user, storage) or _fallback_style()
 
-    jd = bundle.extracted_jd if bundle else None
-    query = f"{jd.role_title} cover letter" if jd else "cover letter"
-    retrieved = await storage.retrieve_relevant_entries(user_id=user.user_id, query=query, k=10)
+    jd = bundle.extracted_jd
+    query = f"{jd.role_title} cover letter"
+    retrieved = await storage.retrieve_relevant_entries(
+        user_id=user.user_id, query=query, k=10
+    )
 
-    company_name = bundle.company_research.company_name if bundle else "the company"
+    company_name = bundle.company_research.company_name
+
+    citation_ctx = await build_context(
+        research_bundle=bundle,
+        user_id=user.user_id,
+        career_entries=retrieved,
+    )
 
     async def generator():
         return await cover_letter.generate(
-            jd=bundle.extracted_jd,
+            jd=jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
             style_profile=style_profile,
             star_material=star_polishes,
+            citation_ctx=citation_ctx,
         )
 
     cl = await generator()
-    cl = await _audit_and_ship(cl, bundle, style_profile, company_name, generator, session.session_id)
+    cl = await _audit_and_ship(
+        cl, bundle, style_profile, company_name, generator, session.session_id
+    )
 
-    docx_path, pdf_path = _make_output_paths(session.session_id, "cover_letter")
-    render_docx(cl, docx_path)
-    render_pdf(cl, pdf_path)
+    out_dir = _output_dir(session.session_id)
+    docx_path = render_cover_letter_docx(cl, out_dir, sender_name=user.name)
+    pdf_path = render_cover_letter_pdf(cl, out_dir, sender_name=user.name)
 
     return cl, docx_path, pdf_path
 
@@ -421,24 +655,43 @@ async def handle_predict_questions(
     from .sub_agents import likely_questions
 
     bundle = await _load_session_bundle(session, storage)
+    if bundle is None:
+        raise ValueError(
+            "No research bundle on session — forward a job URL before predicting questions."
+        )
+    bundle, shield_verdict = await _shield_bundle(bundle, "likely_questions")
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
+
     style_profile = await _get_style_profile(user, storage) or _fallback_style()
 
-    jd = bundle.extracted_jd if bundle else None
-    query = f"{jd.role_title} interview" if jd else "interview questions"
-    retrieved = await storage.retrieve_relevant_entries(user_id=user.user_id, query=query, k=10)
+    jd = bundle.extracted_jd
+    query = f"{jd.role_title} interview"
+    retrieved = await storage.retrieve_relevant_entries(
+        user_id=user.user_id, query=query, k=10
+    )
 
-    company_name = bundle.company_research.company_name if bundle else "the company"
+    company_name = bundle.company_research.company_name
+
+    citation_ctx = await build_context(
+        research_bundle=bundle,
+        user_id=user.user_id,
+        career_entries=retrieved,
+    )
 
     async def generator():
         return await likely_questions.generate(
-            jd=bundle.extracted_jd,
+            jd=jd,
             research_bundle=bundle,
             user=user,
             retrieved_entries=retrieved,
+            citation_ctx=citation_ctx,
         )
 
     lq = await generator()
-    lq = await _audit_and_ship(lq, bundle, style_profile, company_name, generator, session.session_id)
+    lq = await _audit_and_ship(
+        lq, bundle, style_profile, company_name, generator, session.session_id
+    )
     return lq
 
 
@@ -450,11 +703,21 @@ async def handle_salary_advice(
     from .sub_agents import salary_strategist
 
     bundle = await _load_session_bundle(session, storage)
+    if not bundle:
+        raise ValueError("No research bundle — forward a job first")
+
+    bundle, shield_verdict = await _shield_bundle(bundle, "salary_strategist")
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
+
     style_profile = await _get_style_profile(user, storage) or _fallback_style()
     ctx = await compute_job_search_context(user, storage)
 
-    if not bundle:
-        raise ValueError("No research bundle — forward a job first")
+    citation_ctx = await build_context(
+        research_bundle=bundle,
+        user_id=user.user_id,
+        career_entries=[],
+    )
 
     return await salary_strategist.generate(
         jd=bundle.extracted_jd,
@@ -462,6 +725,7 @@ async def handle_salary_advice(
         user=user,
         context=ctx,
         style_profile=style_profile,
+        citation_ctx=citation_ctx,
     )
 
 
@@ -470,8 +734,12 @@ async def handle_full_prep(
     user: UserProfile,
     storage: Storage,
     star_polishes: Optional[list[STARPolish]] = None,
-) -> Pack:
-    """Parallel fan-out of all 4 Phase 4 generators."""
+) -> tuple[Pack, dict[str, Path]]:
+    """Parallel fan-out of all 4 Phase 4 generators.
+
+    Returns the Pack plus a mapping of file kinds to rendered paths so the
+    bot surface can attach the .docx/.pdf deliverables (CLAUDE.md Rule 9).
+    """
     cv_task = asyncio.create_task(
         handle_draft_cv(session, user, storage, star_polishes)
     )
@@ -485,29 +753,37 @@ async def handle_full_prep(
         handle_salary_advice(session, user, storage)
     )
 
-    results = await asyncio.gather(cv_task, cl_task, lq_task, sal_task, return_exceptions=True)
+    results = await asyncio.gather(
+        cv_task, cl_task, lq_task, sal_task, return_exceptions=True
+    )
 
     cv_out = cl_out = lq_out = sal_out = None
+    files: dict[str, Path] = {}
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             log.error("full_prep sub-task %d failed: %s", i, result)
-        else:
-            if i == 0:
-                cv_out, _, _ = result
-            elif i == 1:
-                cl_out, _, _ = result
-            elif i == 2:
-                lq_out = result
-            elif i == 3:
-                sal_out = result
+            continue
+        if i == 0:
+            cv_out, cv_docx, cv_pdf = result
+            files["cv_docx"] = cv_docx
+            files["cv_pdf"] = cv_pdf
+        elif i == 1:
+            cl_out, cl_docx, cl_pdf = result
+            files["cover_letter_docx"] = cl_docx
+            files["cover_letter_pdf"] = cl_pdf
+        elif i == 2:
+            lq_out = result
+        elif i == 3:
+            sal_out = result
 
-    return Pack(
+    pack = Pack(
         session_id=session.session_id,
         cv=cv_out,
         cover_letter=cl_out,
         likely_questions=lq_out,
         salary=sal_out,
     )
+    return pack, files
 
 
 async def handle_draft_reply(
@@ -519,13 +795,23 @@ async def handle_draft_reply(
 ) -> DraftReplyOutput:
     from .sub_agents import draft_reply
 
+    # CLAUDE.md Rule 10: pasted recruiter email is the primary injection
+    # vector — shield before the high-stakes generator.
+    cleaned_msg, shield_verdict = await shield_content(
+        content=incoming_message,
+        source_type="recruiter_email",
+        downstream_agent="draft_reply",
+    )
+    if shield_verdict and shield_verdict.recommended_action == "REJECT":
+        raise ContentIntegrityRejected(shield_verdict, "recruiter_email")
+
     style_profile = await _get_style_profile(user, storage) or _fallback_style()
     relevant = await storage.retrieve_relevant_entries(
-        user_id=user.user_id, query=incoming_message[:200], k=5
+        user_id=user.user_id, query=cleaned_msg[:200], k=5
     )
 
     return await draft_reply.generate(
-        incoming_message=incoming_message,
+        incoming_message=cleaned_msg,
         user_intent_hint=user_intent,
         user=user,
         style_profile=style_profile,
@@ -594,7 +880,7 @@ async def compute_job_search_context(
 
 
 def _fallback_style() -> WritingStyleProfile:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     return WritingStyleProfile(
         profile_id="fallback",
         user_id="unknown",

@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -152,7 +152,7 @@ async def finalise_onboarding(
             log.warning("Style extraction failed: %s", exc)
 
     # Build a minimal UserProfile from transcript answers
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     from ..schemas import VisaStatus
     from datetime import date
 
@@ -170,16 +170,55 @@ async def finalise_onboarding(
         salary_floor = vals[0] if vals else 30000
         salary_target = vals[1] if len(vals) > 1 else None
 
-    # Determine user_type
+    # Determine user_type.
+    # Negation-aware: phrases like "I'm not on a visa", "no visa needed",
+    # "British citizen" or "UK resident" should NOT flip user_type to
+    # visa_holder even if the literal word "visa" appears.
     user_type = "uk_resident"
     visa_status = None
-    if any(kw in visa_text.lower() for kw in ["visa", "graduate", "skilled", "student"]):
+    visa_text_lower = visa_text.lower()
+
+    _uk_resident_markers = (
+        "not on a visa",
+        "no visa",
+        "don't need a visa",
+        "do not need a visa",
+        "british citizen",
+        "uk citizen",
+        "irish citizen",
+        "settled status",
+        "indefinite leave",
+        "ilr",
+        "uk resident",
+        "uk national",
+    )
+    _explicit_resident = any(m in visa_text_lower for m in _uk_resident_markers)
+
+    # Routes: map free-text mention to the Literal accepted by VisaStatus.route.
+    _route_patterns: list[tuple[str, str]] = [
+        (r"\bgraduate\b", "graduate"),
+        (r"\bskilled\s*worker\b|\btier\s*2\b", "skilled_worker"),
+        (r"\bdependan[tc]\b", "dependant"),
+        (r"\bstudent\b|\btier\s*4\b", "student"),
+        (r"\bglobal\s*talent\b", "global_talent"),
+    ]
+    detected_route: Optional[str] = None
+    for pattern, route in _route_patterns:
+        if re.search(pattern, visa_text_lower):
+            detected_route = route
+            break
+
+    _has_visa_word = "visa" in visa_text_lower
+
+    if not _explicit_resident and (detected_route is not None or _has_visa_word):
         user_type = "visa_holder"
-        # Best-effort expiry parse
         expiry_match = re.search(r"(\d{4})", visa_text)
         expiry_year = int(expiry_match.group(1)) if expiry_match else date.today().year + 2
         from datetime import date as d_date
-        visa_status = VisaStatus(route="graduate", expiry_date=d_date(expiry_year, 12, 31))
+        visa_status = VisaStatus(
+            route=detected_route or "other",
+            expiry_date=d_date(expiry_year, 12, 31),
+        )
 
     # Employment status
     employment = "EMPLOYED"

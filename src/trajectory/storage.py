@@ -14,13 +14,22 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 import aiosqlite
 
 from .config import settings
+
+
+def _utcnow() -> datetime:
+    """Naive UTC timestamp — drop-in replacement for the deprecated
+    `datetime.utcnow()`, behaviourally identical. Kept naive to stay
+    compatible with already-stored isoformat strings without timezone
+    suffix.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 from .schemas import (
     CareerEntry,
     Session,
@@ -147,7 +156,7 @@ async def upsert_user_profile(profile: UserProfile) -> None:
                 payload = excluded.payload,
                 updated_at = excluded.updated_at
             """,
-            (profile.user_id, profile.model_dump_json(), datetime.utcnow().isoformat()),
+            (profile.user_id, profile.model_dump_json(), _utcnow().isoformat()),
         )
         await db.commit()
 
@@ -350,7 +359,7 @@ async def upsert_writing_style_profile(profile: WritingStyleProfile) -> None:
                 profile.profile_id,
                 profile.user_id,
                 profile.model_dump_json(),
-                datetime.utcnow().isoformat(),
+                _utcnow().isoformat(),
             ),
         )
         await db.commit()
@@ -435,7 +444,7 @@ async def cache_scraped_page(url: str, text: str, fetched_at: datetime) -> None:
 
 
 async def get_cached_page(url: str, max_age_hours: int = 24) -> Optional[str]:
-    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    cutoff = _utcnow() - timedelta(hours=max_age_hours)
     async with await _connect() as db:
         async with db.execute(
             "SELECT text, fetched_at FROM scraped_pages WHERE url = ?",
@@ -503,7 +512,7 @@ async def log_llm_cost(
                 input_tokens,
                 output_tokens,
                 cost,
-                datetime.utcnow().isoformat(),
+                _utcnow().isoformat(),
             ),
         )
         await db.commit()
@@ -581,7 +590,19 @@ class Storage:
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
+        # Tests can pass a custom DB path; mutate the shared settings only when
+        # the override is concrete (no `:memory:` — aiosqlite would still need
+        # a file path) and only when no other Storage instance has already
+        # initialised the schema, so a unit test does not accidentally
+        # repoint a live process.
         if db_path and db_path != ":memory:":
+            global _initialised
+            if _initialised:
+                # Refuse to silently switch the DB out from under live state.
+                raise RuntimeError(
+                    "Storage already initialised against "
+                    f"{settings.sqlite_db_path}; cannot rebind to {db_path}."
+                )
             settings.sqlite_db_path = Path(db_path)
 
     async def initialise(self) -> None:
@@ -606,7 +627,11 @@ class Storage:
     async def retrieve_relevant_entries(
         self, user_id: str, query: str, k: int = 8
     ) -> list[CareerEntry]:
-        return await retrieve_relevant_entries(user_id=user_id, query=query, k=k)
+        # Module-level fn is `(user_id, query_text, k)`; the wrapper accepts
+        # `query` for caller ergonomics and forwards under the right kwarg.
+        return await retrieve_relevant_entries(
+            user_id=user_id, query_text=query, k=k
+        )
 
     async def get_all_career_entries(self) -> list[CareerEntry]:
         return await get_all_career_entries()

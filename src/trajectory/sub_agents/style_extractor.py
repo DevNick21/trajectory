@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from ..config import settings
@@ -61,16 +61,30 @@ async def extract(
     samples: list[str],
     session_id: Optional[str] = None,
 ) -> WritingStyleProfile:
+    # CLAUDE.md Rule 10: user-pasted writing samples are untrusted.
+    # Tier 1 only — the output schema is structured so residual risk
+    # cannot leak into free-form text.
+    from ..validators.content_shield import shield as shield_content
+
+    cleaned_samples: list[str] = []
+    for s in samples:
+        cleaned, _ = await shield_content(
+            content=s,
+            source_type="writing_sample",
+            downstream_agent="style_extractor",
+        )
+        cleaned_samples.append(cleaned)
+
     user_input = json.dumps(
         {
-            "sample_count": len(samples),
-            "samples": samples,
+            "sample_count": len(cleaned_samples),
+            "samples": cleaned_samples,
         },
         default=str,
     )
 
     profile_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
 
     raw = await call_agent(
         agent_name="style_extractor",

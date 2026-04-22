@@ -11,6 +11,7 @@ No RapidAPI. No Glassdoor/Levels.fyi API. Open-source-compatible only.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -139,7 +140,11 @@ async def _aggregate_postings(role: str, location: str) -> Optional[AggregatedPo
     try:
         from jobspy import scrape_jobs  # type: ignore[import]
 
-        jobs = scrape_jobs(
+        # scrape_jobs is fully synchronous (httpx + parsing); offload to a
+        # worker thread so the event loop is not blocked for the duration
+        # of the network round-trips.
+        jobs = await asyncio.to_thread(
+            scrape_jobs,
             site_name=["indeed", "linkedin"],
             search_term=role,
             location=location,
@@ -209,8 +214,8 @@ async def fetch(
     sources_consulted: list[str] = []
     citations: list[Citation] = []
 
-    # 1. ASHE lookup
-    ashe = _lookup_ashe(soc_code=soc_code, region=location)
+    # 1. ASHE lookup (parquet read + pandas filter — offload to worker)
+    ashe = await asyncio.to_thread(_lookup_ashe, soc_code, location)
     if ashe is not None:
         sources_consulted.append(f"ashe_{ashe.granularity}")
         citations.append(

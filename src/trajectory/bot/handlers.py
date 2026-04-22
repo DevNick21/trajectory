@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from telegram import Message, Update
@@ -22,6 +22,7 @@ from ..orchestrator import (
     handle_predict_questions,
     handle_salary_advice,
 )
+from ..validators.content_shield import ContentIntegrityRejected
 from ..schemas import Session
 from ..storage import Storage
 from .formatting import (
@@ -158,6 +159,15 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 "Got it. Forward me a job URL when you're ready, "
                 "or ask for a CV, cover letter, interview questions, or salary advice."
             )
+    except ContentIntegrityRejected as exc:
+        log.warning(
+            "Content shield rejected %s for intent %s: %s",
+            exc.source_type, intent, exc.verdict.reasoning,
+        )
+        await update.message.reply_text(
+            "I couldn't process this content — there were signs of prompt "
+            "injection. The job URL may be compromised or the page was modified."
+        )
     except Exception as exc:
         log.exception("Handler error for intent %s: %s", intent, exc)
         await update.message.reply_text(
@@ -220,7 +230,7 @@ async def _handle_forward_job(
         return
 
     session_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     session = Session(
         session_id=session_id,
         user_id=user.user_id,
@@ -272,7 +282,11 @@ async def _handle_forward_job(
             )
     except Exception as exc:
         log.exception("forward_job failed: %s", exc)
-        await update.message.reply_text(f"Research failed: {exc!s}")
+        # Do not echo raw exception text to Telegram — may leak tokens,
+        # file paths, or internal config. Server-side log carries the detail.
+        await update.message.reply_text(
+            "Research failed. Double-check the URL is public, or try again."
+        )
 
 
 async def _require_session(
@@ -289,6 +303,20 @@ async def _require_session(
     return last_session
 
 
+async def _send_document(context, chat_id: int, path, *, filename: Optional[str] = None) -> None:
+    """Send a file without leaking the file handle.
+
+    python-telegram-bot v21's `send_document` accepts a pathlib.Path (it
+    opens + closes internally). Passing a bare `open()` leaked descriptors
+    on every CV/cover-letter request.
+    """
+    await context.bot.send_document(
+        chat_id,
+        document=path,
+        filename=filename,
+    )
+
+
 async def _handle_draft_cv(update, context, user, storage, last_session):
     session = await _require_session(update, last_session, storage, "a CV")
     if not session:
@@ -298,8 +326,9 @@ async def _handle_draft_cv(update, context, user, storage, last_session):
     await msg.delete()
     for chunk in format_cv_output(cv):
         await update.message.reply_html(chunk)
-    await context.bot.send_document(update.effective_chat.id, open(docx_path, "rb"), filename="cv.docx")
-    await context.bot.send_document(update.effective_chat.id, open(pdf_path, "rb"), filename="cv.pdf")
+    chat_id = update.effective_chat.id
+    await _send_document(context, chat_id, docx_path, filename=docx_path.name)
+    await _send_document(context, chat_id, pdf_path, filename=pdf_path.name)
 
 
 async def _handle_draft_cover_letter(update, context, user, storage, last_session):
@@ -311,8 +340,9 @@ async def _handle_draft_cover_letter(update, context, user, storage, last_sessio
     await msg.delete()
     for chunk in format_cover_letter(cl):
         await update.message.reply_html(chunk)
-    await context.bot.send_document(update.effective_chat.id, open(docx_path, "rb"), filename="cover_letter.docx")
-    await context.bot.send_document(update.effective_chat.id, open(pdf_path, "rb"), filename="cover_letter.pdf")
+    chat_id = update.effective_chat.id
+    await _send_document(context, chat_id, docx_path, filename=docx_path.name)
+    await _send_document(context, chat_id, pdf_path, filename=pdf_path.name)
 
 
 async def _handle_predict_questions(update, context, user, storage, last_session):
@@ -344,16 +374,26 @@ async def _handle_full_prep(update, context, user, storage, last_session):
     msg = await update.message.reply_text(
         "Generating full application pack — CV, cover letter, interview questions, salary strategy…"
     )
-    pack = await handle_full_prep(session, user, storage)
+    pack, files = await handle_full_prep(session, user, storage)
     await msg.delete()
+
+    chat_id = update.effective_chat.id
 
     if pack.cv:
         for chunk in format_cv_output(pack.cv):
             await update.message.reply_html(chunk)
+        for key in ("cv_docx", "cv_pdf"):
+            p = files.get(key)
+            if p:
+                await _send_document(context, chat_id, p, filename=p.name)
 
     if pack.cover_letter:
         for chunk in format_cover_letter(pack.cover_letter):
             await update.message.reply_html(chunk)
+        for key in ("cover_letter_docx", "cover_letter_pdf"):
+            p = files.get(key)
+            if p:
+                await _send_document(context, chat_id, p, filename=p.name)
 
     if pack.likely_questions:
         for chunk in format_likely_questions(pack.likely_questions):
@@ -365,11 +405,11 @@ async def _handle_full_prep(update, context, user, storage, last_session):
 
 
 async def _handle_draft_reply(update, context, user, storage, text):
-    from ..config import settings
-    style_profile = None
-    if user.writing_style_profile_id:
-        style_profile = await storage.get_writing_style_profile(user.writing_style_profile_id)
-
+    # Note: storage.get_writing_style_profile is keyed on user_id (the
+    # module-level SELECT uses WHERE user_id = ?). Passing the
+    # writing_style_profile_id here previously caused a silent miss —
+    # we look up by user_id inside orchestrator.handle_draft_reply
+    # regardless, so this block is retained only for symmetry/logging.
     reply = await handle_draft_reply(
         incoming_message=text,
         user_intent="other",

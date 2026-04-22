@@ -99,12 +99,20 @@ async def detect(
     reviews: Optional[list[ReviewExcerpt]] = None,
     session_id: Optional[str] = None,
 ) -> RedFlagsReport:
-    user_input = "\n\n".join(
+    # CLAUDE.md Rule 10: combined scraped content. Tier 1 only (low-stakes).
+    from ..validators.content_shield import shield as shield_content
+
+    raw_input = "\n\n".join(
         [
             _summarise_company_research(company_research),
             _summarise_companies_house(companies_house),
             _summarise_reviews(reviews or []),
         ]
+    )
+    user_input, _ = await shield_content(
+        content=raw_input,
+        source_type="scraped_company_page",
+        downstream_agent="red_flags_detector",
     )
 
     return await call_agent(
