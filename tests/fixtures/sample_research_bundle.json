@@ -1,0 +1,137 @@
+{
+  "session_id": "fixture-session-001",
+  "extracted_jd": {
+    "role_title": "Senior Software Engineer",
+    "seniority_signal": "senior",
+    "soc_code_guess": "2136",
+    "soc_code_reasoning": "JD mentions 'software development' and 'Python engineering'",
+    "salary_band": {"min": 70000, "max": 90000, "currency": "GBP", "period": "annual"},
+    "location": "London",
+    "remote_policy": "hybrid",
+    "required_years_experience": 5,
+    "required_years_experience_range": [4, 7],
+    "required_skills": ["Python", "distributed systems", "AWS", "Kubernetes", "PostgreSQL"],
+    "posted_date": "2025-03-15",
+    "posting_platform": "linkedin",
+    "hiring_manager_named": true,
+    "hiring_manager_name": "Alex Chen, Head of Platform Engineering",
+    "jd_text_full": "We are looking for a Senior Software Engineer to join our Platform Engineering team, reporting to Alex Chen. You will design and build distributed systems handling 1M+ RPS. Requirements: 5+ years Python, strong AWS and Kubernetes experience, PostgreSQL at scale. We run blameless postmortems and have a no-on-call-unless-you-own-it policy.",
+    "specificity_signals": [
+      "reporting to Alex Chen, Head of Platform Engineering",
+      "1M+ RPS systems",
+      "blameless postmortems",
+      "no-on-call-unless-you-own-it policy"
+    ],
+    "vagueness_signals": ["competitive salary", "fast-paced environment"]
+  },
+  "company_research": {
+    "company_name": "Acme Tech Ltd",
+    "company_domain": "acmetech.io",
+    "scraped_pages": [
+      {
+        "url": "https://acmetech.io/careers",
+        "fetched_at": "2025-03-20T10:00:00",
+        "title": "Careers at Acme Tech",
+        "text": "We build infrastructure for the next generation of fintech. Our engineering team ships autonomously. We value blameless postmortems and psychological safety.",
+        "text_hash": "abc123"
+      },
+      {
+        "url": "https://acmetech.io/blog/engineering",
+        "fetched_at": "2025-03-20T10:01:00",
+        "title": "Engineering Blog",
+        "text": "How we eliminated 400ms p99 latency in our payment processing pipeline. Our team of 45 engineers ships twice a week.",
+        "text_hash": "def456"
+      }
+    ],
+    "culture_claims": [
+      {
+        "claim": "Engineers ship autonomously with no micro-management",
+        "url": "https://acmetech.io/careers",
+        "verbatim_snippet": "Our engineering team ships autonomously."
+      },
+      {
+        "claim": "Blameless postmortem culture",
+        "url": "https://acmetech.io/careers",
+        "verbatim_snippet": "We value blameless postmortems and psychological safety."
+      }
+    ],
+    "tech_stack_signals": ["Python", "Kubernetes", "AWS", "PostgreSQL"],
+    "team_size_signals": ["team of 45 engineers"],
+    "recent_activity_signals": ["engineering blog post March 2025"],
+    "posted_salary_bands": ["£70,000 - £90,000"],
+    "policies": {"remote": "hybrid", "visa_sponsorship": "yes"},
+    "careers_page_url": "https://acmetech.io/careers",
+    "not_on_careers_page": false
+  },
+  "companies_house": {
+    "company_number": "12345678",
+    "status": "ACTIVE",
+    "company_name_official": "ACME TECH LTD",
+    "sic_codes": ["62012"],
+    "incorporation_date": "2018-03-01",
+    "accounts_overdue": false,
+    "confirmation_statement_overdue": false,
+    "last_accounts_date": "2024-12-31",
+    "no_filings_in_years": 0,
+    "resolution_to_wind_up": false,
+    "director_disqualifications": 0
+  },
+  "sponsor_status": {
+    "status": "LISTED",
+    "matched_name": "ACME TECH LTD",
+    "rating": "A",
+    "visa_routes": ["Skilled Worker"],
+    "last_register_update": "2025-03-01"
+  },
+  "soc_check": {
+    "soc_code": "2136",
+    "soc_title": "Programmers and software development professionals",
+    "on_appendix_skilled_occupations": true,
+    "going_rate_gbp": 40300,
+    "new_entrant_rate_gbp": 30900,
+    "offered_salary_gbp": 70000,
+    "below_threshold": false,
+    "shortfall_gbp": null,
+    "new_entrant_eligible": false
+  },
+  "ghost_job": {
+    "probability": "LIKELY_REAL",
+    "signals": [],
+    "confidence": "HIGH",
+    "raw_jd_score": {
+      "named_hiring_manager": 1.0,
+      "specific_duty_bullets": 0.8,
+      "specific_tech_stack": 0.9,
+      "specific_team_context": 0.8,
+      "specific_success_metrics": 0.7,
+      "specificity_score": 4.2,
+      "specificity_signals": ["named hiring manager Alex Chen", "1M+ RPS", "blameless postmortems"],
+      "vagueness_signals": ["competitive salary"]
+    },
+    "age_days": 5
+  },
+  "salary_signals": {
+    "posted_band": {"min": 70000, "max": 90000, "currency": "GBP"},
+    "glassdoor_range": null,
+    "levels_fyi_range": null,
+    "market_p10": 52000,
+    "market_p50": 72000,
+    "market_p90": 95000,
+    "sources_consulted": ["jd_posted_band"],
+    "data_citations": [
+      {
+        "kind": "url_snippet",
+        "url": "https://acmetech.io/careers",
+        "verbatim_snippet": "£70,000 - £90,000",
+        "data_field": null,
+        "data_value": null,
+        "entry_id": null
+      }
+    ]
+  },
+  "red_flags": {
+    "flags": [],
+    "checked": true
+  },
+  "bundle_completed_at": "2025-03-20T10:05:00"
+}
