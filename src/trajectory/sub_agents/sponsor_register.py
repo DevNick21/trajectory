@@ -65,25 +65,53 @@ def _columns(df) -> dict:
                 return lowered[cand]
         return None
 
+    # Column names rotate with every Home Office publication — the
+    # current (2026-04) CSV uses "Type & Rating" for the rating field.
     return {
         "name": pick("organisation name", "organisation_name", "name"),
-        "rating": pick("rating", "tier rating", "tier_rating"),
+        "rating": pick(
+            "type & rating", "type and rating",
+            "rating", "tier rating", "tier_rating",
+        ),
         "routes": pick("route", "routes"),
         "last_updated": pick("last updated", "last_updated", "date"),
     }
 
 
 def _map_status(rating: str) -> str:
+    """Map the Home Office "Type & Rating" cell onto our status enum.
+
+    Observed values in the register (top 10 of ~140k rows):
+      Worker (A rating)          — the canonical licensed sponsor
+      Temporary Worker (A rating)
+      Worker (UK Expansion Worker: Provisional )
+      Worker (B rating)
+      Worker (A (Premium))       — still an A-rated sponsor
+      Temporary Worker (B rating)
+      Worker (A (SME+))
+      Temporary Worker (A (SME+))
+      Temporary Worker (A (Premium))
+
+    Previous "startswith" logic matched the leading "Worker"/"Temporary"
+    literal and fell through to NOT_LISTED for every sponsor. Search the
+    parenthesised rating token instead.
+    """
+    import re as _re
+
     r = (rating or "").lower()
     if "suspend" in r:
         return "SUSPENDED"
-    if r.startswith("b"):
-        return "B_RATED"
-    if r.startswith("a"):
+    # Pull the rating letter out of "(A rating)" / "(B rating)" / "(A (Premium))".
+    m = _re.search(r"\(\s*([ab])\b", r)
+    if m:
+        return "B_RATED" if m.group(1) == "b" else "LISTED"
+    # "UK Expansion Worker: Provisional" — treat as LISTED for our
+    # purposes (company IS on the register and can sponsor).
+    if "provisional" in r or "expansion" in r:
         return "LISTED"
-    # Unrecognised rating: safer to flag NOT_LISTED than to greenlight a
-    # visa holder against unknown status. The verdict agent treats NOT_LISTED
-    # as a hard blocker, which is the conservative outcome here.
+    # Unrecognised rating: flag NOT_LISTED so the verdict agent treats
+    # this as a hard blocker rather than greenlighting a visa holder
+    # against unknown status.
     return "NOT_LISTED"
 
 

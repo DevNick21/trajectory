@@ -1,3 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trajectory"
+version = "0.1.0"
+description = "Telegram-native UK job-search assistant."
+requires-python = ">=3.11"
+# Runtime deps live in requirements.txt so pip-install-from-source and
+# the smoke-test venv agree on a single source of truth. `pip install -e .`
+# installs the package without re-declaring them here.
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["trajectory*"]
+
+[tool.setuptools.package-data]
+# Ship the prompt Markdown files alongside the Python package so
+# `pip install trajectory` on a fresh host can load_prompt(...) without
+# relying on a source checkout. Covers both top-level prompt files and
+# nested folders (onboarding/*.md).
+trajectory = ["prompts/*.md", "prompts/**/*.md"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

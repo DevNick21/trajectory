@@ -15,9 +15,12 @@ edit without updating AGENTS.md.
 
 from __future__ import annotations
 
+from ..prompts import load_prompt
+
 import asyncio
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
@@ -38,55 +41,10 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-JD_EXTRACTOR_SYSTEM_PROMPT = """\
-Extract structured fields from a UK job description.
-
-Extract:
-- role_title (as stated)
-- seniority_signal (intern | junior | mid | senior | staff | principal | unclear)
-- soc_code_guess (your best guess at SOC 2020 code; cite which JD phrase drove it)
-- salary_band (min, max, currency, period) or null if not stated
-- location (city, region, remote policy)
-- required_years_experience (number or range)
-- required_skills (list of specific technologies/tools named)
-- posted_date (ISO date if extractable; null otherwise)
-- posting_platform (linkedin | indeed | glassdoor | company_site | other)
-- hiring_manager_named (bool)
-- jd_text_full (the raw JD)
-- specificity_signals (list of what IS specific; used by ghost-job scorer)
-- vagueness_signals (list of what is vague or boilerplate)
-
-RULES:
-
-1. Never invent a salary band. Absent = null, not a guess.
-2. SOC guess cites the exact JD phrase driving it.
-3. Output is strict JSON.
-"""
+JD_EXTRACTOR_SYSTEM_PROMPT = load_prompt("jd_extractor")
 
 
-COMPANY_SUMMARISER_SYSTEM_PROMPT = """\
-Summarise the scraped pages of a company into structured research for a
-job-search assistant.
-
-You receive 3-10 pages (careers page, engineering blog, about page, team
-page, values page, recent blog posts). Extract:
-
-- Stated values / cultural claims, each with a verbatim snippet + URL
-- Technical stack signals (languages, frameworks, infra)
-- Team size signals (explicit numbers, "small team", "we're X engineers")
-- Recent activity signals (most recent blog post date, hiring-pace signals)
-- Any posted salary bands
-- Explicit policies (remote, hybrid, visa sponsorship statements)
-
-RULES:
-
-1. Every extracted fact has a source URL and a verbatim snippet.
-2. Do not infer values not stated. "We empower our engineers" -> claim;
-   "we have a flat culture" (implied) -> do not include.
-3. If the company's careers page exists and this job URL's listing is
-   NOT on it, flag `not_on_careers_page=true`.
-4. Output is strict JSON, no prose.
-"""
+COMPANY_SUMMARISER_SYSTEM_PROMPT = load_prompt("company_scraper_summariser")
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +246,57 @@ async def run(
         pages=scraped_pages,
         session_id=session_id,
     )
+
+    # Deterministic post-check on not_on_careers_page.
+    #
+    # The LLM cannot reliably infer this by itself: it would need to
+    # cross-reference the JD URL against every link on the careers page.
+    # Since not_on_careers_page is a HARD ghost-job signal, we verify
+    # here with a cheap substring check on the text we actually scraped.
+    company_research = _verify_not_on_careers_page(
+        company_research, job_url=job_url, role_title=extracted_jd.role_title
+    )
+
     return company_research, extracted_jd
+
+
+def _verify_not_on_careers_page(
+    research: CompanyResearch, *, job_url: str, role_title: str
+) -> CompanyResearch:
+    """Overwrite `not_on_careers_page` with a deterministic substring check.
+
+    Positive signal rules (any one → listing IS on the careers page):
+      1. The literal job URL appears in the careers-page text.
+      2. All alphanumeric tokens of the role title appear in the careers
+         page text (set-subset match, case-insensitive).
+
+    If neither holds, we set `not_on_careers_page=True` — the HARD ghost
+    signal the verdict agent relies on.
+
+    If no careers page was identified at all, we leave the LLM's value
+    alone (there's nothing to verify against).
+    """
+    careers_url = research.careers_page_url
+    if not careers_url:
+        return research
+
+    careers_page = next(
+        (p for p in research.scraped_pages if p.url == careers_url), None
+    )
+    if careers_page is None or not careers_page.text:
+        return research
+
+    careers_text = careers_page.text.lower()
+    if job_url.lower() in careers_text:
+        return research.model_copy(update={"not_on_careers_page": False})
+
+    role_tokens = {t for t in re.split(r"\W+", role_title.lower()) if len(t) > 2}
+    if role_tokens:
+        page_tokens = set(re.split(r"\W+", careers_text))
+        if role_tokens.issubset(page_tokens):
+            return research.model_copy(update={"not_on_careers_page": False})
+
+    return research.model_copy(update={"not_on_careers_page": True})
 
 
 async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
@@ -307,16 +315,21 @@ async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+_CLOSING_UNTRUSTED_TAG = re.compile(r"</\s*untrusted_content\s*>", re.IGNORECASE)
+
+
 def _sanitise_untrusted(text: str) -> str:
     """Neutralise closing tags of our own wrapper so a scraped page cannot
     break out of the `<untrusted_content>` boundary by including the literal
     `</untrusted_content>` in its own text.
 
-    Prompt-injection defence: we treat every scraped byte as hostile input.
-    The LLM is told in the prompt that anything between the tags is data,
-    not instructions.
+    Case-insensitive and whitespace-tolerant so attackers cannot escape the
+    wrapper with `</UNTRUSTED_CONTENT>` or `</untrusted_content >`. The
+    shield-tier-1 filter in `validators/content_shield.py` runs upstream
+    and already strips zero-width + bidi chars, so those cannot hide a
+    closing tag from this regex either.
     """
-    return text.replace("</untrusted_content>", "<!-- /untrusted_content -->")
+    return _CLOSING_UNTRUSTED_TAG.sub("<!-- /untrusted_content -->", text)
 
 
 async def _extract_jd(

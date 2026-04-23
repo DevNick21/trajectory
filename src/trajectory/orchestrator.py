@@ -73,15 +73,23 @@ async def handle_forward_job(
     )
     from .bot.progress_stream import PhaseOneProgressStreamer
 
+    # Order by typical completion latency so the visual ticking on the
+    # Telegram progress message matches the order in which checkmarks
+    # actually appear. Phase 1A runs serially (JD extract, summariser,
+    # Companies House), then Phase 1C runs in parallel — within 1C the
+    # parquet lookups resolve fastest, then the scraper, then the Opus
+    # xhigh agents, with red_flags last because it waits on reviews.
     all_agents = [
+        # Phase 1A (serial)
         "phase_1_jd_extractor",
         "phase_1_company_scraper_summariser",
         "companies_house",
-        "reviews",
-        "phase_1_ghost_job_jd_scorer",
-        "salary_data",
+        # Phase 1C (parallel — ordered by typical completion)
         "sponsor_register",
         "soc_check",
+        "salary_data",
+        "reviews",
+        "phase_1_ghost_job_jd_scorer",
         "phase_1_red_flags",
     ]
 
@@ -456,6 +464,15 @@ def _apply_rewrites_to_strings(obj, rewrites: list[tuple[str, str]]):
     This replaces the prior `json.dumps → str.replace → json.loads` approach,
     which corrupted payloads whenever an offending_substring contained
     quotes, backslashes, or other JSON-significant bytes.
+
+    Known limitation: rewrites apply to the FIRST occurrence of
+    offending_substring within each string leaf. If the same banned phrase
+    appears in both, say, a CV bullet and the cover letter body, only the
+    first hit in each field is replaced. In practice the self-audit LLM
+    rarely emits >3 flags per generation and duplicate banned phrases are
+    uncommon enough that this is a tolerable failure mode; fixing it
+    properly requires threading a field-path through AuditFlag and has
+    been left out of scope. See PROCESS.md if we revisit.
     """
     if isinstance(obj, str):
         out = obj
@@ -551,7 +568,7 @@ async def handle_draft_cv(
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
 
-    style_profile = await _get_style_profile(user, storage) or _fallback_style()
+    style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} {' '.join((jd.required_skills or [])[:5])}"
@@ -608,7 +625,7 @@ async def handle_draft_cover_letter(
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
 
-    style_profile = await _get_style_profile(user, storage) or _fallback_style()
+    style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} cover letter"
@@ -663,7 +680,7 @@ async def handle_predict_questions(
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
 
-    style_profile = await _get_style_profile(user, storage) or _fallback_style()
+    style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} interview"
@@ -710,7 +727,7 @@ async def handle_salary_advice(
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "scraped_jd")
 
-    style_profile = await _get_style_profile(user, storage) or _fallback_style()
+    style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
     ctx = await compute_job_search_context(user, storage)
 
     citation_ctx = await build_context(
@@ -805,7 +822,7 @@ async def handle_draft_reply(
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "recruiter_email")
 
-    style_profile = await _get_style_profile(user, storage) or _fallback_style()
+    style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
     relevant = await storage.retrieve_relevant_entries(
         user_id=user.user_id, query=cleaned_msg[:200], k=5
     )
@@ -845,10 +862,7 @@ async def compute_job_search_context(
     )
     rejections = sum(
         1 for s in recent_sessions
-        if s.verdict and (
-            (isinstance(s.verdict, dict) and s.verdict.get("decision") == "NO_GO")
-            or (hasattr(s.verdict, "decision") and s.verdict.decision == "NO_GO")
-        )
+        if s.verdict and s.verdict.decision == "NO_GO"
     )
 
     if months_until_expiry is not None and months_until_expiry < 3:
@@ -879,11 +893,17 @@ async def compute_job_search_context(
 # ---------------------------------------------------------------------------
 
 
-def _fallback_style() -> WritingStyleProfile:
+def _fallback_style(user_id: str) -> WritingStyleProfile:
+    """Neutral style profile used when onboarding didn't collect samples.
+
+    Threads the real user_id through so storage logs, audits, and later
+    debugging can tell which user hit the fallback — "unknown" as a
+    sentinel made log grepping harder without helping anyone.
+    """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     return WritingStyleProfile(
-        profile_id="fallback",
-        user_id="unknown",
+        profile_id=f"fallback:{user_id}",
+        user_id=user_id,
         tone="professional and clear",
         sentence_length_pref="medium",
         formality_level=6,

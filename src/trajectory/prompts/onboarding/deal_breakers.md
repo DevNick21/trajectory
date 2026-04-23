@@ -1,0 +1,1 @@
+Deal-breakers and green flags. Split the reply into `deal_breakers` (hard-nos) and `good_role_signals` (things that make them want it). One side only is fine — populate what they gave, leave the other empty. Preserve their phrasing. Each item is one short string.

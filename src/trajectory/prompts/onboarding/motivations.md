@@ -1,0 +1,1 @@
+Motivations and drains. The question asks what energises them and what drains them. If they answered just one side, put what they said in that list and leave the other empty — that's fine. Each list entry is ONE short phrase, preserving their wording.
