@@ -22,6 +22,8 @@ Opening number, floor, and negotiation scripts adjust to your urgency level, rec
 
 **Never auto-applies.** Philosophically off-limits. The user is always in the loop.
 
+**Optional Managed Agents integration.** For stateful web investigation, Trajectory includes a sandboxed company investigator that runs inside a Claude Managed Agents session — Claude chooses which company pages to fetch based on what each page reveals, instead of running a fixed discovery list. Set `enable_managed_company_investigator=true` in your environment to opt in. See `src/trajectory/managed/company_investigator.py`.
+
 ---
 
 ## Checks run on every job

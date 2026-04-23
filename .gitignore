@@ -1,13 +1,13 @@
-# Internal design docs
-ARCHITECTURE.md
-AGENTS.md
-CLAUDE.md
-CLAUDE_DESIGN_PLAYBOOK.md
-PROCESS.md
-PROJECT_STRUCTURE.md
-SCHEMAS.md
-SUBMISSION.md
-SKILL.md
+# Internal design docs (root-only — nested copies inside .claude/ ship)
+/ARCHITECTURE.md
+/AGENTS.md
+/CLAUDE.md
+/CLAUDE_DESIGN_PLAYBOOK.md
+/PROCESS.md
+/PROJECT_STRUCTURE.md
+/SCHEMAS.md
+/SUBMISSION.md
+/SKILL.md
 
 
 # Environment
@@ -41,6 +41,7 @@ data/trajectory.db-wal
 data/embeddings.faiss
 data/embeddings.faiss.ids.json
 data/generated/
+data/managed_agents.json
 
 # Logs
 *.log

@@ -1,102 +1,56 @@
-# Claude Code prompt — Trajectory pre-submission polish
+# Claude Code prompt — Trajectory pre-submission polish (revised)
 
 > Paste this entire file to Claude Code as the task brief. Read it fully before writing any code.
 >
-> **Scope:** pre-submission fixes only. Demo polish and honesty rewrites. No architectural changes. No new features.
+> **This is a revised version of the earlier `01-pre-submission-polish.md`.** Three of the original five fixes turned out to be already done or partially done in the current repo. This version drops the obsolete work and tightens the remaining asks so Claude Code doesn't duplicate effort.
 >
-> **Companion prompts:**
-> - `02-managed-agents-company-investigator.md` — real MA integration (post-polish, substantial)
-> - `03-jsonld-extractor.md` — pre-LLM schema.org parser (post-submission safe to defer)
-> - `04-latex-cv-renderer.md` — alternative CV template path (post-submission)
-> - `05-cv-tailor-agentic.md` — FAISS-as-tool refactor of CV tailor (post-submission)
-> - `06-skill-trajectory-new-subagent.md` — install the 7-step discipline skill (post-submission)
+> **Scope:** pre-submission fixes only. Demo polish, honesty rewrites, data freshness, and a CLAUDE.md drift audit. No architectural changes. No new features.
+>
+> **Companion prompts (unchanged):**
+> - `02-managed-agents-company-investigator.md`
+> - `03-jsonld-extractor.md`
+> - `04-latex-cv-renderer.md`
+> - `05-cv-tailor-agentic.md`
+> - `06-skill-trajectory-new-subagent.md`
 
 ---
 
 ## Context
 
-Trajectory is 72 hours from submission. The main code path works end-to-end — a green run was achieved at $2.66 total cost, 6/6 gate tests passed. This task does not build new features. It fixes five specific issues found during review that affect either demo quality or submission honesty.
+Trajectory's main code path works end-to-end. A green run was achieved at $2.66 total cost, 6/6 gate tests passed. This task does not build new features.
+
+**Before you touch any code, do a state check first.** A previous session's work has already landed some of what an earlier version of this prompt asked for. Specifically verified as already done:
+
+- `bot/handlers.py::on_start` already captures `update.effective_user.first_name` (and last_name/username) into `ob.display_name`. No change needed there.
+- `bot/onboarding.py::finalise_onboarding` already uses `session.display_name or "User"`.
+- `sub_agents/onboarding_parser.py::_call_parser` already uses `settings.sonnet_model_id, effort="low"`. Docstring already documents the rationale.
+
+If any of the above is NOT in the state I described, stop and tell the user — something has regressed since the last green run.
 
 Read before starting:
 
-1. `CLAUDE.md` — operating rules.
-2. `src/trajectory/bot/onboarding.py` — specifically `finalise_onboarding` and the `name="User"` TODO comment.
-3. `src/trajectory/bot/handlers.py` — specifically `on_start` and where the onboarding session is created.
-4. `src/trajectory/sub_agents/onboarding_parser.py` — the `_call_parser` function and its `model=` argument.
-5. `src/trajectory/llm.py` — specifically `_call_via_managed_agents`, `_routes_through_managed_agents`, and the `use_managed_agents` flag plumbing.
-6. `src/trajectory/config.py` — `use_managed_agents` and `managed_agents_beta_header`.
-7. `scripts/fetch_gov_data.py` — specifically `fetch_going_rates()`.
-8. `SUBMISSION.md` §3 (video VO), §4 (written description, judging-criteria table).
-9. `README.md` — the "What it does" section.
-10. `PROCESS.md` — the last entry, to know where your additions start numbering.
+1. `CLAUDE.md` — operating rules. Read with Fix 4 in mind — you'll be auditing this file later in the task.
+2. `src/trajectory/config.py` — `use_managed_agents`, `managed_agents_beta_header`.
+3. `src/trajectory/llm.py` — `_call_via_managed_agents`, `_routes_through_managed_agents`, the `use_managed_agents` flag plumbing.
+4. `scripts/fetch_gov_data.py::fetch_going_rates()` — specifically the hardcoded skeleton and its comment at lines 248-254.
+5. `src/trajectory/sub_agents/soc_check.py::_verify_sync` — specifically the threshold selection logic.
+6. `SUBMISSION.md` — §3 (video VO), §4 (written description, judging-criteria table). The file is gitignored but lives in the local checkout.
+7. `README.md` — search for any mention of "Managed Agents". Based on the shared repo state this phrase currently doesn't appear — in which case Fix 2 has no README.md edit to make.
+8. `PROCESS.md` — the last entry (gitignored locally). You need this to know where your additions start numbering.
 
-## The five fixes
+## The four fixes
 
-### Fix 1 — Capture user's name from Telegram
+### Fix 1 — Refresh stale Skilled Worker going rates
 
-**Problem.** `bot/onboarding.py:finalise_onboarding` hardcodes `name="User"` with a TODO comment. Every generated CV renders with "User" as the applicant name. Embarrassing on camera.
+**Problem.** `scripts/fetch_gov_data.py::fetch_going_rates()` ships a hardcoded 10-row skeleton. The comment at the top of the function already acknowledges that only SOC 2136 was updated to the April 2026 regime; the other 10 SOC codes still hold April 2024 values. The general £41,700 threshold isn't stored anywhere, so `soc_check` can't consult it.
 
-**Fix.**
-
-1. In `bot/handlers.py::on_start`, after creating the `OnboardingSession`, read `update.effective_user.first_name` (required field in Telegram) and store it:
-
-   ```python
-   ob = OnboardingSession(user_id=user_id)
-   # Telegram requires first_name on every user — capture it so we don't
-   # need to ask during onboarding.
-   tg_first_name = (update.effective_user.first_name or "").strip()
-   if tg_first_name:
-       ob.answers["name"] = tg_first_name
-   _onboarding_sessions[chat_id] = ob
-   ```
-
-2. In `bot/onboarding.py::finalise_onboarding`, replace the hardcoded `name="User"` line with:
-
-   ```python
-   name=session.answers.get("name") or "",
-   ```
-
-   Empty string, never the literal "User" placeholder. Empty strings are handled gracefully by downstream renderers (verify this — check `renderers/cv_docx.py` and `renderers/cv_pdf.py` handle empty `cv.name`).
-
-3. If `cv.name` renders poorly when empty, fall back to `"Candidate"` in the renderer itself, not in the profile. The profile should never contain a sentinel value.
-
-4. Remove the TODO comment. Replace with a one-line comment explaining the Telegram-sourced default.
-
-### Fix 2 — Onboarding parser: Opus → Sonnet
-
-**Problem.** `onboarding_parser._call_parser` currently calls `call_agent` with `model=settings.opus_model_id, effort="low"`. Per-reply cost is ~$0.15. Per-onboarding (7 stages) is ~$1.00. The task is per-field structured extraction from a single reply — Sonnet 4.6 handles this at ~$0.01/reply.
+The practical consequence is a failing visa-holder demo: Trajectory would pass a job at £42k on SOC 2135 when the real binding threshold is `max(41700, 55000) = 55000`, or cite the wrong shortfall on a NO_GO verdict.
 
 **Fix.**
 
-1. Change the `model=` argument in `onboarding_parser._call_parser` to `settings.sonnet_model_id`. Leave `effort="low"`.
+1. **Do not attempt to scrape the live gov.uk going rates page in this task.** The proper fix needs a URL resolver similar to `_resolve_sponsor_register_url` plus an Appendix Skilled Occupations parser. Out of scope.
 
-2. Update the docstring at the top of `onboarding_parser.py` — the comment says "Opus 4.7 low-effort per-stage parser". Change to "Sonnet 4.6 low-effort per-stage parser" and add a one-sentence rationale: per-field extraction from a single reply is not a reasoning task, so Sonnet is the correct tier per CLAUDE.md Rule 7.
-
-3. Update `scripts/smoke_tests/onboarding_parser.py`. The `ESTIMATED_COST_USD` constant is `0.15` — which was accurate only on Opus. Change to `0.05` (covers 3 Sonnet low round-trips with margin).
-
-4. Run the onboarding smoke test locally if the user's environment supports it. If it passes on Sonnet low, the swap is validated. If Sonnet low fails any assertion, revert to `settings.opus_model_id` and report back.
-
-   Before running anything against the real API, confirm with the user that they want you to spend ~$0.05 of their API credits on a validation run. Do not assume yes.
-
-### Fix 3 — Refresh stale Skilled Worker going rates
-
-**Problem.** `scripts/fetch_gov_data.py::fetch_going_rates()` returns a hardcoded 10-row skeleton from April 2024 rates:
-
-| SOC | Current parquet | Actual 2026 regime |
-|---|---|---|
-| General threshold | (not modelled) | **£41,700** |
-| New entrant floor | £30,900 | **£33,400** |
-| SOC 2136 going rate | £40,300 | **~£52,000** |
-
-This means any visa-holder demo would fail: Trajectory would pass a job at £42k on SOC 2136 when the real threshold is ~£52k, or cite the wrong shortfall amount on a NO_GO verdict.
-
-**Fix.**
-
-1. **Do not attempt to scrape the live gov.uk going rates page during this task.** That's the post-hackathon proper fix; it needs a URL resolver similar to `_resolve_sponsor_register_url` plus a real Appendix Skilled Occupations parser. Too much scope for this prompt.
-
-2. Instead, update the hardcoded skeleton in `fetch_going_rates()` to 2026 values. Source your numbers from public 2026 immigration-law references; do a quick `web_search` for "SOC <code> going rate 2026 skilled worker" for each SOC in the list. Cite your source for each SOC in a code comment so the numbers are defensible.
-
-3. Use these 2026 values for the SOCs currently in the skeleton (verify against a current source before committing — my numbers below are from April 2026 web searches but check them):
+2. Update the hardcoded skeleton to 2026 values. For each row, add a one-line code comment citing the public 2026 source you used. Do a `web_search` for "SOC <code> going rate 2026 skilled worker" per SOC. These are the target values as of April 2026 (verify before committing):
 
    | SOC | Title | going_rate | new_entrant_rate |
    |---|---|---|---|
@@ -107,121 +61,182 @@ This means any visa-holder demo would fail: Trajectory would pass a job at £42k
    | 2134 | IT project managers | 58000 | 33400 |
    | 3534 | Finance and investment analysts | 56000 | 33400 |
    | 2424 | Business and financial project management | 62000 | 33400 |
-   | 2221 | Medical practitioners | 60000 | 41750 (Health & Care route) |
+   | 2221 | Medical practitioners | 60000 | 41750 |
    | 2119 | Natural and social science professionals | 41700 | 33400 |
    | 2425 | Management consultants and business analysts | 56000 | 33400 |
    | 1150 | Chief executives and senior officials | 95000 | 66500 |
 
-   **The new_entrant_rate floor is £33,400 for standard cases as of 2026.** This is a hard floor from the Home Office's tradeable-points Option E — even if 70% of the going rate would be lower, £33,400 applies. Code this floor explicitly. Do not hand-calculate percentages from memory.
+   The new_entrant_rate floor of £33,400 is a hard Home Office floor for standard cases as of 2026 — even if 70% of the going rate would be lower, £33,400 applies. Code the floor explicitly; do not hand-calculate percentages from memory.
 
-4. Add a new field `general_threshold_gbp = 41700` as a module-level constant in `fetch_going_rates()`, written into the parquet as a single row or as a separate parquet file. The verdict agent uses this when the SOC-specific going rate is below the general threshold — the binding constraint is `max(general_threshold, going_rate)`. Check `sub_agents/soc_check.py::_verify_sync` — if it doesn't already implement this max, add it. If it does, verify the threshold value isn't stale there too.
+   SOC 2136 is already at 52000 / 33400, so the existing row stays as-is. You're updating the other ten.
 
-5. Update the comment at the top of `fetch_going_rates()` to state: "Hardcoded skeleton reflecting the July 2025 regime (general threshold £41,700; new entrant floor £33,400). This is a demo stand-in. Post-hackathon, replace with a real parser of the gov.uk Skilled Worker going rates page — see PROCESS.md Entry <N>."
+3. Add a module-level constant `GENERAL_THRESHOLD_GBP = 41_700` in `scripts/fetch_gov_data.py`. Write it into the parquet as a single additional row or as a separate parquet file — whichever is simpler to read back. Either way, update `_load()` in `sub_agents/soc_check.py` to expose the value.
 
-6. If the user has a stale `data/processed/going_rates.parquet` checked out, the fetcher will skip re-running because of the existing-file guard. Tell the user in your summary that they need to run `rm data/processed/going_rates.parquet && python scripts/fetch_gov_data.py` for the new values to take effect.
+4. Update `soc_check.py::_verify_sync`. Currently the threshold selection is:
 
-### Fix 4 — Managed Agents honesty rewrite
+   ```python
+   if ne_eligible and new_entrant_rate is not None:
+       threshold = new_entrant_rate
+   elif going_rate is not None:
+       threshold = going_rate
+   ```
 
-**Problem.** `SUBMISSION.md` §3, §4, and `README.md` claim:
+   This ignores the general £41,700 threshold. The binding constraint per the 2026 regime is `max(general_threshold, role_specific_rate)`. Rewrite to:
 
-> "Eight Opus 4.7 sub-agents run in parallel via Managed Agents."
+   ```python
+   role_rate = (
+       new_entrant_rate if (ne_eligible and new_entrant_rate is not None)
+       else going_rate
+   )
+   if role_rate is not None and general_threshold is not None:
+       threshold = max(role_rate, general_threshold)
+   elif role_rate is not None:
+       threshold = role_rate
+   elif general_threshold is not None:
+       threshold = general_threshold
+   else:
+       threshold = None
+   ```
 
-The code does not do this. `llm.py::_call_via_managed_agents` calls `client.messages.create(...)` with the Managed Agents beta header attached — which is a no-op because that header belongs on `/v1/sessions` endpoints, not `/v1/messages`. Shipping the claim unchanged is an honesty risk with judges who check code.
+   The `general_threshold` variable comes from the new parquet row/file you added in step 3. Don't hardcode it in two places.
 
-**Fix.** This is a documentation-only fix for now. A separate prompt (`02-managed-agents-company-investigator.md`) covers building a genuine Managed Agents integration — that's optional and post-polish.
+5. Update the comment block at the top of `fetch_going_rates()` to read:
 
-In this task, you make three edits:
+   > "Hardcoded skeleton reflecting the April 2026 regime (general threshold £41,700; new entrant floor £33,400). SOC 2136 was updated in an earlier pass (PROCESS.md Entry 27); this pass refreshes the remaining rows. Post-hackathon, replace with a real parser of the gov.uk Skilled Worker going rates page — see the corresponding PROCESS.md entry (numbered below)."
 
-**1. `SUBMISSION.md` §3 — video VO.**
+6. Tell the user in your summary that they need to delete the stale parquet and re-run the fetcher for the new values to take effect:
 
-Find the line:
-> "Eight Opus 4.7 sub-agents run in parallel via Managed Agents."
+   ```bash
+   rm data/processed/going_rates.parquet
+   python scripts/fetch_gov_data.py
+   ```
 
-Replace with:
+### Fix 2 — Managed Agents honesty rewrite
+
+**Problem.** `llm.py::_call_via_managed_agents` attaches `anthropic-beta: managed-agents-2026-04-01` as a default header on a client that then calls `client.messages.create(...)`. That header belongs on `/v1/sessions`, not `/v1/messages` — so on the Messages API endpoint it's a no-op. `settings.use_managed_agents` defaults to `True`, so Phase 1 agents do route through this function, and the function just makes a plain Messages API call dressed up to look like it's using MA.
+
+If SUBMISSION.md §3 or §4 claims "via Managed Agents" and a judge checks the code, the claim fails.
+
+**Fix.** Documentation-only in this task. The real integration lives in prompt 02. Code cleanup of the dead MA stub also lives in prompt 02, so that code stays in place for now.
+
+Before editing:
+
+- **Grep SUBMISSION.md for the phrase "Managed Agents".** If it doesn't appear, Fix 2 is a no-op and you skip straight to Fix 3. Confirm that result to the user.
+- **Grep README.md for the same phrase.** Based on the shared repo snapshot, README.md doesn't currently contain "Managed Agents" — the "What it does" section uses architecture language but not this phrase. If your grep agrees, skip the README edit.
+
+Assuming SUBMISSION.md does contain the phrase:
+
+**`SUBMISSION.md` §3 — video VO.**
+
+Find the line containing "via Managed Agents" in the VO script. Replace it with:
+
 > "Eight Opus 4.7 and Sonnet 4.6 sub-agents run in parallel — JD extraction, Companies House, Sponsor Register, SOC going rates, ghost-job detection, salary benchmarking, red flags. Thirty seconds. What I used to do in four hours, badly."
 
-Also remove the phrase "via Managed Agents" anywhere else in §3.
+Remove the phrase "via Managed Agents" anywhere else in §3.
 
-**2. `SUBMISSION.md` §4 — written description.**
+**`SUBMISSION.md` §4 — written description.**
 
-Find:
-> "Paste a job URL and eight Opus 4.7 sub-agents run in parallel via Managed Agents: company scraping, Companies House, Glassdoor, Sponsor Register, SOC going rates, ghost-job detection across four signals, and salary benchmarking."
+Find the sentence containing "via Managed Agents". Replace with:
 
-Replace with:
 > "Paste a job URL and eight sub-agents run in parallel: company scraping, Companies House, Glassdoor, Sponsor Register, SOC going rates, ghost-job detection across four signals, and salary benchmarking. Opus 4.7 handles the reasoning-heavy agents (verdict, red flags, ghost-job scoring) with adaptive thinking at xhigh effort; Sonnet 4.6 handles the extraction pipeline. Every output is Pydantic-validated structured JSON, and every claim in the final verdict must resolve to a scraped URL + verbatim snippet, a gov.uk field, or a specific entry in the user's career history."
 
-**3. `SUBMISSION.md` §4 — judging-criteria table.**
+**`SUBMISSION.md` §4 — judging-criteria table.**
 
-Replace the "Opus 4.7 Use (25%)" row's evidence column. Currently cites "eight Opus 4.7 sub-agents … parallel via Managed Agents". Replace with:
+Replace the "Opus 4.7 Use (25%)" row's evidence column. If it cites "eight Opus 4.7 sub-agents … parallel via Managed Agents", swap it for:
 
 > "16-agent orchestration (12 Opus, 4 Sonnet) with adaptive thinking and structured tool-use output, Pydantic-validated at every call, citation validator enforcing no invented data, and an injection-resistant two-tier content shield on every untrusted input."
 
-**4. `README.md` — "What it does" section.**
+**Do not touch the code in this task.** Prompt 02 handles the dead-stub cleanup as part of a real integration. If the user opts to skip prompt 02, a follow-up will delete the dead code separately.
 
-Find the bullet referencing Managed Agents. Replace with a version that uses accurate language: "Eight sub-agents run in parallel via `asyncio.gather` — each returns Pydantic-validated structured output."
+### Fix 3 — PROCESS.md entries
 
-**5. Do not touch the code in this task.** Leaving the dead `_call_via_managed_agents` stub in place for this task is fine — prompt `02-managed-agents-company-investigator.md` handles code cleanup as part of the real integration. If the user chooses to skip that prompt entirely, a separate follow-up will delete the dead code.
+Append new entries at the end of `PROCESS.md`. Use the next available number. Some of what an earlier version of this prompt wanted is already captured in existing entries:
 
-### Fix 5 — PROCESS.md entries
+- Entry 26 (onboarding parser: regex → per-stage LLM) is referenced by `onboarding_parser.py`'s docstring and should already exist. If it doesn't, create it — but verify first by opening PROCESS.md and scanning for "Entry 26".
+- Entry 27 (going rates freshness) is referenced by `fetch_going_rates()`'s comment. If it doesn't exist, create it — but again verify first.
 
-Append four new entries at the end of `PROCESS.md`. Use the next available entry numbers. (If your last entry is 25, these become 26-29.)
+Whatever the next number is (call it N), append:
 
-**Entry N — Onboarding parser: regex → per-stage LLM.**
-
-Document:
-- Trigger: live test revealed regex in `finalise_onboarding` failed silently on typical replies (5 pounds → £30k default; "I don't work" → single-item list; green flags never populated).
-- Decision: replace with per-stage Sonnet low parser. 7 stages, one coroutine each. Three-status output (`parsed` / `needs_clarification` / `off_topic`).
-- Architecture choices: prompts as markdown files under `prompts/onboarding/`; `AdvanceOutcome` dataclass instead of new state machine branch; clarification cap of 3 per stage with graceful "skip" on the third; off-topic cap of 3 per session before abandonment; 2000-char input cap as DoS defence; Content Shield Tier 1 on every reply.
-- Model choice: initial deploy used Opus low; corrected to Sonnet low on honesty review — per-field extraction from a single reply is not a reasoning task.
-- What was NOT added: CLARIFYING state (the dataclass handled it); explicit name question (captured from Telegram `first_name` instead).
-
-**Entry N+1 — Known data freshness: going_rates.parquet.**
+**Entry N — Skilled Worker going rates: 2026 refresh.**
 
 Document:
-- `scripts/fetch_gov_data.py::fetch_going_rates()` ships a hardcoded skeleton because the live gov.uk resolver was never implemented for this data source (only for the Sponsor Register).
-- Skeleton updated to 2026 values (general threshold £41,700; new entrant floor £33,400; SOC 2136 going rate ~£52,000).
-- Forward-looking: post-hackathon, implement a real parser of the Appendix Skilled Occupations page following the same pattern as `_resolve_sponsor_register_url`.
+- Trigger: April 2026 visa-holder demos would fail — most SOC rates in the skeleton were 2024 values. SOC 2136 had been refreshed in Entry 27, but the others and the £41,700 general threshold were not.
+- Decision: refresh all remaining rates to the 2026 regime using public immigration-law sources (one cited source per SOC in code comments). Add a module-level `GENERAL_THRESHOLD_GBP = 41_700` constant stored in the parquet and consumed by `soc_check._verify_sync`.
+- Semantics change: `soc_check` now computes `max(role_specific_rate, general_threshold)` — previously only the role rate was consulted, which would pass jobs below the general threshold when the role rate happened to be lower.
+- Forward-looking: build a real parser of the Appendix Skilled Occupations page to replace this skeleton, following `_resolve_sponsor_register_url`.
 
-**Entry N+2 — Managed Agents claim correction.**
+**Entry N+1 — Managed Agents claim correction.**
 
 Document:
-- The submission materials claimed "via Managed Agents" in three places. The code did not do this — `_call_via_managed_agents` calls the Messages API with the MA beta header, which is a no-op on `/v1/messages`.
-- Fix applied: submission materials rewritten to describe the actual architecture (`asyncio.gather` parallel fan-out with Pydantic-validated structured output). The dead code stub is still present and will be addressed in a separate task (see prompt `02-managed-agents-company-investigator.md`).
-- Why the dead stub wasn't deleted in this pass: the user may opt to build a real Managed Agents integration for the company scraper, in which case the code touched is a superset of the deletion.
+- Trigger: code review found that `llm._call_via_managed_agents` attaches the MA beta header to a plain Messages API call — a no-op on `/v1/messages`. SUBMISSION.md claimed "via Managed Agents" on top of this.
+- Decision: submission materials rewritten to describe the actual architecture (`asyncio.gather` parallel fan-out with Pydantic-validated structured output). The dead code stub stays in place for prompt 02 to handle — the user may opt to build a real MA integration for the company scraper, in which case the code touched is a superset of deletion.
 
-**Entry N+3 — Repo review: deferred defects.**
+**Entry N+2 — Deferred defects from repo review.**
 
-Document (short list, one line each):
+One line each:
 
-- Verdict truncates scraped_pages text to 1200 chars in `_serialise_bundle`. Risk of dropping citable evidence on long pages. Deferred; post-hackathon fix.
+- Verdict truncates scraped_pages text to 1200 chars in `_serialise_bundle`. Risk of dropping citable evidence on long pages. Deferred; post-hackathon.
 - Self-audit `_apply_rewrites_to_strings` uses `str.replace(..., count=1)` per leaf, which can hit the wrong occurrence when the same banned phrase appears in multiple fields. Proper fix needs field-path threading through `AuditFlag`. Deferred.
-- Content shield `shield()` does not emit a flag for agents that aren't in either `HIGH_STAKES_AGENTS` or `LOW_STAKES_AGENTS`. New agents without explicit registration receive Tier 1 but no Tier 2 regardless of risk. Post-hackathon, add a registry check that raises at startup.
+- Content shield `shield()` does not emit a flag for agents not in either `HIGH_STAKES_AGENTS` or `LOW_STAKES_AGENTS`. New agents without explicit registration receive Tier 1 but no Tier 2 regardless of risk. Add a registry check that raises at startup — post-hackathon.
 
-## Acceptance criteria
+### Fix 4 — CLAUDE.md drift audit
+
+**Problem.** `CLAUDE.md` has accreted three days of directives across green-run iterations. Opus 4.7 takes CAPS and "NEVER/ALWAYS" directives very literally — stale ones silently degrade every future Claude Code session, and conflicting directives produce unpredictable behaviour when they both fire on the same turn. This is the last chance pre-submission to tighten it.
+
+**Fix.** Audit, don't rewrite wholesale.
+
+1. Open `CLAUDE.md` and list every directive that matches any of these patterns:
+   - Starts with `ALWAYS`, `NEVER`, `DO NOT`, `MUST`, or `MUST NOT`
+   - Is in CAPS for more than three words
+   - References a specific file path, function name, or module name
+   - Gives a numbered rule in a "Rules" or "Operating rules" block
+
+2. For each listed directive, classify it into exactly one of:
+   - **KEEP** — still accurate, still load-bearing.
+   - **STALE** — references a file, symbol, pattern, or behaviour that no longer exists in the repo (verify with `grep` or `view` — don't guess).
+   - **CONFLICTING** — contradicts another directive elsewhere in CLAUDE.md, or contradicts the actual code behaviour after earlier fixes in this session.
+   - **TOO RIGID** — correct in spirit but phrased so absolutely that Opus 4.7 is likely to over-trigger on it (Tharik's term for this pattern is "over-indexing"). Example: an `ALWAYS` rule that should allow an escape hatch for a legitimate exception.
+
+3. Present the classified list to the user as a table (Directive | Classification | Proposed action | Rationale). **Stop here.** Do not edit CLAUDE.md until the user approves the proposed edits.
+
+4. After approval, apply the edits. For STALE: delete. For CONFLICTING: rewrite to resolve the conflict, citing which directive it was reconciled against. For TOO RIGID: soften with a narrow scope clause (e.g. "ALWAYS X unless Y" or "Prefer X; consider Y when…"). For KEEP: untouched.
+
+5. After edits, do a second pass: count the `NEVER`/`ALWAYS` directives before and after. Report both counts. If the total dropped by more than 30% or grew at all, pause and ask the user if that's intended.
+
+**Do not:**
+- Rewrite the entire CLAUDE.md from scratch.
+- Change the section structure.
+- Touch directives that are clearly operational (e.g. "Python 3.11+", "run ruff before committing").
+- Modify any directive without an explicit classification and rationale in the table.
+
+**Scope cap:** if the audit produces more than 8 proposed edits, that's a signal CLAUDE.md has accumulated more drift than is safe to fix in a pre-submission pass. Stop at 8, apply those, flag the rest as a PROCESS.md deferred item.
+
+
 
 Task is complete when all are true:
 
-- [ ] `bot/handlers.py::on_start` captures `update.effective_user.first_name` into `ob.answers["name"]`.
-- [ ] `bot/onboarding.py::finalise_onboarding` uses `session.answers.get("name") or ""` instead of `"User"`. No sentinel placeholder anywhere.
-- [ ] Renderer fallback (if needed): `cv.name` empty renders as `"Candidate"` in `renderers/cv_docx.py` and `renderers/cv_pdf.py`, not `"User"`.
-- [ ] `sub_agents/onboarding_parser.py::_call_parser` uses `model=settings.sonnet_model_id, effort="low"`. Docstring updated.
-- [ ] `scripts/smoke_tests/onboarding_parser.py` has `ESTIMATED_COST_USD = 0.05`.
-- [ ] `scripts/fetch_gov_data.py::fetch_going_rates()` uses 2026 values for every SOC in its skeleton, with a per-SOC source comment. General threshold £41,700 is stored and consulted.
-- [ ] `sub_agents/soc_check.py::_verify_sync` computes `max(general_threshold, going_rate)` as the binding threshold. If it didn't before, it does now.
-- [ ] `SUBMISSION.md` and `README.md` no longer claim "via Managed Agents" blanket over the 8-agent pipeline. Rewrites match Fix 4 §1–4 verbatim (or close paraphrase acceptable — user reviews the draft).
-- [ ] `PROCESS.md` has four new entries as specified. Numbering continuous with existing entries.
+- [ ] State check at the top of this prompt confirmed — name capture, Sonnet parser, PROCESS.md Entry 26/27 all verified present (or the user told they're absent).
+- [ ] `scripts/fetch_gov_data.py::fetch_going_rates()` uses 2026 values for every SOC in its skeleton, with a per-SOC source comment. `GENERAL_THRESHOLD_GBP = 41_700` is stored and exposed.
+- [ ] `sub_agents/soc_check.py::_verify_sync` computes `max(role_specific_rate, general_threshold)`. Threshold selection code matches Fix 1 step 4.
+- [ ] If SUBMISSION.md contained "Managed Agents", it has been rewritten per Fix 2 §1-3. If it didn't, the user has been told.
+- [ ] If README.md contained "Managed Agents", it has been rewritten; otherwise untouched.
+- [ ] `PROCESS.md` has up to three new entries as specified. Numbering continuous with existing entries; entry numbers in the code comments (`onboarding_parser.py` docstring, `fetch_going_rates()` comment) still resolve.
 - [ ] `pytest tests/` all green. `ruff check src/ tests/ scripts/` no new warnings.
-- [ ] The user has been told they need `rm data/processed/going_rates.parquet && python scripts/fetch_gov_data.py` to apply the new going rates.
+- [ ] User has been told: `rm data/processed/going_rates.parquet && python scripts/fetch_gov_data.py` to apply the new going rates.
+- [ ] CLAUDE.md directives audited. A classified table was presented to the user before any edits. Approved edits applied. Before/after `NEVER`/`ALWAYS` counts reported. Edit count ≤ 8; overflow deferred to PROCESS.md.
 
 ## What NOT to do
 
+- Do not re-add `ob.answers["name"]` plumbing; `ob.display_name` already exists.
+- Do not swap the onboarding parser model; it's already Sonnet low.
 - Do not delete `_call_via_managed_agents`, `_routes_through_managed_agents`, `use_managed_agents`, or `managed_agents_beta_header` in this task. Prompt 02 handles that.
 - Do not build any new agent.
-- Do not scrape the live gov.uk Skilled Worker page in this task. That's post-hackathon work.
-- Do not make the Sonnet swap without running the onboarding smoke test first (with user consent on the ~$0.05 cost).
-- Do not rewrite parts of SUBMISSION.md beyond the three edit locations specified. The file's structure is finalised.
+- Do not scrape the live gov.uk Skilled Worker page.
+- Do not touch the SOC 2136 row in the skeleton; it's already correct.
+- Do not rewrite parts of SUBMISSION.md beyond the three edit locations specified.
 - Do not rename, reformat, or restructure PROCESS.md. Append only.
+- Do not rewrite CLAUDE.md wholesale — Fix 4 is targeted edits only, and only after the user approves the classified table.
 
 ## If you're unsure
 
-Stop and ask. Each of these fixes touches submission-sensitive material. Silent guessing is worse than a blocked question.
+Stop and ask. Each of these fixes touches submission-sensitive material. Silent guessing is worse than a blocked question — especially on Fix 2 where a grep miss is the difference between doing nothing and doing something productive.

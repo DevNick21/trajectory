@@ -353,13 +353,21 @@ async def _handle_draft_cv(update, context, user, storage, last_session):
     if not session:
         return
     msg = await update.message.reply_text("Tailoring your CV…")
-    cv, docx_path, pdf_path = await handle_draft_cv(session, user, storage)
+    cv, docx_path, pdf_path, latex_pdf_path = await handle_draft_cv(
+        session, user, storage,
+    )
     await msg.delete()
     for chunk in format_cv_output(cv):
         await update.message.reply_html(chunk)
     chat_id = update.effective_chat.id
     await _send_document(context, chat_id, docx_path, filename=docx_path.name)
     await _send_document(context, chat_id, pdf_path, filename=pdf_path.name)
+    if latex_pdf_path is not None:
+        # Additive third attachment — LaTeX-typeset PDF, optional.
+        await _send_document(
+            context, chat_id, latex_pdf_path,
+            filename=latex_pdf_path.name,
+        )
 
 
 async def _handle_draft_cover_letter(update, context, user, storage, last_session):

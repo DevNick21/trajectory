@@ -46,6 +46,7 @@ class _Entry:
 
 _REGISTRY: list[_Entry] = [
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True),
+    _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True),
     _Entry("content_shield",     "scripts.smoke_tests.content_shield",     cheap=False),
     _Entry("onboarding_parser",  "scripts.smoke_tests.onboarding_parser",  cheap=False),
     _Entry("intent_router",      "scripts.smoke_tests.intent_router",      cheap=False),
@@ -53,6 +54,13 @@ _REGISTRY: list[_Entry] = [
     _Entry("scraper",            "scripts.smoke_tests.scraper",            cheap=False),
     _Entry("verdict",            "scripts.smoke_tests.verdict",            cheap=False),
     _Entry("phase4_cv",          "scripts.smoke_tests.phase4_cv",          cheap=False),
+    # Managed Agents path: gated behind SMOKE_MANAGED_AGENTS=1 inside
+    # the test body itself; runs ~$1-3 when enabled, no-ops otherwise.
+    _Entry("managed_investigator", "scripts.smoke_tests.managed_investigator", cheap=False),
+    # Agentic CV tailor: gated behind SMOKE_AGENTIC_CV=1 (~$0.35).
+    _Entry("cv_tailor_agentic",  "scripts.smoke_tests.cv_tailor_agentic",  cheap=False),
+    # LaTeX CV: gated behind SMOKE_LATEX=1; needs pdflatex on PATH.
+    _Entry("cv_latex",           "scripts.smoke_tests.cv_latex",           cheap=False),
 ]
 
 

@@ -128,7 +128,13 @@ Flow:
 
 ### Step 1 — Docs-reading brief
 
-Fetch and read the seven docs pages listed above. Write a brief to the user (≤ 300 words) confirming:
+**Before you read the docs pages below, check for an official skill.** Anthropic has published a Claude Code skill specifically for the Managed Agents API. It encodes the current API surface and saves you from inferring from prose docs. Check for it in this order:
+
+1. If any skill with `managed-agents`, `managed_agents`, or `claude-managed-agents` in the name is available in this Claude Code session (check `~/.claude/skills/`, the workspace `.claude/skills/`, and any loaded skill index), load it first and follow its guidance.
+2. If not present locally, try to fetch from the public Anthropic skills repository — search GitHub for `anthropics/skills` or `anthropic-ai/skills` and look for a managed-agents subdirectory. Install it if found.
+3. Only if neither 1 nor 2 produces a skill, fall back to reading the seven docs pages listed above from scratch.
+
+Whichever path got you here, write a brief to the user (≤ 300 words) confirming:
 
 - Exact Python SDK method signatures for `client.beta.agents.create`, `client.beta.environments.create`, `client.beta.sessions.create`, `client.beta.sessions.events.send`, `client.beta.sessions.events.stream`, `client.beta.sessions.archive`, `client.beta.sessions.delete`.
 - Which event types you'll handle, which you'll ignore.
@@ -158,10 +164,26 @@ src/trajectory/managed/
 Both are created once per deployment, cached by ID in data/managed_agents.json,
 and reused. See PROCESS.md Entry <N> for why we use Opus 4.7 here — the agent
 is deciding which pages to fetch based on what it reads, which is reasoning.
+
+Cache shape (version-aware — agents in Managed Agents are versioned; editing
+a system prompt creates a new version rather than mutating in place):
+
+    {
+      "agent": {"id": "agt_...", "version": 1},
+      "environment": {"id": "env_..."}
+    }
+
+When the system prompt or tool list in this file changes, bump to a new version
+by creating a new agent rather than mutating the existing one — existing
+archived sessions keep referring to their original version cleanly.
 """
 
-async def get_or_create_agent(client: AsyncAnthropic) -> str:
-    """Return cached agent ID, creating + caching on first call."""
+async def get_or_create_agent(client: AsyncAnthropic) -> tuple[str, int]:
+    """Return (cached agent ID, version), creating + caching on first call.
+
+    Returns a tuple so callers can log which version ran. On 404 (out-of-band
+    deletion in the developer console), invalidate cache and recreate.
+    """
     ...
 
 async def get_or_create_environment(client: AsyncAnthropic) -> str:
@@ -410,3 +432,13 @@ Document:
 ## If you're unsure
 
 Stop. Ask. This task touches honesty-sensitive and runtime-sensitive material.
+
+## Debugging sessions on demo day
+
+If the MA path misbehaves during Saturday's demo recording or Sunday's final runs, the Anthropic developer console is the right tool — not logs. For any session created by the investigator:
+
+- The console has a per-session transcript view showing every event (`user.message`, `agent.tool_use`, `agent.tool_result`, `agent.message`, status changes) with timestamps and token usage.
+- Each session page has an "Ask Claude" button that opens a side chat pre-loaded with that session's context. It's useful for questions like "why did this session spend 12 tool calls before emitting final JSON?" or "which page introduced the off-topic drift?"
+- Editing an agent's system prompt in the console creates a V2 and does not affect already-archived sessions — safe to experiment.
+
+Archive (don't delete) any session whose behaviour you want to investigate later. Archived sessions are free to keep and remain inspectable.

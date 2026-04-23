@@ -69,6 +69,27 @@ def _pick_col(df, *candidates: str) -> Optional[str]:
     return None
 
 
+def _load_general_threshold(going_df) -> Optional[int]:
+    """Extract the `GENERAL` sentinel row written by fetch_going_rates.
+
+    The sentinel row stores GENERAL_THRESHOLD_GBP under `soc_code=GENERAL`
+    so soc_check can pick it up without adding a separate parquet file.
+    Returns None if the sentinel is missing — callers fall back to the
+    role-specific rate alone (the pre-2026 behaviour).
+    """
+    code_col = _pick_col(going_df, "soc_code", "code")
+    rate_col = _pick_col(going_df, "going_rate_gbp", "going_rate", "annual_rate")
+    if code_col is None or rate_col is None:
+        return None
+    hit = going_df[going_df[code_col].astype(str) == "GENERAL"]
+    if hit.empty:
+        return None
+    try:
+        return int(hit.iloc[0][rate_col])
+    except (TypeError, ValueError):
+        return None
+
+
 def _offered_salary(jd: ExtractedJobDescription) -> Optional[int]:
     if not jd.salary_band:
         return None
@@ -154,12 +175,28 @@ def _verify_sync(
 
     offered = _offered_salary(jd)
     ne_eligible = _new_entrant_eligible(user)
+    general_threshold = _load_general_threshold(going_df)
 
-    threshold: Optional[int] = None
-    if ne_eligible and new_entrant_rate is not None:
-        threshold = new_entrant_rate
-    elif going_rate is not None:
-        threshold = going_rate
+    # Threshold selection (April 2026 regime): the binding constraint is
+    #     max(role_specific_rate, GENERAL_THRESHOLD_GBP)
+    # i.e. an employer must meet BOTH the general Skilled Worker floor
+    # AND the occupation-specific going rate. Previously we consulted
+    # only the role rate, which silently passed jobs below the general
+    # floor when the role rate happened to be lower. PROCESS.md Entry 29
+    # documents the change.
+    role_rate: Optional[int] = (
+        new_entrant_rate if (ne_eligible and new_entrant_rate is not None)
+        else going_rate
+    )
+    threshold: Optional[int]
+    if role_rate is not None and general_threshold is not None:
+        threshold = max(role_rate, general_threshold)
+    elif role_rate is not None:
+        threshold = role_rate
+    elif general_threshold is not None:
+        threshold = general_threshold
+    else:
+        threshold = None
 
     below = False
     shortfall: Optional[int] = None

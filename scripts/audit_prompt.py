@@ -19,8 +19,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import importlib
-import inspect
-import json
 import logging
 import sys
 from datetime import datetime
@@ -157,8 +155,9 @@ _AGENT_REGISTRY: dict[str, dict] = {
             "last_session: TRUSTED",
         ],
     },
-    "cv_tailor": {
-        "module": "trajectory.sub_agents.cv_tailor",
+    "cv_tailor_legacy": {
+        # Production path — flag-off default (PROCESS.md Entry 36).
+        "module": "trajectory.sub_agents.cv_tailor_legacy",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "CVOutput",
         "input_sources": [
@@ -167,6 +166,22 @@ _AGENT_REGISTRY: dict[str, dict] = {
             "user_profile: TRUSTED",
             "retrieved_career_entries: TRUSTED",
             "writing_style_profile: TRUSTED",
+        ],
+    },
+    "cv_tailor_agentic": {
+        # Opt-in multi-turn FAISS retrieval path. Career entries enter
+        # via tool-call results (trusted — user's own history) rather
+        # than up-front prompt context.
+        "module": "trajectory.sub_agents.cv_tailor_agentic",
+        "system_prompt_attr": "SYSTEM_PROMPT",
+        "output_schema_symbol": "CVOutput",
+        "input_sources": [
+            "extracted_jd: UNTRUSTED (scraped)",
+            "research_bundle: UNTRUSTED (scraped)",
+            "user_profile: TRUSTED",
+            "writing_style_profile: TRUSTED",
+            "search_career_entries results: TRUSTED (user's own history, "
+            "Tier-1 shielded)",
         ],
     },
     "cover_letter": {
@@ -212,6 +227,20 @@ _AGENT_REGISTRY: dict[str, dict] = {
             "audited_system_prompt: UNTRUSTED (developer-supplied)",
             "audited_output_schema: TRUSTED",
             "input_sources: TRUSTED",
+        ],
+    },
+    "onboarding_parser": {
+        # The parser composes each stage's prompt at module-import time
+        # from a shared header + common rules + per-stage description.
+        # `_CAREER_SYS` is one representative prompt string; the auditor
+        # reads it as a proxy for the 7 stage variants (they share the
+        # header and rules, differing only in the STAGE paragraph).
+        "module": "trajectory.sub_agents.onboarding_parser",
+        "system_prompt_attr": "_CAREER_SYS",
+        "output_schema_symbol": "CareerParseResult",
+        "input_sources": [
+            "stage_key: TRUSTED (onboarding state machine)",
+            "user_reply: UNTRUSTED (typed by the user during /start flow)",
         ],
     },
 }
