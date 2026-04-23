@@ -61,8 +61,18 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
         return
 
-    # Start onboarding
+    # Start onboarding. Capture the user's Telegram display name so the
+    # profile doesn't end up with the "User" placeholder — we never ask
+    # for a name explicitly during the 7-stage flow, so this is the
+    # only clean way to populate it.
     ob = OnboardingSession(user_id=user_id)
+    tg_user = update.effective_user
+    if tg_user is not None:
+        first = (tg_user.first_name or "").strip()
+        last = (tg_user.last_name or "").strip()
+        full = (first + " " + last).strip() or (tg_user.username or "")
+        if full:
+            ob.display_name = full
     _onboarding_sessions[chat_id] = ob
     ob.state = OnboardingState.CAREER
 

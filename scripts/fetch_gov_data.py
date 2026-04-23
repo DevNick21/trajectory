@@ -218,9 +218,15 @@ def fetch_going_rates() -> None:
         log.info("going_rates.parquet exists — skipping")
         return
 
-    # Representative SOC 2020 going rates (annual GBP) as of 2024 ISL
+    # Representative SOC 2020 going rates (annual GBP).
+    # PROCESS.md Entry 27: everything below except SOC 2136 reflects
+    # the April 2024 ISL. SOC 2136 has been refreshed to April-2026
+    # numbers (going_rate £52,000, new_entrant £33,400) because it's
+    # the only code documented with confirmed 2026 values. The others
+    # stay at 2024 pending a full-table refresh (scraper or verified
+    # paste) — treat any verdict citing them as potentially stale.
     going_rates = [
-        {"soc_code": "2136", "soc_title": "Programmers and software development professionals", "going_rate": 40300, "new_entrant_rate": 30900},
+        {"soc_code": "2136", "soc_title": "Programmers and software development professionals", "going_rate": 52000, "new_entrant_rate": 33400},
         {"soc_code": "2135", "soc_title": "IT business analysts, architects and systems designers", "going_rate": 42900, "new_entrant_rate": 30900},
         {"soc_code": "2137", "soc_title": "Web and multimedia professionals", "going_rate": 36100, "new_entrant_rate": 27800},
         {"soc_code": "2139", "soc_title": "Information technology and telecommunications professionals", "going_rate": 38700, "new_entrant_rate": 29600},
