@@ -139,6 +139,10 @@ class OnboardingSession:
     def __init__(self, user_id: str) -> None:
         self.user_id = user_id
         self.state = OnboardingState.START
+        # Display name captured from Telegram's first_name / last_name on
+        # /start. Populated by the bot handler, not the user. Falls back
+        # to "User" during finalise if still unset.
+        self.display_name: Optional[str] = None
         self.answers: dict[str, str] = {}                # raw user text per stage
         self.parsed_answers: dict[str, BaseModel] = {}   # parsed dataclass per stage
         # Consecutive needs_clarification replies on the current stage.
@@ -376,7 +380,7 @@ async def finalise_onboarding(
 
     user = UserProfile(
         user_id=session.user_id,
-        name="User",  # TODO: ask explicitly during onboarding or pick from Telegram profile
+        name=session.display_name or "User",
         user_type=user_type,
         visa_status=visa_status,
         base_location=base_location,

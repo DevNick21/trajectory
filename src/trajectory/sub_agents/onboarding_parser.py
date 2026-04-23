@@ -96,12 +96,18 @@ async def _call_parser(
         downstream_agent="onboarding_parser",
     )
     user_input = f"USER REPLY:\n\n{cleaned.strip()}"
+    # Sonnet 4.6 at effort="low" is the right rung for this job: the
+    # parser does no reasoning, just structured extraction from a short
+    # reply. Opus was overkill (~$0.15/reply) when Sonnet low handles
+    # the same schema at ~$0.02. See PROCESS.md Entry 26 for the
+    # rationale; change model here only after re-running the
+    # onboarding_parser smoke test.
     return await call_agent(
         agent_name=agent_name,
         system_prompt=system_prompt,
         user_input=user_input,
         output_schema=schema,
-        model=settings.opus_model_id,
+        model=settings.sonnet_model_id,
         effort="low",
         max_retries=1,
     )

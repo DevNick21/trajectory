@@ -8,7 +8,8 @@ flow on `OnboardingSession`. Confirms:
     follow_up is non-empty
   - Numeric extraction works in plain English ("sixty k" → 60000)
 
-Cost: ~$0.15 (3 Opus 4.7 low-effort round-trips).
+Cost: ~$0.02 (3 Sonnet 4.6 low-effort round-trips). Was ~$0.15 when
+the parser ran on Opus 4.7 low; PROCESS.md Entry 26 documents the swap.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from ._common import (
 
 NAME = "onboarding_parser"
 REQUIRES_LIVE_LLM = True
-ESTIMATED_COST_USD = 0.15
+ESTIMATED_COST_USD = 0.02
 
 
 async def _body() -> tuple[list[str], list[str], float]:
