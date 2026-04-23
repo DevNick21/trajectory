@@ -46,10 +46,13 @@ class Citation(BaseModel):
                     "verbatim_snippet to be non-empty."
                 )
         elif self.kind == "gov_data":
-            if not self.data_field or self.data_value is None:
+            # Reject both None and empty-string data_value — an empty value
+            # isn't a real citation, and resolving against it would silently
+            # match any empty/missing field in the bundle.
+            if not self.data_field or not self.data_value:
                 raise ValueError(
                     "Citation(kind='gov_data') requires data_field and "
-                    "data_value to be provided."
+                    "data_value to be non-empty."
                 )
         elif self.kind == "career_entry":
             if not self.entry_id:
@@ -145,6 +148,25 @@ class WritingStyleProfile(BaseModel):
     low_confidence_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class WritingStyleProfileLLMOutput(BaseModel):
+    """Subset of WritingStyleProfile that the LLM should actually produce.
+
+    Identity/audit fields (profile_id, user_id, source_sample_ids,
+    sample_count, created_at, updated_at) are injected by the caller.
+    Having the LLM hallucinate them wastes tokens and invites made-up
+    IDs that don't exist in the career store.
+    """
+
+    tone: str
+    sentence_length_pref: Literal["short", "medium", "varied", "long"]
+    formality_level: int = Field(ge=1, le=10)
+    hedging_tendency: Literal["direct", "moderate", "diplomatic"]
+    signature_patterns: list[str]
+    avoided_patterns: list[str]
+    examples: list[str]
+    low_confidence_reason: Optional[str] = None
 
 
 class JobSearchContext(BaseModel):
@@ -534,6 +556,72 @@ class OnboardingResult(BaseModel):
     career_entries: list[CareerEntry]
     writing_style_profile: WritingStyleProfile
     ambiguities_flagged: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Onboarding parser (per-stage, Opus 4.7 low effort)
+#
+# Each onboarding stage has its own parse-result schema. The parser agent
+# decides whether the user's reply covered enough for that stage to
+# advance. If it didn't, `status="needs_clarification"` with a targeted
+# `follow_up` question bounces back to the user instead of polluting the
+# profile with regex-best-effort guesses.
+# ---------------------------------------------------------------------------
+
+
+_ParseStatus = Literal["parsed", "needs_clarification", "off_topic"]
+
+
+class _StageParseBase(BaseModel):
+    status: _ParseStatus
+    follow_up: Optional[str] = None
+
+
+class CareerParseResult(_StageParseBase):
+    narrative: Optional[str] = None
+    roles_mentioned: list[str] = Field(default_factory=list)
+    years_total: Optional[int] = None
+
+
+class MotivationsParseResult(_StageParseBase):
+    motivations: list[str] = Field(default_factory=list)
+    drains: list[str] = Field(default_factory=list)
+
+
+class MoneyParseResult(_StageParseBase):
+    salary_floor_gbp: Optional[int] = None
+    salary_target_gbp: Optional[int] = None
+
+
+class DealBreakersParseResult(_StageParseBase):
+    deal_breakers: list[str] = Field(default_factory=list)
+    good_role_signals: list[str] = Field(default_factory=list)
+
+
+class VisaParseResult(_StageParseBase):
+    user_type: Optional[Literal["visa_holder", "uk_resident"]] = None
+    visa_route: Optional[
+        Literal[
+            "graduate", "skilled_worker", "dependant",
+            "student", "global_talent", "other",
+        ]
+    ] = None
+    visa_expiry: Optional[date] = None
+    base_location: Optional[str] = None
+    open_to_relocation: Optional[bool] = None
+
+
+class LifeParseResult(_StageParseBase):
+    current_employment: Optional[
+        Literal["EMPLOYED", "NOTICE_PERIOD", "UNEMPLOYED"]
+    ] = None
+    search_duration_months: Optional[int] = None
+    hard_deadline: Optional[str] = None
+
+
+class SamplesParseResult(_StageParseBase):
+    samples: list[str] = Field(default_factory=list)
+    sample_count: int = 0
 
 
 # ---------------------------------------------------------------------------

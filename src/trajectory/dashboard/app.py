@@ -17,17 +17,17 @@ from ..storage import Storage
 @st.cache_resource
 def get_storage() -> Storage:
     storage = Storage()
-    asyncio.get_event_loop().run_until_complete(storage.initialise())
+    # asyncio.get_event_loop() is deprecated in 3.10 and raises RuntimeError
+    # in 3.12+ when no loop is running. asyncio.run() creates, manages,
+    # and closes a loop cleanly — correct for a synchronous Streamlit
+    # caller that just needs a one-shot coroutine.
+    asyncio.run(storage.initialise())
     return storage
 
 
 def _run(coro):
     """Run an async coroutine from synchronous Streamlit context."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    return asyncio.run(coro)
 
 
 def main() -> None:
@@ -58,14 +58,10 @@ def main() -> None:
     for s in sessions:
         verdict_decision = "—"
         verdict_confidence = None
+        # Session.verdict is always a Verdict model (storage coerces on save)
         if s.verdict:
-            v = s.verdict
-            if isinstance(v, dict):
-                verdict_decision = v.get("decision", "—")
-                verdict_confidence = v.get("confidence_pct")
-            else:
-                verdict_decision = v.decision
-                verdict_confidence = v.confidence_pct
+            verdict_decision = s.verdict.decision
+            verdict_confidence = s.verdict.confidence_pct
 
         icon = "✅" if verdict_decision == "GO" else ("🚫" if verdict_decision == "NO_GO" else "⏳")
         label = f"{icon} {s.intent} — {s.job_url or '(no URL)'}"
@@ -85,23 +81,23 @@ def main() -> None:
                 if verdict_confidence:
                     st.metric("Confidence", f"{verdict_confidence}%")
 
-            if s.verdict and isinstance(s.verdict, dict):
+            if s.verdict:
                 st.subheader("Verdict detail")
                 verdict = s.verdict
-                if verdict.get("headline"):
-                    st.write(f"**Headline:** {verdict['headline']}")
-                if verdict.get("hard_blockers"):
+                if verdict.headline:
+                    st.write(f"**Headline:** {verdict.headline}")
+                if verdict.hard_blockers:
                     st.error("Hard blockers")
-                    for b in verdict["hard_blockers"]:
-                        st.write(f"• **{b.get('type')}** — {b.get('detail')}")
-                if verdict.get("stretch_concerns"):
+                    for b in verdict.hard_blockers:
+                        st.write(f"• **{b.type}** — {b.detail}")
+                if verdict.stretch_concerns:
                     st.warning("Stretch concerns")
-                    for c in verdict["stretch_concerns"]:
-                        st.write(f"• {c.get('type')}: {c.get('detail')}")
-                if verdict.get("reasoning"):
+                    for c in verdict.stretch_concerns:
+                        st.write(f"• {c.type}: {c.detail}")
+                if verdict.reasoning:
                     st.subheader("Reasoning")
-                    for r in verdict["reasoning"]:
-                        st.write(f"• {r.get('claim')}")
+                    for r in verdict.reasoning:
+                        st.write(f"• {r.claim}")
 
             if s.phase1_output:
                 with st.expander("Phase 1 raw output"):
@@ -114,10 +110,9 @@ def main() -> None:
     # ── Summary stats ──────────────────────────────────────────────────────
     st.divider()
     st.subheader("Summary")
-    go_count = sum(1 for s in sessions if s.verdict and (
-        (isinstance(s.verdict, dict) and s.verdict.get("decision") == "GO")
-        or (hasattr(s.verdict, "decision") and s.verdict.decision == "GO")
-    ))
+    go_count = sum(
+        1 for s in sessions if s.verdict and s.verdict.decision == "GO"
+    )
     st.metric("GO verdicts", go_count, delta=f"out of {len(sessions)}")
 
 

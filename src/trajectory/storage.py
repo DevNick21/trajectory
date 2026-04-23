@@ -119,9 +119,17 @@ async def _ensure_db() -> None:
         _initialised = True
 
 
-async def _connect() -> aiosqlite.Connection:
+async def _connect():
+    """Return an un-awaited aiosqlite Connection proxy.
+
+    Every caller uses `async with await _connect() as db:`. aiosqlite ≥0.21
+    starts the worker thread on the first `await` and treats a second
+    `__aenter__` as a repeat start, raising "threads can only be started
+    once". Returning the connection WITHOUT awaiting it lets the caller
+    both await and enter the context exactly once.
+    """
     await _ensure_db()
-    return await aiosqlite.connect(settings.sqlite_db_path)
+    return aiosqlite.connect(settings.sqlite_db_path)
 
 
 def _dumps(model_obj: Any) -> str:
@@ -669,6 +677,13 @@ class Storage:
     async def save_verdict(self, session_id: str, verdict) -> None:
         session = await get_session(session_id)
         if session:
+            # Single source of truth: Session.verdict is always a Verdict
+            # instance, never a dict. Coerce here so callers can pass
+            # either without scattering isinstance() checks everywhere.
+            from .schemas import Verdict
+
+            if isinstance(verdict, dict):
+                verdict = Verdict.model_validate(verdict)
             session.verdict = verdict
             await update_session(session)
 

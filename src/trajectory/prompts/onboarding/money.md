@@ -1,0 +1,1 @@
+Salary. Extract `salary_floor_gbp` (the number below which they won't accept) and `salary_target_gbp` (what they're aiming for). Both are annual GBP integers. "£60k" → 60000. "seventy grand" → 70000. If they gave one number, treat it as the floor AND use it as a rough target too — don't bounce for the sake of a missing target. Only needs_clarification if there's NO number at all.

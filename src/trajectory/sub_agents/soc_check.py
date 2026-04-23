@@ -10,8 +10,13 @@ Parquet inputs (produced by `scripts/fetch_gov_data.py`):
 
 New-entrant eligibility heuristic (Home Office rules, simplified):
   - Graduate visa holder, OR
-  - Under 26 (no DOB captured in UserProfile — fall back to route check), OR
   - Switching from student route within the last 2 years.
+
+The Home Office also grants new-entrant status to applicants under 26,
+but UserProfile does not (and deliberately does not) carry a DOB, so
+we rely on the route-based signals above — which cover the Graduate-
+visa-to-Skilled-Worker transition that is the target case for this
+product anyway.
 """
 
 from __future__ import annotations

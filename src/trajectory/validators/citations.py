@@ -64,6 +64,17 @@ def _validate_url_snippet(c: Citation, ctx: ValidationContext) -> Optional[str]:
     if ctx.research_bundle is None:
         return "url_snippet citation but no research bundle in context"
 
+    # A snippet quoting `[REDACTED: <pattern>]` means the agent cited
+    # content the Content Shield stripped — the "evidence" is a redaction
+    # marker, not real supporting text. Reject so the retry loop forces
+    # a different citation.
+    if "[REDACTED:" in c.verbatim_snippet:
+        return (
+            f"url_snippet citation: verbatim text is a Content Shield "
+            f"redaction marker, not real evidence. Pick a snippet from "
+            f"unredacted source text at {c.url}."
+        )
+
     snippet_norm = _normalise(c.verbatim_snippet)
     for page in ctx.research_bundle.company_research.scraped_pages:
         if page.url == c.url and snippet_norm in _normalise(page.text):
@@ -84,33 +95,85 @@ def _validate_gov_data(c: Citation, ctx: ValidationContext) -> Optional[str]:
     if actual is None:
         return f"gov_data citation: field {c.data_field!r} not resolvable in research bundle"
 
-    if str(actual).strip() != str(c.data_value).strip():
+    claimed = _normalise(str(c.data_value))
+
+    # List-typed fields (specificity_signals, vagueness_signals, sic_codes,
+    # required_skills, etc.): accept the citation if the claimed value
+    # matches any list element. Citing a single signal from a list is the
+    # natural form for the verdict / generators.
+    if isinstance(actual, list):
+        actual_norm = [_normalise(str(item)) for item in actual]
+        if claimed in actual_norm:
+            return None
         return (
-            f"gov_data citation: field {c.data_field!r} has value {actual!r} "
-            f"but citation claims {c.data_value!r}"
+            f"gov_data citation: field {c.data_field!r} list does not contain "
+            f"{c.data_value!r}; values are {actual!r}"
         )
-    return None
+
+    actual_norm = _normalise(str(actual))
+    if actual_norm == claimed:
+        return None
+
+    # Long free-text fields (jd_text_full, descriptions, etc.) — accept
+    # the citation if the claimed value is a verbatim substring of the
+    # field's full content. Without this the model has to quote the
+    # entire JD body to cite any sentence from it.
+    if len(actual_norm) > 200 and claimed in actual_norm:
+        return None
+
+    return (
+        f"gov_data citation: field {c.data_field!r} has value {actual!r} "
+        f"but citation claims {c.data_value!r}"
+    )
 
 
 def _resolve_gov_field(path: str, bundle: ResearchBundle) -> Any:
-    """Resolve dotted paths like `sponsor_register.status` against the bundle.
+    """Resolve dotted paths against the research bundle.
 
-    Supported roots:
-      - sponsor_register.*  → bundle.sponsor_status
-      - companies_house.*   → bundle.companies_house
-      - soc_check.*         → bundle.soc_check
-      - going_rates.*       → bundle.soc_check (convenience alias)
+    Supported roots — each maps to a resolved field on the bundle that
+    the verdict / Phase 4 generators can cite as a discrete value:
+
+      - sponsor_register.*    → bundle.sponsor_status
+      - companies_house.*     → bundle.companies_house
+      - soc_check.*           → bundle.soc_check
+      - going_rates.*         → bundle.soc_check (convenience alias)
+      - ghost_job.*           → bundle.ghost_job
+      - salary_signals.*      → bundle.salary_signals
+      - red_flags.*           → bundle.red_flags
+      - extracted_jd.*        → bundle.extracted_jd  (scraped JD fields
+                                like remote_policy, salary_band, location)
+      - company_research.*    → bundle.company_research  (company_name,
+                                careers_page_url, not_on_careers_page)
+
+    `gov_data` is a slight misnomer for the JD/company roots — they're
+    sourced from scraping rather than gov.uk — but the citation kind
+    captures "this points at a discrete structured field" rather than a
+    free-text snippet, which is the right semantic for these fields.
     """
     if "." not in path:
         return None
     root, rest = path.split(".", 1)
     source: Optional[BaseModel] = None
-    if root == "sponsor_register":
+    # Accept both the gov-doc-style root (`sponsor_register`) and the
+    # bundle-attribute-style root (`sponsor_status`) since the model
+    # picks whichever feels more natural. Same for ghost_job_assessment,
+    # salary_signals, etc.
+    if root in ("sponsor_register", "sponsor_status"):
         source = bundle.sponsor_status
     elif root == "companies_house":
         source = bundle.companies_house
     elif root in ("soc_check", "going_rates"):
         source = bundle.soc_check
+    elif root in ("ghost_job", "ghost_job_assessment"):
+        source = bundle.ghost_job
+    elif root == "salary_signals":
+        source = bundle.salary_signals
+    elif root in ("red_flags", "red_flags_report"):
+        source = bundle.red_flags
+    elif root in ("extracted_jd", "jd"):
+        source = bundle.extracted_jd
+    elif root == "company_research":
+        source = bundle.company_research
     if source is None:
         return None
 

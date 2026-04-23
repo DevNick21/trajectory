@@ -16,13 +16,20 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Optional
 
 from ..config import settings
 from ..llm import call_agent
+from ..prompts import load_prompt
 from ..schemas import (
     CareerEntry,
+    Citation,
+    HardBlocker,
+    MotivationFitReport,
+    ReasoningPoint,
     ResearchBundle,
+    StretchConcern,
     UserProfile,
     Verdict,
 )
@@ -40,101 +47,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-SYSTEM_PROMPT = """\
-You are the verdict agent in Trajectory, a career assistant serving UK
-job seekers. You decide whether a user should spend 2-4 hours on an
-application, or whether it's a waste of time.
-
-You are blunt and honest. You say NO_GO when the evidence says NO_GO,
-even if the user clearly wants a yes. You do not soften bad news. You
-do not invent encouragement.
-
-You receive: user_profile, research_bundle (all Phase 1 outputs),
-retrieved_career_entries (top-8 relevant to this role).
-
-HARD BLOCKERS - UK RESIDENT USERS:
-
-1. ghost_job.probability == LIKELY_GHOST with HIGH or MEDIUM confidence
-   -> HARD BLOCKER (type: LIKELY_GHOST_JOB). Cite specific ghost signals.
-
-2. companies_house.status in {DISSOLVED, IN_ADMINISTRATION,
-   IN_LIQUIDATION} -> HARD BLOCKER.
-
-3. companies_house.no_filings_in_years >= 2 -> HARD BLOCKER.
-
-4. salary_data shows offered salary below user_profile.salary_floor
-   -> HARD BLOCKER (type: BELOW_PERSONAL_FLOOR).
-
-5. salary_data shows offered salary below market 10th percentile for
-   role+location -> HARD BLOCKER (type: BELOW_MARKET_FLOOR). Cite
-   the percentile data.
-
-6. Any stated deal_breaker from user_profile is triggered by the JD
-   -> HARD BLOCKER (type: DEAL_BREAKER_TRIGGERED). Cite which
-   deal-breaker and which JD phrase triggered it.
-
-ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS:
-
-7. sponsor_register.status == NOT_LISTED -> HARD BLOCKER.
-
-8. sponsor_register.status in {B_RATED, SUSPENDED} -> HARD BLOCKER.
-
-9. soc_check.below_threshold == true AND user is not new-entrant
-   eligible -> HARD BLOCKER. Cite exact GBP shortfall.
-
-10. soc_check.soc_code not in appendix_skilled_occupations
-    -> HARD BLOCKER.
-
-STRETCH CONCERNS (NOT HARD BLOCKERS):
-
-- ghost_job.probability == POSSIBLE_GHOST
-- companies_house shows financial distress signals short of dissolution
-- ghost_job for visa holders (sharper blockers take precedence)
-- MOTIVATION_MISMATCH: 2+ user motivations misaligned with JD
-- EXPERIENCE_GAP: JD requires 10+ years, profile shows <5
-- CULTURE_SIGNAL_MISMATCH: company values clash with user's stated
-  good_role_signals
-
-MOTIVATION FIT CHECK (mandatory, regardless of user_type):
-
-For each user_profile.motivation and user_profile.deal_breaker,
-evaluate whether this role:
-- aligns (cite JD phrase + motivation)
-- misaligns (cite JD phrase + motivation)
-- no_signal
-
-For each user_profile.good_role_signal, check whether the company
-research reveals a match or mismatch.
-
-CITATION DISCIPLINE:
-
-Every reasoning_point MUST cite one of:
-- research_bundle.scraped_pages[url].snippet (verbatim)
-- gov_data field (e.g., sponsor_register.status = NOT_LISTED)
-- career_entry.entry_id
-
-Claims without resolvable citations are rejected by the validator.
-Do not invent citations. If you cannot cite, do not claim.
-
-CONFIDENCE CALIBRATION:
-
-- 85+ : hard blockers all green, strong motivation alignment,
-        salary comfortably above floor, strong role-profile fit
-- 65-85: no hard blockers, reasonable fit, some concerns
-- 45-65: no hard blockers but genuine doubts
-- <45  : soft NO_GO; reasoning should make this explicit
-
-HEADLINE RULES:
-
-Max 12 words. Plain English. No hedging. Examples:
-
-GOOD: "Apply - strong sponsor, salary clears threshold, culture fits."
-GOOD: "Don't apply - this company isn't on the Sponsor Register."
-GOOD: "Don't apply - salary is GBP 3,200 below SOC 2136 going rate."
-BAD : "Based on multiple factors, there are some considerations..."
-
-OUTPUT: Valid JSON matching the Verdict schema. No prose outside JSON.
-"""
+SYSTEM_PROMPT = load_prompt("verdict")
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +158,73 @@ def _make_post_validate(ctx: ValidationContext):
 # ---------------------------------------------------------------------------
 
 
+def _mock_verdict(user: UserProfile, bundle: ResearchBundle) -> Verdict:
+    """Fixture verdict used when SMOKE_TEST_MOCK=1.
+
+    Debug loops on smoke_test.py would otherwise burn Opus 4.7 xhigh on
+    every iteration — roughly $0.50–$1.50 per call. Gating the real API
+    call behind an env var preserves the full wiring of call_agent,
+    post_validate, and _enforce_no_go_with_blockers for integration runs
+    while letting local iteration stay free.
+    """
+    role = bundle.extracted_jd.role_title or "this role"
+    company = bundle.company_research.company_name or "this company"
+    pages = bundle.company_research.scraped_pages
+    first_page_url = pages[0].url if pages else "about:blank"
+    first_snippet = (pages[0].text[:60] if pages and pages[0].text else "fixture")
+    citation = Citation(
+        kind="url_snippet",
+        url=first_page_url,
+        verbatim_snippet=first_snippet,
+    )
+    return Verdict(
+        decision="GO",
+        confidence_pct=72,
+        headline="Apply - fixture verdict, no real Opus call.",
+        reasoning=[
+            ReasoningPoint(
+                claim=f"Fixture verdict for {role} at {company}.",
+                supporting_evidence="SMOKE_TEST_MOCK=1 — no real Opus call.",
+                citation=citation,
+            ),
+            ReasoningPoint(
+                claim="All hard-blocker sources evaluated to benign in the fixture.",
+                supporting_evidence="bundle.sponsor_status / soc_check / ghost_job",
+                citation=citation,
+            ),
+            ReasoningPoint(
+                claim="Motivation and voice profiles wired through end-to-end.",
+                supporting_evidence="style_profile + retrieved_entries both bound.",
+                citation=citation,
+            ),
+        ],
+        hard_blockers=[],
+        stretch_concerns=[],
+        motivation_fit=MotivationFitReport(
+            motivation_evaluations=[],
+            deal_breaker_evaluations=[],
+            good_role_signal_evaluations=[],
+        ),
+    )
+
+
+def _mock_enabled() -> bool:
+    return os.getenv("SMOKE_TEST_MOCK", "").lower() in {"1", "true", "yes"}
+
+
 async def generate(
     research_bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
     session_id: Optional[str] = None,
 ) -> Verdict:
+    if _mock_enabled():
+        logger.warning(
+            "SMOKE_TEST_MOCK=1 — returning fixture verdict without calling "
+            "the Anthropic API. Unset the env var to exercise real Opus."
+        )
+        return _enforce_no_go_with_blockers(_mock_verdict(user, research_bundle))
+
     ctx = await build_context(
         research_bundle=research_bundle,
         user_id=user.user_id,

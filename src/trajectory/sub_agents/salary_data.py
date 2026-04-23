@@ -143,6 +143,19 @@ async def _aggregate_postings(role: str, location: str) -> Optional[AggregatedPo
         # scrape_jobs is fully synchronous (httpx + parsing); offload to a
         # worker thread so the event loop is not blocked for the duration
         # of the network round-trips.
+        #
+        # Site selection notes (jobspy 1.1.13, verified 2026-04):
+        #   - linkedin: returns listings reliably but exposes NO salary
+        #     fields on public pages — useful for posting volume + URLs,
+        #     useless for the salary aggregation we want here.
+        #   - indeed: returns 403 from anti-bot most of the time.
+        #   - glassdoor: not in jobspy.Site enum for this version.
+        # We still attempt both; if neither yields salaries the function
+        # returns None and salary_strategist falls back to ASHE + posted
+        # JD band.
+        #
+        # `hours_old` is NOT a valid kwarg in jobspy 1.1.13; passing it
+        # raises TypeError that the broad except below swallows silently.
         jobs = await asyncio.to_thread(
             scrape_jobs,
             site_name=["indeed", "linkedin"],
@@ -150,7 +163,6 @@ async def _aggregate_postings(role: str, location: str) -> Optional[AggregatedPo
             location=location,
             country_indeed="UK",
             results_wanted=20,
-            hours_old=720,
         )
         if jobs is None or jobs.empty:
             return None
@@ -187,8 +199,18 @@ async def _aggregate_postings(role: str, location: str) -> Optional[AggregatedPo
             p75_gbp=p75,
             sample_urls=urls[:5],
         )
+    except TypeError as exc:
+        # An API-mismatch bug — passing a kwarg jobspy doesn't accept
+        # used to be silently swallowed by the bare `except Exception`.
+        # Re-raise so the caller sees it as a real defect rather than a
+        # benign network hiccup.
+        logger.error("jobspy API mismatch (likely a bug, not network): %s", exc)
+        raise
     except Exception as exc:
-        logger.info("jobspy aggregation failed (non-fatal): %s", exc)
+        # Network errors, anti-bot blocks, and per-site exceptions land
+        # here. Logged at WARNING so the failure is visible without
+        # crashing the Phase 1 fan-out.
+        logger.warning("jobspy aggregation failed: %s", exc)
         return None
 
 
@@ -256,10 +278,15 @@ async def fetch(
         except Exception as exc:
             logger.debug("Could not parse posted_band dict: %s", exc)
 
-    # 3. python-jobspy aggregation (tertiary, best-effort)
+    # 3. python-jobspy aggregation (tertiary, best-effort).
+    # Record an explicit `:unavailable` marker when the call returned nothing
+    # so downstream audits show salary recommendations fell back to ASHE +
+    # posted band, rather than silently dropping the source.
     agg = await _aggregate_postings(role=role, location=location)
     if agg is not None:
         sources_consulted.append("jobspy_aggregation")
+    else:
+        sources_consulted.append("jobspy_aggregation:unavailable")
 
     return SalarySignals(
         ashe=ashe,

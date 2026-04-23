@@ -1,0 +1,1 @@
+Career story. User is describing roles they've held, what they built, and what they're proud of. Extract a tidied `narrative` in their own words (strip filler, keep voice), a list of `roles_mentioned` (job titles they named — empty list is fine), and `years_total` if they stated it. A minimal narrative is acceptable — "I worked at X for 3 years" is parseable.

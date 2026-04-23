@@ -242,6 +242,77 @@ async def call_agent(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Per-model API shape (Anthropic deprecated `thinking.type=enabled` for Opus
+# 4.7 in favour of adaptive thinking + `output_config.effort`).
+#
+# Source: https://platform.claude.com/docs/en/build-with-claude/extended-thinking
+#         https://platform.claude.com/docs/en/build-with-claude/effort
+#
+# Rules captured here so both the Messages API and Managed Agents call paths
+# stay in sync:
+#   - Opus 4.7+ requires `thinking={"type": "adaptive"}`. The legacy
+#     `enabled`/`budget_tokens` shape returns HTTP 400.
+#   - Effort is a top-level `output_config={"effort": <level>}` field.
+#     Accepted values: low | medium | high | xhigh | max.
+#   - When adaptive thinking is active, `tool_choice` may only be
+#     `{"type": "auto"}` or `{"type": "none"}` — pinning a single tool
+#     errors out. Older Sonnet models without thinking can still pin.
+#   - max_tokens needs headroom for thinking + output. Docs recommend
+#     ~64k for Opus 4.7 xhigh; we dial it down for cheaper effort levels.
+# ---------------------------------------------------------------------------
+
+
+_VALID_API_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+
+
+def _is_opus_47(model: str) -> bool:
+    return "opus-4-7" in model.lower()
+
+
+def _build_messages_request(
+    *,
+    tool: dict,
+    model: str,
+    effort: str,
+) -> dict[str, Any]:
+    """Build the model-specific kwargs dict shared by both call paths."""
+    is_opus47 = _is_opus_47(model)
+    extra: dict[str, Any] = {}
+
+    # Adaptive thinking is mandatory on Opus 4.7+; harmless to omit on
+    # older models that handle it via defaults.
+    if is_opus47:
+        extra["thinking"] = {"type": "adaptive"}
+
+    # Pass effort through verbatim if it's a known API value.
+    if effort in _VALID_API_EFFORTS:
+        extra["output_config"] = {"effort": effort}
+
+    # max_tokens — sized to give adaptive thinking room while staying
+    # below the SDK's non-streaming threshold. The Anthropic Python SDK
+    # raises ValueError("Streaming is required for operations that may
+    # take longer than 10 minutes") above ~16k for Opus 4.7. Our outputs
+    # are single tool_use blocks (CV, Verdict, etc.) — typical ~2-4k
+    # output tokens — so 12k is plenty of headroom for thinking + output
+    # without forcing us onto the streaming API.
+    if is_opus47 and effort in {"xhigh", "max"}:
+        extra["max_tokens"] = 12_000
+    elif is_opus47:
+        extra["max_tokens"] = 8_000
+    else:
+        extra["max_tokens"] = 4_096
+
+    # tool_choice — adaptive thinking forbids forced-tool. Only pin the
+    # single tool when no thinking block is sent (i.e. older Sonnet).
+    if is_opus47:
+        extra["tool_choice"] = {"type": "auto"}
+    else:
+        extra["tool_choice"] = {"type": "tool", "name": tool["name"]}
+
+    return extra
+
+
 async def _call_via_messages_api(
     *,
     agent_name: str,
@@ -255,32 +326,16 @@ async def _call_via_messages_api(
     client = _get_anthropic_client()
     tool = _schema_to_tool(output_schema)
 
-    max_tokens = 4096
-    extra_kwargs: dict[str, Any] = {}
-    thinking_enabled = effort == "xhigh"
-    if thinking_enabled:
-        # Extended thinking requires `budget_tokens < max_tokens` and
-        # forbids `tool_choice` in {"tool", "any"} — we therefore allow the
-        # model to choose the single-tool and bump max_tokens to leave room
-        # for the final answer on top of the thinking budget.
-        budget_tokens = 8000
-        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
-        max_tokens = budget_tokens + 4096
-
-    tool_choice: dict[str, Any]
-    if thinking_enabled:
-        tool_choice = {"type": "auto"}
-    else:
-        tool_choice = {"type": "tool", "name": tool["name"]}
+    request_kwargs = _build_messages_request(
+        tool=tool, model=model, effort=effort,
+    )
 
     resp = await client.messages.create(
         model=model,
-        max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
         tools=[tool],
-        tool_choice=tool_choice,
-        **extra_kwargs,
+        **request_kwargs,
     )
 
     tool_use_block = next(
@@ -293,7 +348,7 @@ async def _call_via_messages_api(
             f"stop_reason={resp.stop_reason}"
         )
 
-    raw = tool_use_block.input
+    raw = _unwrap_parameter_value(tool_use_block.input)
     if not isinstance(raw, dict):
         raise AgentCallFailed(
             f"Agent {agent_name} tool_use.input was not a JSON object."
@@ -301,6 +356,43 @@ async def _call_via_messages_api(
 
     usage = resp.usage
     return raw, int(usage.input_tokens), int(usage.output_tokens)
+
+
+_WRAPPER_KEYS = frozenset({
+    "$PARAMETER_VALUE",
+    "parameter",
+    "parameters",
+    "arguments",
+    "args",
+    "input",
+    "value",
+})
+
+
+def _unwrap_parameter_value(raw: Any) -> Any:
+    """Unwrap the spurious wrapper key Anthropic occasionally adds to
+    tool_use input on complex schemas.
+
+    Observed wrappers from Opus 4.7 in the wild:
+      - `{"$PARAMETER_VALUE": {...real fields...}}`
+      - `{"parameter": {...real fields...}}`
+
+    Same root cause: the model is uncertain about the schema shape and
+    nests the args inside a synthetic key. Pydantic then rejects the
+    wrapped object because none of the schema's required fields are at
+    the top level. Stripping any single-key wrapper whose value is a
+    dict resolves this transparently — without it the retry loop would
+    burn attempts on a purely encoding-level quirk.
+    """
+    if (
+        isinstance(raw, dict)
+        and len(raw) == 1
+        and isinstance(next(iter(raw.values())), dict)
+    ):
+        only_key = next(iter(raw))
+        if only_key in _WRAPPER_KEYS:
+            return raw[only_key]
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -331,32 +423,17 @@ async def _call_via_managed_agents(
     )
     tool = _schema_to_tool(output_schema)
 
-    max_tokens = 4096
-    extra_kwargs: dict[str, Any] = {}
-    thinking_enabled = effort == "xhigh"
-    if thinking_enabled:
-        # Same constraints as the plain Messages backend: budget_tokens must
-        # be strictly less than max_tokens, and tool_choice cannot pin a
-        # single tool when extended thinking is enabled.
-        budget_tokens = 8000
-        extra_kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
-        max_tokens = budget_tokens + 4096
-
-    tool_choice: dict[str, Any]
-    if thinking_enabled:
-        tool_choice = {"type": "auto"}
-    else:
-        tool_choice = {"type": "tool", "name": tool["name"]}
+    request_kwargs = _build_messages_request(
+        tool=tool, model=model, effort=effort,
+    )
 
     resp = await client.messages.create(
         model=model,
-        max_tokens=max_tokens,
         system=system_prompt,
         messages=messages,
         tools=[tool],
-        tool_choice=tool_choice,
         metadata={"agent_name": agent_name},
-        **extra_kwargs,
+        **request_kwargs,
     )
 
     tool_use_block = next(
@@ -367,7 +444,7 @@ async def _call_via_managed_agents(
         raise AgentCallFailed(
             f"Managed-Agents call for {agent_name} did not emit tool_use."
         )
-    raw = tool_use_block.input
+    raw = _unwrap_parameter_value(tool_use_block.input)
     if not isinstance(raw, dict):
         raise AgentCallFailed(
             f"Managed-Agents call for {agent_name} returned non-dict."

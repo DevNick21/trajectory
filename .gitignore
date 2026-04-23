@@ -1,6 +1,13 @@
-# Internal design docs — keep README.md only
-*.md
-!README.md
+# Internal design docs
+ARCHITECTURE.md
+AGENTS.md
+CLAUDE.md
+CLAUDE_DESIGN_PLAYBOOK.md
+PROCESS.md
+PROJECT_STRUCTURE.md
+SCHEMAS.md
+SUBMISSION.md
+
 
 # Environment
 .env

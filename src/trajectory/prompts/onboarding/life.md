@@ -1,0 +1,1 @@
+Employment situation. `current_employment`: EMPLOYED / NOTICE_PERIOD / UNEMPLOYED. `search_duration_months` is an integer ("a few weeks" = 0, "six months" = 6). `hard_deadline` is any deadline they mentioned (free text) or null. Parse whatever you can — if they only said "employed, been looking a few months", that's enough to set status=parsed.

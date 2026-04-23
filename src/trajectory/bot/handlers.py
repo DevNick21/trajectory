@@ -111,11 +111,10 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     if routed.blocked_by_verdict:
         if last_session and last_session.verdict:
-            v = last_session.verdict
-            if isinstance(v, dict):
-                from ..schemas import Verdict
-                v = Verdict.model_validate(v)
-            for chunk in format_verdict(v):
+            # Session.verdict is always a Verdict model — storage.save_verdict
+            # coerces on the write side, so readers don't need isinstance()
+            # branches here.
+            for chunk in format_verdict(last_session.verdict):
                 await update.message.reply_html(chunk)
         else:
             await update.message.reply_text("Last verdict was NO_GO — I won't generate a pack for that role.")
@@ -189,9 +188,31 @@ async def _handle_onboarding_message(
     chat_id = update.effective_chat.id
     text = update.message.text or ""
 
-    new_state = ob.advance(text)
+    # Show a typing indicator — parsing each reply costs a short Opus 4.7
+    # low-effort round-trip, so the user shouldn't think the bot hung.
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    except Exception:
+        pass
 
-    if new_state == OnboardingState.PROCESSING:
+    outcome = await ob.advance(text)
+
+    # abandon_session: too many off-topic replies across the session.
+    # Drop the onboarding entry so the next /start gets a clean session
+    # and let the user know they need to restart.
+    if outcome.abandon_session:
+        _onboarding_sessions.pop(chat_id, None)
+        if outcome.follow_up:
+            await update.message.reply_text(outcome.follow_up)
+        return
+
+    # needs_clarification or off_topic: stay on the current stage, send
+    # the one-line follow-up, wait for the user to try again.
+    if outcome.follow_up:
+        await update.message.reply_text(outcome.follow_up)
+        return
+
+    if outcome.state == OnboardingState.PROCESSING:
         msg = await update.message.reply_text("Processing your profile — one moment…")
         try:
             user = await finalise_onboarding(ob, storage)
