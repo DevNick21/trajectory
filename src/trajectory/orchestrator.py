@@ -552,9 +552,15 @@ async def handle_draft_cv(
     user: UserProfile,
     storage: Storage,
     star_polishes: Optional[list[STARPolish]] = None,
-) -> tuple[CVOutput, Path, Path]:
+) -> tuple[CVOutput, Path, Path, Optional[Path]]:
+    """Returns (cv, docx_path, pdf_path, latex_pdf_path).
+
+    `latex_pdf_path` is None when pdflatex is missing, the writer
+    agent failed, or the repair loop exhausted — see PROCESS.md
+    Entry 37 for the additive contract.
+    """
     from .sub_agents import cv_tailor
-    from .renderers import render_cv_docx, render_cv_pdf
+    from .renderers import render_cv_docx, render_cv_pdf, render_latex_pdf
 
     bundle = await _load_session_bundle(session, storage)
     if bundle is None:
@@ -604,7 +610,16 @@ async def handle_draft_cv(
     docx_path = render_cv_docx(cv, out_dir, company=company_name)
     pdf_path = render_cv_pdf(cv, out_dir, company=company_name)
 
-    return cv, docx_path, pdf_path
+    # Additive third path: LaTeX-typeset PDF. Failures are silent; the
+    # caller still gets the docx + reportlab pdf above.
+    latex_pdf_path = await render_latex_pdf(
+        cv,
+        target_role=jd.role_title,
+        session_id=session.session_id,
+        out_dir=out_dir,
+    )
+
+    return cv, docx_path, pdf_path, latex_pdf_path
 
 
 async def handle_draft_cover_letter(

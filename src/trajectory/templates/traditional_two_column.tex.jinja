@@ -1,0 +1,82 @@
+% Reference template — traditional two-column CV.
+% The cv_latex_writer agent uses this as a style guide.
+%
+% Target: finance / consulting / regulated / civil service senior roles.
+% A4 paper, 11pt, two-column layout via `paracol`, conservative typography.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{paracol}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+\usepackage{ragged2e}
+
+\definecolor{accent}{RGB}{50,50,50}
+
+\titleformat{\section}{\normalsize\bfseries\scshape\color{accent}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{6pt}{4pt}
+
+\setlist[itemize]{leftmargin=*,nosep}
+\pagenumbering{gobble}
+\RaggedRight
+
+\columnratio{0.32,0.68}
+
+\begin{document}
+
+% --- Header (spans full width, outside paracol) ---
+\begin{center}
+{\Large\bfseries Jane Example}\\[2pt]
+\href{mailto:jane@example.com}{jane@example.com} \textbullet{} London, UK
+\textbullet{} \href{https://linkedin.com/in/jane}{linkedin.com/in/jane}
+\end{center}
+
+\vspace{4pt}
+
+\begin{paracol}{2}
+
+% --- Left column: Skills, Education, Languages ---
+\section*{Skills}
+Python, SQL, Excel, FactSet, regulatory reporting, model validation.
+
+\section*{Education}
+\textbf{MSc Finance}\\University of Example, 2022
+
+\textbf{BSc Economics}\\University of Example, 2020
+
+\section*{Languages}
+English (native), French (fluent), Mandarin (intermediate).
+
+\switchcolumn
+
+% --- Right column: Summary, Experience ---
+\section*{Summary}
+One short paragraph framing the candidate for a regulated / quantitative
+role, mentioning a specific relevant strength.
+
+\section*{Experience}
+\textbf{Analyst}, Example Bank \hfill 2023 -- Present\\
+\textit{London, UK}
+\begin{itemize}
+  \item Delivered regulatory report X covering Y entities.
+  \item Reduced manual reconciliation time from Z hours to W.
+\end{itemize}
+
+\textbf{Summer Analyst}, Example Consulting \hfill Summer 2022\\
+\textit{London, UK}
+\begin{itemize}
+  \item Built the client-facing risk-weighted-assets model.
+\end{itemize}
+
+\end{paracol}
+
+\end{document}

@@ -2,9 +2,12 @@
 
 Every agent in `sub_agents/` goes through `call_agent`. The wrapper:
 
-- Routes Phase 1 / Phase 4 fan-out sessions through Managed Agents (beta
-  header `managed-agents-2026-04-01`) when `settings.use_managed_agents`,
-  otherwise through the plain Messages API.
+- Calls Anthropic via the plain Messages API. (Previously this module
+  also routed Phase 1 and Phase 4 fan-out agents through a "Managed
+  Agents" branch; it attached the beta header to `client.messages.create`
+  which was a no-op. Deleted 2026-04-23 — see PROCESS.md Entry 35. The
+  genuine Managed Agents integration now lives in
+  `src/trajectory/managed/company_investigator.py`.)
 - Forces structured output via `tool_use` — the agent is given a single
   tool whose input_schema is the Pydantic JSON schema, and we parse
   `tool_use.input` back into the model. This is the "strict Pydantic
@@ -20,7 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncIterator, Callable, Literal, Optional, TypeVar
+from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -42,17 +45,6 @@ class AgentCallFailed(RuntimeError):
 
 Priority = Literal["CRITICAL", "NORMAL"]
 _EFFORT_LEVELS = {"low", "medium", "high", "xhigh"}
-
-
-# ---------------------------------------------------------------------------
-# Routing
-# ---------------------------------------------------------------------------
-
-
-def _routes_through_managed_agents(agent_name: str) -> bool:
-    if not settings.use_managed_agents:
-        return False
-    return agent_name.startswith(("phase_1_", "phase_4_fanout_"))
 
 
 # ---------------------------------------------------------------------------
@@ -148,11 +140,6 @@ async def call_agent(
 
     await _enforce_credit_budget(priority)
 
-    if _routes_through_managed_agents(agent_name):
-        call_fn = _call_via_managed_agents
-    else:
-        call_fn = _call_via_messages_api
-
     last_feedback: Optional[str] = None
     last_output_for_feedback: Any = None
 
@@ -168,26 +155,14 @@ async def call_agent(
                 }
             )
 
-        try:
-            raw_output, input_tokens, output_tokens = await call_fn(
-                agent_name=agent_name,
-                system_prompt=system_prompt,
-                messages=messages,
-                output_schema=output_schema,
-                model=model,
-                effort=effort,
-            )
-        except Exception as e:
-            # Managed Agents failures fall back to plain Messages API once.
-            if call_fn is _call_via_managed_agents:
-                logger.warning(
-                    "Managed Agents failed for %s (%s). Falling back to Messages API.",
-                    agent_name,
-                    e,
-                )
-                call_fn = _call_via_messages_api
-                continue
-            raise
+        raw_output, input_tokens, output_tokens = await _call_via_messages_api(
+            agent_name=agent_name,
+            system_prompt=system_prompt,
+            messages=messages,
+            output_schema=output_schema,
+            model=model,
+            effort=effort,
+        )
 
         await log_llm_cost(
             session_id=session_id,
@@ -396,62 +371,182 @@ def _unwrap_parameter_value(raw: Any) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# Backend: Managed Agents beta
+# Multi-turn tool-use loop (agentic CV tailor; see PROCESS.md Entry 36)
 # ---------------------------------------------------------------------------
 
 
-async def _call_via_managed_agents(
+async def call_agent_with_tools(
     *,
     agent_name: str,
     system_prompt: str,
-    messages: list[dict],
-    output_schema: type[BaseModel],
+    user_input: str,
+    tools: list[dict],
+    tool_executor: Callable[[str, dict], Awaitable[str]],
+    response_schema: type[T],
     model: str,
-    effort: str,
-) -> tuple[dict, int, int]:
-    """Managed Agents backend.
+    effort: str = "xhigh",
+    session_id: Optional[str] = None,
+    max_iterations: int = 10,
+    priority: Priority = "NORMAL",
+) -> T:
+    """Run a multi-turn tool-use loop until the model emits structured output.
 
-    Skeleton note: the exact beta SDK surface may shift — we route through
-    the Anthropic client with the beta header applied. If this fails, the
-    caller in `call_agent` falls back to the plain Messages API.
+    The agent has two ways to respond on each turn:
+      1. Call one of the provided tools (`tool_use` content block) — the
+         executor runs it, we append a `tool_result` block, loop.
+      2. Emit final structured output via the synthetic
+         `emit_structured_output` tool (the same shape as `call_agent`
+         uses). We parse, validate, return.
+
+    `tool_executor(tool_name, tool_input)` returns the tool result as a
+    string (already shielded by the caller if appropriate).
+
+    Token usage accumulates across turns; logged once at the end.
+    `max_iterations` ceiling prevents runaway loops; exceeding raises
+    `AgentCallFailed`.
     """
-    from anthropic import AsyncAnthropic
+    if effort not in _EFFORT_LEVELS:
+        raise ValueError(f"Unknown effort level: {effort}")
 
-    client = AsyncAnthropic(
-        api_key=settings.anthropic_api_key,
-        default_headers={"anthropic-beta": settings.managed_agents_beta_header},
-    )
-    tool = _schema_to_tool(output_schema)
+    await _enforce_credit_budget(priority)
+
+    client = _get_anthropic_client()
+    final_tool = _schema_to_tool(response_schema)
+    final_tool_name = final_tool["name"]
+    all_tools = list(tools) + [final_tool]
 
     request_kwargs = _build_messages_request(
-        tool=tool, model=model, effort=effort,
+        tool=final_tool, model=model, effort=effort,
     )
+    # The multi-turn loop needs `auto` tool_choice every turn so the
+    # model can pick between user tools and the final emitter. Override
+    # whatever _build_messages_request set.
+    request_kwargs["tool_choice"] = {"type": "auto"}
 
-    resp = await client.messages.create(
+    messages: list[dict] = [{"role": "user", "content": user_input}]
+    total_input = 0
+    total_output = 0
+
+    for turn in range(max_iterations):
+        resp = await client.messages.create(
+            model=model,
+            system=system_prompt,
+            messages=messages,
+            tools=all_tools,
+            **request_kwargs,
+        )
+
+        usage = resp.usage
+        total_input += int(getattr(usage, "input_tokens", 0))
+        total_output += int(getattr(usage, "output_tokens", 0))
+
+        # Append the assistant response to the message list verbatim — we
+        # need both text/thinking blocks AND tool_use blocks because the
+        # API requires every tool_use to be followed by a tool_result on
+        # the next turn.
+        assistant_blocks = []
+        for block in resp.content:
+            btype = getattr(block, "type", None)
+            if btype == "text":
+                assistant_blocks.append(
+                    {"type": "text", "text": getattr(block, "text", "")}
+                )
+            elif btype == "tool_use":
+                assistant_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": getattr(block, "id", ""),
+                        "name": getattr(block, "name", ""),
+                        "input": getattr(block, "input", {}),
+                    }
+                )
+            elif btype == "thinking":
+                # Preserve thinking blocks so adaptive thinking continues
+                # to work across turns.
+                assistant_blocks.append(
+                    {
+                        "type": "thinking",
+                        "thinking": getattr(block, "thinking", ""),
+                        "signature": getattr(block, "signature", ""),
+                    }
+                )
+        messages.append({"role": "assistant", "content": assistant_blocks})
+
+        # Find every tool_use in this turn — there can be multiple.
+        tool_uses = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
+
+        # If the model emitted the final tool, we're done.
+        final_call = next(
+            (tu for tu in tool_uses if getattr(tu, "name", "") == final_tool_name),
+            None,
+        )
+        if final_call is not None:
+            raw = _unwrap_parameter_value(getattr(final_call, "input", {}))
+            if not isinstance(raw, dict):
+                raise AgentCallFailed(
+                    f"Agent {agent_name} final tool_use.input was not a JSON object."
+                )
+            await log_llm_cost(
+                session_id=session_id,
+                agent_name=agent_name,
+                model=model,
+                input_tokens=total_input,
+                output_tokens=total_output,
+            )
+            return response_schema.model_validate(raw)
+
+        # Otherwise, execute every non-final tool the model called and
+        # append all results in one user message.
+        if not tool_uses:
+            # Model returned text-only — give it a single nudge to use a
+            # tool or emit final.
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "You produced a text-only response. Please either "
+                        f"call one of the provided tools or emit the final "
+                        f"{response_schema.__name__} via the "
+                        f"`{final_tool_name}` tool. Don't reply with "
+                        "free-form text."
+                    ),
+                }
+            )
+            continue
+
+        result_blocks: list[dict] = []
+        for tu in tool_uses:
+            tool_name = getattr(tu, "name", "")
+            tool_use_id = getattr(tu, "id", "")
+            tool_input = getattr(tu, "input", {}) or {}
+            try:
+                tool_result = await tool_executor(tool_name, tool_input)
+            except Exception as exc:
+                logger.warning(
+                    "Tool %s raised in agent %s: %r", tool_name, agent_name, exc,
+                )
+                tool_result = f"ERROR: tool {tool_name} failed: {exc}"
+            result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": tool_result,
+                }
+            )
+        messages.append({"role": "user", "content": result_blocks})
+
+    # Loop exhausted without final emission.
+    await log_llm_cost(
+        session_id=session_id,
+        agent_name=agent_name,
         model=model,
-        system=system_prompt,
-        messages=messages,
-        tools=[tool],
-        metadata={"agent_name": agent_name},
-        **request_kwargs,
+        input_tokens=total_input,
+        output_tokens=total_output,
     )
-
-    tool_use_block = next(
-        (b for b in resp.content if getattr(b, "type", None) == "tool_use"),
-        None,
+    raise AgentCallFailed(
+        f"Agent {agent_name} exceeded max_iterations={max_iterations} "
+        f"without emitting final {response_schema.__name__}."
     )
-    if tool_use_block is None:
-        raise AgentCallFailed(
-            f"Managed-Agents call for {agent_name} did not emit tool_use."
-        )
-    raw = _unwrap_parameter_value(tool_use_block.input)
-    if not isinstance(raw, dict):
-        raise AgentCallFailed(
-            f"Managed-Agents call for {agent_name} returned non-dict."
-        )
-
-    usage = resp.usage
-    return raw, int(usage.input_tokens), int(usage.output_tokens)
 
 
 # ---------------------------------------------------------------------------

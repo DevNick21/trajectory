@@ -256,6 +256,29 @@ class CompanyResearch(BaseModel):
     not_on_careers_page: bool = False
 
 
+class JsonLdExtraction(BaseModel):
+    """Fields extracted from a Schema.org JobPosting JSON-LD block.
+
+    Only populated when the source is authoritative Schema.org. Values are
+    ground truth — the Sonnet JD extractor should defer to these rather
+    than re-inferring from body text. This model is an internal
+    intermediate: NOT stored in the research bundle, NOT passed to the
+    verdict agent, NOT cited.
+    """
+
+    title: Optional[str] = None
+    date_posted: Optional[date] = None
+    valid_through: Optional[date] = None
+    hiring_organization_name: Optional[str] = None
+    employment_type: Optional[str] = None
+    location: Optional[str] = None
+    salary_min_gbp: Optional[int] = None
+    salary_max_gbp: Optional[int] = None
+    salary_period: Optional[Literal["annual", "hourly", "daily", "monthly"]] = None
+    description_plain: Optional[str] = None
+    raw_fields_present: list[str] = Field(default_factory=list)
+
+
 class ExtractedJobDescription(BaseModel):
     role_title: str
     seniority_signal: Literal[
@@ -705,6 +728,26 @@ class DraftReplyOutput(BaseModel):
     citations: list[Citation] = Field(default_factory=list)
 
 
+class LatexCVOutput(BaseModel):
+    """Output of the cv_latex_writer agent — .tex source plus metadata."""
+
+    template: Literal["modern_one_column", "traditional_two_column"]
+    tex_source: str
+    packages_used: list[str] = Field(default_factory=list)
+    writer_notes: str = ""
+
+
+class LatexRepairOutput(BaseModel):
+    """Output of the cv_latex_repairer agent — patched .tex source.
+
+    Empty `tex_source` + reason-prefixed `change_summary` signals the
+    repairer gave up. The renderer detects this and exits cleanly.
+    """
+
+    tex_source: str
+    change_summary: str
+
+
 class Pack(BaseModel):
     """Aggregate of Phase 4 outputs (populated incrementally by intent)."""
 
@@ -753,6 +796,38 @@ class ContentShieldVerdict(BaseModel):
     reasoning: str
     residual_patterns_detected: list[str] = Field(default_factory=list)
     recommended_action: Literal["PASS_THROUGH", "PASS_WITH_WARNING", "REJECT"]
+
+
+# ---------------------------------------------------------------------------
+# Managed Agents — company investigator output
+#
+# See `src/trajectory/managed/company_investigator.py`. The MA agent
+# returns an `InvestigatorOutput` JSON object. The investigator module
+# converts it to `CompanyResearch` + `ExtractedJobDescription` and the
+# conversion is the citation-enforcement boundary: every finding's
+# `verbatim_snippet` must appear in one of the pages actually fetched
+# during the session.
+# ---------------------------------------------------------------------------
+
+
+class InvestigatorFinding(BaseModel):
+    claim: str
+    source_url: str
+    verbatim_snippet: str  # MUST appear verbatim in a fetched page's text
+
+
+class InvestigatorOutput(BaseModel):
+    company_name: str
+    company_domain: Optional[str] = None
+    culture_claims: list[InvestigatorFinding] = Field(default_factory=list)
+    tech_stack_signals: list[InvestigatorFinding] = Field(default_factory=list)
+    team_size_signals: list[InvestigatorFinding] = Field(default_factory=list)
+    recent_activity_signals: list[InvestigatorFinding] = Field(default_factory=list)
+    posted_salary_bands: list[InvestigatorFinding] = Field(default_factory=list)
+    careers_page_url: Optional[str] = None
+    not_on_careers_page: bool = False
+    extracted_jd: ExtractedJobDescription
+    investigation_notes: str
 
 
 # ---------------------------------------------------------------------------

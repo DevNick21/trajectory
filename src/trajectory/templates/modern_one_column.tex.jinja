@@ -1,0 +1,64 @@
+% Reference template — modern one-column CV.
+% The cv_latex_writer agent uses this as a style guide. This is not
+% rendered via a Jinja engine; the `.jinja` extension is aspirational.
+%
+% Target: tech / engineering / startup / civil service roles.
+% A4 paper, 11pt, single column, modest colour accents.
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+\usepackage{microtype}
+\usepackage{ragged2e}
+
+\definecolor{accent}{RGB}{40,80,120}
+
+\titleformat{\section}{\large\bfseries\color{accent}}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{8pt}{6pt}
+
+\setlist[itemize]{leftmargin=*,nosep}
+\pagenumbering{gobble}
+\RaggedRight
+
+\begin{document}
+
+% --- Header ---
+\begin{flushleft}
+{\LARGE\bfseries Jane Example}\\[2pt]
+\href{mailto:jane@example.com}{jane@example.com} \textbullet{} London, UK
+\textbullet{} \href{https://linkedin.com/in/jane}{linkedin.com/in/jane}
+\textbullet{} \href{https://github.com/jane}{github.com/jane}
+\end{flushleft}
+
+\section*{Summary}
+One short paragraph in the candidate's voice mentioning a specific
+strength relevant to the target role.
+
+\section*{Experience}
+\textbf{Senior Engineer}, Acme Ltd \hfill 2023 -- Present\\
+\textit{London, UK}
+\begin{itemize}
+  \item Shipped X, reducing Y by Z\%.
+  \item Led migration from A to B across N services.
+\end{itemize}
+
+\textbf{Engineer}, Example Co \hfill 2020 -- 2023\\
+\textit{Remote}
+\begin{itemize}
+  \item Built the first version of the payments API.
+\end{itemize}
+
+\section*{Education}
+\textbf{BSc Computer Science}, University of Example \hfill 2016 -- 2020
+
+\section*{Skills}
+Python, AWS, Kubernetes, PostgreSQL, observability, REST design.
+
+\end{document}

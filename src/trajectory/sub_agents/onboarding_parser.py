@@ -1,7 +1,11 @@
 """Onboarding reply parser.
 
-Opus 4.7 low-effort per-stage parser. Replaces regex-heavy finalise_onboarding
-logic with LLM-driven structured extraction.
+Sonnet 4.6 low-effort per-stage parser. Replaces regex-heavy
+finalise_onboarding logic with LLM-driven structured extraction. The
+initial deploy used Opus 4.7 low; PROCESS.md Entry 26 documents the
+swap to Sonnet 4.6 low (~$0.02/reply vs ~$0.15/reply, identical
+quality on the smoke test) and the rationale under CLAUDE.md Rule 7
+(structured extraction, no reasoning → Sonnet).
 
 Each stage has its own Pydantic result schema (see `schemas.py` — `*ParseResult`).
 The parser emits one of three statuses:

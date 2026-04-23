@@ -173,6 +173,16 @@ HIGH_STAKES_AGENTS: frozenset[str] = frozenset(
         "cover_letter",
         "likely_questions",
         "draft_reply",
+        # Managed Agents company investigator: its output feeds verdict,
+        # so every page fetched inside the sandbox runs Tier 2 when Tier
+        # 1 flags.
+        "managed_company_investigator",
+        # LaTeX CV pipeline: writer produces a .tex file that will be
+        # compiled by a subprocess; repairer rewrites it after a compile
+        # error. Both ingest agent-written text but also pdflatex error
+        # logs — keep them high-stakes.
+        "cv_latex_writer",
+        "cv_latex_repairer",
     }
 )
 

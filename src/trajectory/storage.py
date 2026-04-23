@@ -316,6 +316,35 @@ async def retrieve_relevant_entries(
     return ordered
 
 
+async def search_career_entries_semantic(
+    user_id: str,
+    query: str,
+    kind_filter: str = "ANY",
+    top_k: int = 5,
+) -> list[CareerEntry]:
+    """Kind-filterable semantic search over a user's career entries.
+
+    Used by the agentic CV tailor's `search_career_entries` tool. Wraps
+    `retrieve_relevant_entries` and applies a Python-side kind filter
+    after the FAISS hop.
+
+    `kind_filter`:
+      - "ANY" → no filter
+      - any literal `CareerEntry.kind` value → restrict to that kind
+        (`cv_bullet`, `qa_answer`, `star_polish`, `project_note`,
+        `preference`, `motivation`, `deal_breaker`, `writing_sample`,
+        `conversation`)
+    """
+    top_k = max(1, min(int(top_k), 10))
+    over_fetch = top_k * 4 if kind_filter != "ANY" else top_k
+    entries = await retrieve_relevant_entries(
+        user_id=user_id, query_text=query, k=over_fetch,
+    )
+    if kind_filter != "ANY":
+        entries = [e for e in entries if e.kind == kind_filter]
+    return entries[:top_k]
+
+
 async def career_entries_exist(entry_ids: list[str]) -> set[str]:
     """Used by the citation validator: returns the subset that exists."""
     if not entry_ids:

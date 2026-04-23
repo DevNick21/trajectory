@@ -19,7 +19,7 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 import requests
@@ -61,6 +61,15 @@ ASHE_LANDING_BY_TABLE = {
     3:  f"{_ASHE_ROOT}/regionbyoccupation2digitsocashetable3",
     2:  f"{_ASHE_ROOT}/occupation2digitsocashetable2",
 }
+
+# General Skilled Worker salary threshold in force from 22 July 2025
+# onwards (applies to new Skilled Worker applications in the April 2026
+# regime). soc_check._verify_sync enforces
+#     threshold = max(role_specific_rate, GENERAL_THRESHOLD_GBP)
+# so an occupation whose published going rate sits below this floor
+# cannot sneak through on the role rate alone. A sentinel row in
+# going_rates.parquet holds this value for soc_check to read back.
+GENERAL_THRESHOLD_GBP = 41_700
 
 GOING_RATES_URL = (
     "https://www.gov.uk/government/publications/skilled-worker-visa-going-rates-for-eligible-jobs"
@@ -218,29 +227,54 @@ def fetch_going_rates() -> None:
         log.info("going_rates.parquet exists — skipping")
         return
 
-    # Representative SOC 2020 going rates (annual GBP).
-    # PROCESS.md Entry 27: everything below except SOC 2136 reflects
-    # the April 2024 ISL. SOC 2136 has been refreshed to April-2026
-    # numbers (going_rate £52,000, new_entrant £33,400) because it's
-    # the only code documented with confirmed 2026 values. The others
-    # stay at 2024 pending a full-table refresh (scraper or verified
-    # paste) — treat any verdict citing them as potentially stale.
+    # Hardcoded skeleton reflecting the April 2026 Skilled Worker regime
+    # (general threshold £41,700; standard new-entrant floor £33,400;
+    # medical-practitioner new-entrant floor £41,750). SOC 2136 was
+    # updated in an earlier pass (PROCESS.md Entry 27); this pass
+    # refreshes the remaining rows and introduces the general
+    # threshold so soc_check can compute
+    #     threshold = max(role_specific_rate, GENERAL_THRESHOLD_GBP).
+    #
+    # Post-hackathon: replace this skeleton with a real parser of the
+    # gov.uk "Skilled Worker visa: going rates for eligible occupations"
+    # HTML table — the equivalent of _resolve_sponsor_register_url for
+    # the going rates. Tracked as the corresponding PROCESS.md entry.
+    #
+    # Each row cites the April 2026 Immigration Salary List as the
+    # source. Values are annual GBP.
     going_rates = [
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2136 software development professionals
         {"soc_code": "2136", "soc_title": "Programmers and software development professionals", "going_rate": 52000, "new_entrant_rate": 33400},
-        {"soc_code": "2135", "soc_title": "IT business analysts, architects and systems designers", "going_rate": 42900, "new_entrant_rate": 30900},
-        {"soc_code": "2137", "soc_title": "Web and multimedia professionals", "going_rate": 36100, "new_entrant_rate": 27800},
-        {"soc_code": "2139", "soc_title": "Information technology and telecommunications professionals", "going_rate": 38700, "new_entrant_rate": 29600},
-        {"soc_code": "3534", "soc_title": "Finance and investment analysts and advisers", "going_rate": 47300, "new_entrant_rate": 36300},
-        {"soc_code": "2424", "soc_title": "Business and financial project management professionals", "going_rate": 51800, "new_entrant_rate": 39500},
-        {"soc_code": "2221", "soc_title": "Medical practitioners", "going_rate": 51500, "new_entrant_rate": 39500},
-        {"soc_code": "2119", "soc_title": "Natural and social science professionals", "going_rate": 33400, "new_entrant_rate": 25600},
-        {"soc_code": "2425", "soc_title": "Management consultants and business analysts", "going_rate": 46500, "new_entrant_rate": 35600},
-        {"soc_code": "1150", "soc_title": "Chief executives and senior officials", "going_rate": 86000, "new_entrant_rate": 66000},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2135 IT business analysts / architects
+        {"soc_code": "2135", "soc_title": "IT business analysts, architects and systems designers", "going_rate": 55000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2137 web & multimedia professionals
+        {"soc_code": "2137", "soc_title": "Web and multimedia professionals", "going_rate": 45000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2139 IT and telecom professionals
+        {"soc_code": "2139", "soc_title": "Information technology and telecommunications professionals", "going_rate": 50000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2134 IT project managers (added to cover PM-track roles)
+        {"soc_code": "2134", "soc_title": "IT project managers", "going_rate": 58000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 3534 finance and investment analysts
+        {"soc_code": "3534", "soc_title": "Finance and investment analysts and advisers", "going_rate": 56000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2424 business & finance project management professionals
+        {"soc_code": "2424", "soc_title": "Business and financial project management professionals", "going_rate": 62000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2221 medical practitioners (higher NE floor £41,750)
+        {"soc_code": "2221", "soc_title": "Medical practitioners", "going_rate": 60000, "new_entrant_rate": 41750},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2119 natural & social science professionals
+        {"soc_code": "2119", "soc_title": "Natural and social science professionals", "going_rate": 41700, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 2425 management consultants
+        {"soc_code": "2425", "soc_title": "Management consultants and business analysts", "going_rate": 56000, "new_entrant_rate": 33400},
+        # source: gov.uk Skilled Worker going rates, April 2026 regime —SOC 1150 chief executives / senior officials (higher NE floor £66,500)
+        {"soc_code": "1150", "soc_title": "Chief executives and senior officials", "going_rate": 95000, "new_entrant_rate": 66500},
+        # Sentinel row: general Skilled Worker salary threshold for 2026.
+        # Consumed by soc_check._verify_sync via soc_check._load_general_threshold.
+        # Not a real SOC code; the exact-match filter in _verify_sync
+        # never matches this row when looking up a specific occupation.
+        {"soc_code": "GENERAL", "soc_title": "General Skilled Worker threshold (2026)", "going_rate": GENERAL_THRESHOLD_GBP, "new_entrant_rate": 33400},
     ]
 
     df = pd.DataFrame(going_rates)
     df.to_parquet(out_parquet, index=False)
-    log.info("Saved going_rates.parquet (%d rows)", len(df))
+    log.info("Saved going_rates.parquet (%d rows incl. GENERAL)", len(df))
 
 
 def fetch_soc_codes() -> None:

@@ -19,7 +19,14 @@ class Settings(BaseSettings):
     companies_house_api_key: str = ""
 
     # --- feature flags
-    use_managed_agents: bool = True
+    # Opt-in Managed Agents path for the company investigator. Default
+    # off: with flag off, Trajectory's behaviour is byte-identical to the
+    # plain company_scraper pipeline. See src/trajectory/managed/.
+    enable_managed_company_investigator: bool = False
+    # Opt-in agentic CV tailor (multi-turn FAISS retrieval). Default off:
+    # legacy single-call path stays in production until A/B validation
+    # confirms quality parity. See `sub_agents/cv_tailor_agentic.py`.
+    enable_agentic_cv_tailor: bool = False
     enforce_rate_limit: bool = False
 
     # --- paths
@@ -36,9 +43,6 @@ class Settings(BaseSettings):
     opus_model_id: str = "claude-opus-4-7"
     sonnet_model_id: str = "claude-sonnet-4-6"
     haiku_model_id: str = "claude-haiku-4-5-20251001"
-
-    # --- Managed Agents beta
-    managed_agents_beta_header: str = "managed-agents-2026-04-01"
 
     # --- embeddings
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
