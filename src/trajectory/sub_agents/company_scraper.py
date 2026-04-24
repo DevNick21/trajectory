@@ -177,18 +177,41 @@ def _hash_text(text: str) -> str:
 
 
 _CANDIDATE_PATHS = [
+    # Jobs / hiring surfaces
     "/careers",
+    "/careers/jobs",
     "/jobs",
+    "/join-us",
+    # Company + who-we-are
     "/about",
     "/about-us",
     "/company",
+    "/who-we-are",
+    "/mission",
+    "/story",
+    "/handbook",
+    # Culture + values (Phase 1 summariser's highest-signal pages)
     "/values",
     "/culture",
+    "/life",
+    "/life-at",
+    "/benefits",
     "/team",
+    "/leadership",
+    "/people",
+    # Engineering / product blogs (tech-stack + recent-activity signals)
     "/blog",
     "/engineering",
     "/engineering-blog",
     "/tech-blog",
+    "/eng",
+    # Press + trust (funding + regulatory signals for the red-flags agent)
+    "/news",
+    "/press",
+    "/investors",
+    "/security",
+    "/trust",
+    "/privacy",
 ]
 
 
