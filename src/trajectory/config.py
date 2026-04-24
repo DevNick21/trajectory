@@ -48,6 +48,19 @@ class Settings(BaseSettings):
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = Field(default=384)
 
+    # --- dual-surface (web + Telegram). MIGRATION_PLAN.md.
+    # Single-user demo: both surfaces resolve to the same user_profiles
+    # row. The Telegram adapter uses `update.effective_user.id` directly
+    # (which equals demo_user_id since you're the only user); the web
+    # adapter reads demo_user_id since it has no auth. For multi-user
+    # this becomes a session-derived identity in the web layer.
+    demo_user_id: str = ""
+    api_port: int = 8000
+    # CORS allowlist for the FastAPI app — strict, no wildcards.
+    web_origin: str = "http://localhost:5173"
+    # Public-facing URL the bot points un-onboarded users at.
+    web_url: str = "http://localhost:5173"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
