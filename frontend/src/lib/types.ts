@@ -153,6 +153,46 @@ export type FullPrepEvent =
   | { type: "done" };
 
 // ---------------------------------------------------------------------------
+// Queue (batch processing — #5)
+// ---------------------------------------------------------------------------
+
+export type QueueItemStatus = "pending" | "processing" | "done" | "failed";
+
+export interface QueueItem {
+  id: string;
+  job_url: string;
+  status: QueueItemStatus;
+  session_id: string | null;
+  error: string | null;
+  added_at: string;
+  processed_at: string | null;
+}
+
+export interface QueueListResponse {
+  items: QueueItem[];
+  pending_count: number;
+  processing_count: number;
+  done_count: number;
+  failed_count: number;
+}
+
+// POST /api/queue/process
+export type QueueBatchEvent =
+  | { type: "started"; id: string; job_url: string }
+  | {
+      type: "completed";
+      id: string;
+      session_id: string;
+      verdict_decision: "GO" | "NO_GO";
+      verdict_headline: string;
+      role_title: string | null;
+      company_name: string | null;
+    }
+  | { type: "failed"; id: string; error: string }
+  | { type: "error"; data: { message: string } }
+  | { type: "done"; processed_count?: number; note?: string };
+
+// ---------------------------------------------------------------------------
 // Error envelope (HTTPException(detail={...}) shape)
 // ---------------------------------------------------------------------------
 

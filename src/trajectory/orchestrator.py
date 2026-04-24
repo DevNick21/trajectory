@@ -709,8 +709,12 @@ async def handle_draft_cv(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} {' '.join((jd.required_skills or [])[:5])}"
+    # STAR boost: prefer validated star_polish + qa_answer narratives
+    # over raw cv_bullet / project_note. See storage.STAR_BOOST_KINDS.
+    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
-        user_id=user.user_id, query=query, k=12
+        user_id=user.user_id, query=query, k=12,
+        kind_weights=STAR_BOOST_KINDS,
     )
 
     company_name = bundle.company_research.company_name
@@ -775,8 +779,10 @@ async def handle_draft_cover_letter(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} cover letter"
+    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
-        user_id=user.user_id, query=query, k=10
+        user_id=user.user_id, query=query, k=10,
+        kind_weights=STAR_BOOST_KINDS,
     )
 
     company_name = bundle.company_research.company_name
@@ -830,8 +836,10 @@ async def handle_predict_questions(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} interview"
+    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
-        user_id=user.user_id, query=query, k=10
+        user_id=user.user_id, query=query, k=10,
+        kind_weights=STAR_BOOST_KINDS,
     )
 
     company_name = bundle.company_research.company_name
@@ -974,8 +982,10 @@ async def handle_draft_reply(
         raise ContentIntegrityRejected(shield_verdict, "recruiter_email")
 
     style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
+    from .storage import STAR_BOOST_KINDS
     relevant = await storage.retrieve_relevant_entries(
-        user_id=user.user_id, query=cleaned_msg[:200], k=5
+        user_id=user.user_id, query=cleaned_msg[:200], k=5,
+        kind_weights=STAR_BOOST_KINDS,
     )
 
     return await draft_reply.generate(

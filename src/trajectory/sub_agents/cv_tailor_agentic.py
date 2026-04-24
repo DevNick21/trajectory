@@ -41,7 +41,7 @@ from ..schemas import (
     UserProfile,
     WritingStyleProfile,
 )
-from ..storage import search_career_entries_semantic
+from ..storage import STAR_BOOST_KINDS, search_career_entries_semantic
 from ..validators.banned_phrases import contains_banned
 from ..validators.citations import ValidationContext, validate_output
 from ..validators.content_shield import shield as shield_content
@@ -201,11 +201,16 @@ class CVTailorToolExecutor:
             })
         top_k = min(top_k, remaining)
 
+        # STAR boost — prefer user-validated star_polish + qa_answer
+        # when the agent searches, same as the legacy path. Silent
+        # inside the tool response (the agent sees entry.kind and can
+        # weigh them itself too).
         entries: list[CareerEntry] = await search_career_entries_semantic(
             user_id=self._profile.user_id,
             query=query,
             kind_filter=kind_filter,
             top_k=top_k,
+            kind_weights=STAR_BOOST_KINDS,
         )
         self._search_call_count += 1
         self._retrieved_ids.update(e.entry_id for e in entries)

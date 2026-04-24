@@ -31,6 +31,40 @@ class ForwardJobRequest(BaseModel):
     job_url: HttpUrl
 
 
+class QueueAddRequest(BaseModel):
+    """POST /api/queue body — accepts one or many URLs at once.
+
+    At least one of the two fields must be non-empty; the endpoint
+    rejects empty payloads with 400 so the frontend can keep the
+    paste-box input trivial.
+    """
+
+    job_url: Optional[HttpUrl] = None
+    job_urls: Optional[list[HttpUrl]] = None
+
+
+class QueueItem(BaseModel):
+    """Row in GET /api/queue. Wraps trajectory.schemas.QueuedJob for
+    the HTTP layer so the response shape stays stable if the domain
+    model grows fields we don't want to expose."""
+
+    id: str
+    job_url: str
+    status: Literal["pending", "processing", "done", "failed"]
+    session_id: Optional[str] = None
+    error: Optional[str] = None
+    added_at: datetime
+    processed_at: Optional[datetime] = None
+
+
+class QueueListResponse(BaseModel):
+    items: list[QueueItem] = Field(default_factory=list)
+    pending_count: int = 0
+    processing_count: int = 0
+    done_count: int = 0
+    failed_count: int = 0
+
+
 # ---------------------------------------------------------------------------
 # Sessions
 # ---------------------------------------------------------------------------

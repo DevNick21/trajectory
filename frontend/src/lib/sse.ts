@@ -13,7 +13,7 @@
 // the caller's onEvent gets a typed value when the message line is
 // valid JSON.
 
-import type { ForwardJobEvent, FullPrepEvent } from "./types";
+import type { ForwardJobEvent, FullPrepEvent, QueueBatchEvent } from "./types";
 
 interface PostSSEOptions {
   signal?: AbortSignal;
@@ -100,6 +100,18 @@ export interface FullPrepOptions extends PostSSEOptions {
 export const streamFullPrep = (sessionId: string, opts: FullPrepOptions) =>
   postSSE<FullPrepEvent>(
     `/api/sessions/${encodeURIComponent(sessionId)}/full_prep`,
+    {},
+    opts.onEvent,
+    { signal: opts.signal, onError: opts.onError },
+  );
+
+export interface QueueBatchOptions extends PostSSEOptions {
+  onEvent: (event: QueueBatchEvent) => void;
+}
+
+export const streamQueueBatch = (opts: QueueBatchOptions) =>
+  postSSE<QueueBatchEvent>(
+    "/api/queue/process",
     {},
     opts.onEvent,
     { signal: opts.signal, onError: opts.onError },

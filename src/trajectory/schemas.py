@@ -817,6 +817,25 @@ class InvestigatorFinding(BaseModel):
     verbatim_snippet: str  # MUST appear verbatim in a fetched page's text
 
 
+class QueuedJob(BaseModel):
+    """A saved-for-later job URL awaiting batch processing.
+
+    The queue is a distinct table from `sessions` — a queue entry
+    exists before any Phase 1 work runs, and transitions to
+    `status="done"` with a `session_id` pointer once processed. On
+    failure, the entry sticks around for retry.
+    """
+
+    id: str
+    user_id: str
+    job_url: str
+    status: Literal["pending", "processing", "done", "failed"]
+    session_id: Optional[str] = None
+    error: Optional[str] = None
+    added_at: datetime
+    processed_at: Optional[datetime] = None
+
+
 class InvestigatorOutput(BaseModel):
     company_name: str
     company_domain: Optional[str] = None
