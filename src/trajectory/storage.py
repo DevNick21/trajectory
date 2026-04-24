@@ -32,6 +32,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 from .schemas import (
     CareerEntry,
+    QueuedJob,
     Session,
     UserProfile,
     WritingStyleProfile,
@@ -92,6 +93,19 @@ CREATE TABLE IF NOT EXISTS llm_cost_log (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_cost_agent ON llm_cost_log(agent_name);
+
+CREATE TABLE IF NOT EXISTS queued_jobs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    job_url TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    session_id TEXT,
+    error TEXT,
+    added_at TEXT NOT NULL,
+    processed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_queued_user ON queued_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_queued_status ON queued_jobs(status);
 """
 
 
@@ -267,15 +281,37 @@ async def insert_career_entry(entry: CareerEntry) -> None:
         _faiss_save()
 
 
+# Kinds that represent user-validated "master stories" — polished STAR
+# narratives and Q&A answers already verified by the user in dialogue.
+# Generators prefer these over raw cv_bullet / project_note because
+# they sound like the user and have been pre-reviewed. See #2 in the
+# "money no object" roadmap (retrieval weighting, not schema change).
+STAR_BOOST_KINDS: dict[str, float] = {
+    "star_polish": 1.5,
+    "qa_answer": 1.2,
+}
+
+
 async def retrieve_relevant_entries(
     user_id: str,
     query_text: str,
     k: int = 12,
+    kind_weights: Optional[dict[str, float]] = None,
 ) -> list[CareerEntry]:
     """FAISS nearest-neighbour over career entries for this user.
 
-    We over-fetch from FAISS and filter by user in Python — acceptable for
-    single-user demo scale. For multi-user at scale, partition by user_id.
+    When `kind_weights` is provided, each FAISS inner-product score is
+    multiplied by the kind's weight (default 1.0 for unlisted kinds)
+    and results are re-sorted. Used by Phase 4 generators to prefer
+    `star_polish` + `qa_answer` entries — the "master story bank" —
+    over raw cv_bullet / project_note material.
+
+    Without weights: behaviour is identical to pre-weighting —
+    FAISS-hit order is preserved.
+
+    We over-fetch from FAISS and filter by user in Python — acceptable
+    for single-user demo scale. For multi-user at scale, partition by
+    user_id.
     """
     import numpy as np
 
@@ -285,15 +321,18 @@ async def retrieve_relevant_entries(
 
     query_vec = np.asarray([await _embed(query_text)], dtype="float32")
     over_fetch = min(index.ntotal, max(k * 4, 32))
-    _, idxs = index.search(query_vec, over_fetch)
+    scores, idxs = index.search(query_vec, over_fetch)
 
-    hit_ids: list[str] = []
-    for i in idxs[0]:
+    # Keep (faiss_position, score, entry_id) so we can re-rank by
+    # score × kind_weight when weights are supplied.
+    hits: list[tuple[int, float, str]] = []
+    for pos, (i, score) in enumerate(zip(idxs[0], scores[0])):
         if 0 <= i < len(id_map):
-            hit_ids.append(id_map[i])
-    if not hit_ids:
+            hits.append((pos, float(score), id_map[i]))
+    if not hits:
         return []
 
+    hit_ids = [eid for (_, _, eid) in hits]
     placeholders = ",".join("?" for _ in hit_ids)
     async with await _connect() as db:
         async with db.execute(
@@ -305,15 +344,31 @@ async def retrieve_relevant_entries(
         ) as cur:
             rows = await cur.fetchall()
 
-    # Re-rank in FAISS-hit order.
-    by_id = {CareerEntry.model_validate_json(r[0]).entry_id: r[0] for r in rows}
-    ordered: list[CareerEntry] = []
-    for eid in hit_ids:
-        if eid in by_id:
-            ordered.append(CareerEntry.model_validate_json(by_id[eid]))
-            if len(ordered) >= k:
-                break
-    return ordered
+    by_id: dict[str, CareerEntry] = {}
+    for r in rows:
+        entry = CareerEntry.model_validate_json(r[0])
+        by_id[entry.entry_id] = entry
+
+    # Re-rank. Without weights, FAISS order is preserved by using the
+    # original position as the sort key. With weights, multiply score
+    # by kind weight and sort descending — ties break on FAISS order.
+    scored: list[tuple[float, int, CareerEntry]] = []
+    for (pos, score, eid) in hits:
+        entry = by_id.get(eid)
+        if entry is None:
+            continue
+        if kind_weights:
+            weight = kind_weights.get(entry.kind, 1.0)
+            boosted = score * weight
+            scored.append((-boosted, pos, entry))
+        else:
+            # Pure FAISS order — use position as the primary key so
+            # the numeric score doesn't matter (IndexFlatIP returns
+            # higher = better; negating keeps the sort stable + correct).
+            scored.append((float(pos), pos, entry))
+
+    scored.sort(key=lambda x: (x[0], x[1]))
+    return [entry for (_, _, entry) in scored[:k]]
 
 
 async def search_career_entries_semantic(
@@ -321,6 +376,7 @@ async def search_career_entries_semantic(
     query: str,
     kind_filter: str = "ANY",
     top_k: int = 5,
+    kind_weights: Optional[dict[str, float]] = None,
 ) -> list[CareerEntry]:
     """Kind-filterable semantic search over a user's career entries.
 
@@ -334,11 +390,15 @@ async def search_career_entries_semantic(
         (`cv_bullet`, `qa_answer`, `star_polish`, `project_note`,
         `preference`, `motivation`, `deal_breaker`, `writing_sample`,
         `conversation`)
+    `kind_weights`: forwarded to `retrieve_relevant_entries` so the
+    agent's retrieval prefers validated narratives (see
+    `STAR_BOOST_KINDS`). Pass None for pure similarity order.
     """
     top_k = max(1, min(int(top_k), 10))
     over_fetch = top_k * 4 if kind_filter != "ANY" else top_k
     entries = await retrieve_relevant_entries(
         user_id=user_id, query_text=query, k=over_fetch,
+        kind_weights=kind_weights,
     )
     if kind_filter != "ANY":
         entries = [e for e in entries if e.kind == kind_filter]
@@ -585,6 +645,138 @@ async def session_cost_summary(session_id: str) -> dict:
     return {"total_usd": sum(by_agent.values()), "by_agent": by_agent}
 
 
+# ---------------------------------------------------------------------------
+# Queued jobs (batch processing — see api/routes/queue.py)
+# ---------------------------------------------------------------------------
+
+
+def _queued_from_row(row) -> QueuedJob:
+    """Shared row→model conversion used by every queue query."""
+    (qid, user_id, job_url, status, session_id, error, added_at,
+     processed_at) = row
+    return QueuedJob(
+        id=qid,
+        user_id=user_id,
+        job_url=job_url,
+        status=status,
+        session_id=session_id,
+        error=error,
+        added_at=datetime.fromisoformat(added_at),
+        processed_at=(
+            datetime.fromisoformat(processed_at) if processed_at else None
+        ),
+    )
+
+
+async def insert_queued_job(user_id: str, job_url: str) -> QueuedJob:
+    import uuid
+
+    job = QueuedJob(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_url=job_url,
+        status="pending",
+        added_at=_utcnow(),
+    )
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO queued_jobs
+                (id, user_id, job_url, status, added_at)
+            VALUES (?, ?, ?, 'pending', ?)
+            """,
+            (job.id, user_id, job_url, job.added_at.isoformat()),
+        )
+        await db.commit()
+    return job
+
+
+async def list_queued_jobs(
+    user_id: str, status_filter: Optional[str] = None,
+) -> list[QueuedJob]:
+    sql = (
+        "SELECT id, user_id, job_url, status, session_id, error, added_at, "
+        "processed_at FROM queued_jobs WHERE user_id = ?"
+    )
+    args: tuple = (user_id,)
+    if status_filter:
+        sql += " AND status = ?"
+        args = (user_id, status_filter)
+    sql += " ORDER BY added_at DESC"
+    async with await _connect() as db:
+        async with db.execute(sql, args) as cur:
+            rows = await cur.fetchall()
+    return [_queued_from_row(r) for r in rows]
+
+
+async def get_queued_job(job_id: str) -> Optional[QueuedJob]:
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT id, user_id, job_url, status, session_id, error, "
+            "added_at, processed_at FROM queued_jobs WHERE id = ?",
+            (job_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return _queued_from_row(row) if row else None
+
+
+async def _update_queued_job_status(
+    job_id: str,
+    status: str,
+    *,
+    session_id: Optional[str] = None,
+    error: Optional[str] = None,
+    mark_processed: bool = False,
+) -> None:
+    now = _utcnow().isoformat() if mark_processed else None
+    async with await _connect() as db:
+        await db.execute(
+            """
+            UPDATE queued_jobs
+            SET status = ?,
+                session_id = COALESCE(?, session_id),
+                error = COALESCE(?, error),
+                processed_at = COALESCE(?, processed_at)
+            WHERE id = ?
+            """,
+            (status, session_id, error, now, job_id),
+        )
+        await db.commit()
+
+
+async def mark_queued_job_processing(job_id: str) -> None:
+    await _update_queued_job_status(job_id, "processing")
+
+
+async def mark_queued_job_done(job_id: str, session_id: str) -> None:
+    await _update_queued_job_status(
+        job_id, "done", session_id=session_id, mark_processed=True,
+    )
+
+
+async def mark_queued_job_failed(job_id: str, error: str) -> None:
+    # Truncate error strings to avoid blowing up the column with raw
+    # tracebacks — the full detail stays in server logs.
+    await _update_queued_job_status(
+        job_id, "failed", error=error[:500], mark_processed=True,
+    )
+
+
+async def remove_queued_job(job_id: str, user_id: str) -> bool:
+    """Delete a queue entry. Returns True if the row was owned by
+    `user_id` and deleted, False otherwise — the API layer turns a
+    False into a 404 (not-found / not-yours, same shape as everywhere
+    else)."""
+    async with await _connect() as db:
+        async with db.execute(
+            "DELETE FROM queued_jobs WHERE id = ? AND user_id = ?",
+            (job_id, user_id),
+        ) as cur:
+            deleted = cur.rowcount > 0
+        await db.commit()
+    return deleted
+
+
 async def get_all_career_entries_for_user(user_id: str) -> list[CareerEntry]:
     async with await _connect() as db:
         async with db.execute(
@@ -685,12 +877,17 @@ class Storage:
         await insert_career_entry(entry)
 
     async def retrieve_relevant_entries(
-        self, user_id: str, query: str, k: int = 8
+        self,
+        user_id: str,
+        query: str,
+        k: int = 8,
+        kind_weights: Optional[dict[str, float]] = None,
     ) -> list[CareerEntry]:
-        # Module-level fn is `(user_id, query_text, k)`; the wrapper accepts
-        # `query` for caller ergonomics and forwards under the right kwarg.
+        # Module-level fn is `(user_id, query_text, k, kind_weights)`; the
+        # wrapper accepts `query` for caller ergonomics and forwards under
+        # the right kwarg.
         return await retrieve_relevant_entries(
-            user_id=user_id, query_text=query, k=k
+            user_id=user_id, query_text=query, k=k, kind_weights=kind_weights,
         )
 
     async def get_all_career_entries(self) -> list[CareerEntry]:
@@ -722,6 +919,35 @@ class Storage:
 
     async def session_cost_summary(self, session_id: str) -> dict:
         return await session_cost_summary(session_id=session_id)
+
+    # ── Queued jobs ────────────────────────────────────────────────────────
+
+    async def insert_queued_job(self, user_id: str, job_url: str) -> QueuedJob:
+        return await insert_queued_job(user_id=user_id, job_url=job_url)
+
+    async def list_queued_jobs(
+        self, user_id: str, status_filter: Optional[str] = None,
+    ) -> list[QueuedJob]:
+        return await list_queued_jobs(
+            user_id=user_id, status_filter=status_filter,
+        )
+
+    async def get_queued_job(self, job_id: str) -> Optional[QueuedJob]:
+        return await get_queued_job(job_id=job_id)
+
+    async def mark_queued_job_processing(self, job_id: str) -> None:
+        await mark_queued_job_processing(job_id=job_id)
+
+    async def mark_queued_job_done(
+        self, job_id: str, session_id: str,
+    ) -> None:
+        await mark_queued_job_done(job_id=job_id, session_id=session_id)
+
+    async def mark_queued_job_failed(self, job_id: str, error: str) -> None:
+        await mark_queued_job_failed(job_id=job_id, error=error)
+
+    async def remove_queued_job(self, job_id: str, user_id: str) -> bool:
+        return await remove_queued_job(job_id=job_id, user_id=user_id)
 
     async def save_phase1_output(self, session_id: str, bundle) -> None:
         session = await get_session(session_id)

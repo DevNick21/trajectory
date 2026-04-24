@@ -14,6 +14,7 @@ from .health import router as health_router
 from .onboarding import router as onboarding_router
 from .pack import router as pack_router
 from .profile import router as profile_router
+from .queue import router as queue_router
 from .sessions import router as sessions_router
 
 api_router = APIRouter()
@@ -27,6 +28,7 @@ api_router.include_router(profile_router, prefix="/api")
 api_router.include_router(onboarding_router, prefix="/api")
 api_router.include_router(sessions_router, prefix="/api")
 api_router.include_router(pack_router, prefix="/api")
+api_router.include_router(queue_router, prefix="/api")
 api_router.include_router(files_router, prefix="/api")
 
 __all__ = ["api_router"]

@@ -2,6 +2,7 @@ import { Link, Route, Routes } from "react-router-dom";
 import Dashboard from "@/pages/Dashboard";
 import SessionDetail from "@/pages/SessionDetail";
 import Onboarding from "@/pages/Onboarding";
+import Queue from "@/pages/Queue";
 
 export default function App() {
   return (
@@ -15,6 +16,9 @@ export default function App() {
             <Link to="/" className="hover:underline">
               Dashboard
             </Link>
+            <Link to="/queue" className="hover:underline">
+              Queue
+            </Link>
             <Link to="/onboarding" className="hover:underline">
               Onboarding
             </Link>
@@ -24,6 +28,7 @@ export default function App() {
       <main className="flex-1 container py-8">
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/queue" element={<Queue />} />
           <Route path="/sessions/:id" element={<SessionDetail />} />
           <Route path="/onboarding" element={<Onboarding />} />
         </Routes>

@@ -243,7 +243,7 @@ async def test_happy_path_emits_cv(monkeypatch):
     monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
 
     # Fake search returns two entries per call.
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1"), _entry("e2")]
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
@@ -312,7 +312,7 @@ async def test_hallucinated_citation_raises(monkeypatch):
     client.messages.create = fake_create
     monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
 
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
@@ -372,7 +372,7 @@ async def test_early_emission_under_min_searches_raises(monkeypatch):
     client.messages.create = fake_create
     monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
 
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
@@ -425,7 +425,7 @@ async def test_max_iterations_raises(monkeypatch):
     client.messages.create = fake_create
     monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
 
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
@@ -553,7 +553,7 @@ async def test_dispatcher_agentic_fallback_on_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_executor_tracks_retrieved_and_count(monkeypatch):
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("a"), _entry("b")]
 
     async def fake_shield(*, content, source_type, downstream_agent):
@@ -585,7 +585,7 @@ async def test_executor_tracks_retrieved_and_count(monkeypatch):
 async def test_executor_enforces_retrieval_budget(monkeypatch):
     call_count = [0]
 
-    async def fake_search(user_id, query, kind_filter="ANY", top_k=5):
+    async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         call_count[0] += 1
         return [_entry(f"e{call_count[0]}_{i}") for i in range(5)]
 

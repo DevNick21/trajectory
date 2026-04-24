@@ -7,6 +7,8 @@ import type {
   OnboardingFinaliseResponse,
   PackGeneratorName,
   PackResult,
+  QueueItem,
+  QueueListResponse,
   SessionDetailResponse,
   SessionListResponse,
   UserProfile,
@@ -128,6 +130,27 @@ export const finaliseOnboarding = (payload: OnboardingFinalisePayload) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+// ---------------------------------------------------------------------------
+// Queue (#5)
+// ---------------------------------------------------------------------------
+
+export const addToQueue = (jobUrls: string[]) =>
+  request<QueueItem[]>("/api/queue", {
+    method: "POST",
+    body: JSON.stringify({ job_urls: jobUrls }),
+  });
+
+export const listQueue = () => request<QueueListResponse>("/api/queue");
+
+export const removeFromQueue = async (id: string): Promise<void> => {
+  const resp = await fetch(`/api/queue/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok && resp.status !== 204) {
+    throw new ApiError(resp.status, undefined, `DELETE failed: ${resp.status}`);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // File download URL (no fetch — the browser navigates to it directly)
