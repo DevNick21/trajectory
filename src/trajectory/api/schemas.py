@@ -83,3 +83,26 @@ class SessionDetailResponse(BaseModel):
     verdict: Optional[dict[str, Any]] = None
     generated_files: list[GeneratedFile] = Field(default_factory=list)
     cost_summary: CostSummary = Field(default_factory=CostSummary)
+
+
+# ---------------------------------------------------------------------------
+# Pack generation (Wave 5)
+# ---------------------------------------------------------------------------
+
+
+PackGeneratorName = Literal["cv", "cover_letter", "questions", "salary"]
+
+
+class PackResult(BaseModel):
+    """Response shape for the four individual pack endpoints.
+
+    `output` is the agent's Pydantic output (CVOutput, CoverLetterOutput,
+    LikelyQuestionsOutput, SalaryRecommendation) serialised via
+    `.model_dump(mode="json")`. `generated_files` lists the rendered
+    files (CV + cover letter only — questions + salary live in chat
+    payloads with no file deliverables).
+    """
+
+    generator: PackGeneratorName
+    output: dict[str, Any]
+    generated_files: list[GeneratedFile] = Field(default_factory=list)

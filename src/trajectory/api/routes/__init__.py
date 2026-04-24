@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from .files import router as files_router
 from .health import router as health_router
+from .pack import router as pack_router
 from .profile import router as profile_router
 from .sessions import router as sessions_router
 
@@ -23,6 +24,7 @@ api_router.include_router(health_router)
 # can route everything to a single mount point.
 api_router.include_router(profile_router, prefix="/api")
 api_router.include_router(sessions_router, prefix="/api")
+api_router.include_router(pack_router, prefix="/api")
 api_router.include_router(files_router, prefix="/api")
 
 __all__ = ["api_router"]
