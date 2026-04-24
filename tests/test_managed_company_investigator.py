@@ -140,11 +140,13 @@ def _build_mock_client(
     )
     client.beta.sessions.retrieve = AsyncMock(return_value=retrieved)
 
-    # Events
+    # Events. AsyncAnthropic's events.stream(...) is an async def that
+    # resolves to the async context manager — match that shape with
+    # AsyncMock so the production `async with await ...` pattern works.
     client.beta.sessions.events.send = AsyncMock(return_value=None)
 
     stream = _FakeStream(events)
-    client.beta.sessions.events.stream = MagicMock(return_value=stream)
+    client.beta.sessions.events.stream = AsyncMock(return_value=stream)
 
     return client
 
@@ -433,7 +435,8 @@ async def test_resource_reuse_across_invocations(mock_anthropic, _no_cost_log):
     await investigate(job_url=_JOB_URL)
 
     # Reset the stream for a second run (fresh scripted events).
-    client.beta.sessions.events.stream = MagicMock(
+    # AsyncMock — events.stream is an async def on the real SDK.
+    client.beta.sessions.events.stream = AsyncMock(
         return_value=_FakeStream(_happy_path_events())
     )
     client.beta.sessions.archive.reset_mock()
