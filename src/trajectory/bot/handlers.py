@@ -423,7 +423,11 @@ async def _handle_full_prep(update, context, user, storage, last_session):
     if pack.cv:
         for chunk in format_cv_output(pack.cv):
             await update.message.reply_html(chunk)
-        for key in ("cv_docx", "cv_pdf"):
+        # cv_latex_pdf is optional (additive third path — None when
+        # pdflatex is missing or the LaTeX render failed). Including
+        # it in the loop sends it after the docx + reportlab pdf when
+        # present and is a no-op otherwise.
+        for key in ("cv_docx", "cv_pdf", "cv_latex_pdf"):
             p = files.get(key)
             if p:
                 await _send_document(context, chat_id, p, filename=p.name)
