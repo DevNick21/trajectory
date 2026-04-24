@@ -1,30 +1,51 @@
-"""GET /api/sessions and GET /api/sessions/{id} — read-only session API.
+"""Session API:
 
-Both endpoints enforce ownership: the demo user can only see their
-own sessions. List returns slim summaries; detail returns the full
-research bundle, verdict, generated files, and cost breakdown.
+  - GET  /api/sessions               — slim recent-sessions list
+  - GET  /api/sessions/{id}          — full detail (bundle + verdict + files)
+  - POST /api/sessions/forward_job   — Phase 1 pipeline as SSE stream
 
-Wave 4 will add `POST /api/sessions/forward_job` (SSE).
+All three are ownership-gated to settings.demo_user_id. The same 404
+covers "not found" and "not yours" so an attacker cannot enumerate
+session ids.
+
+SSE event vocabulary (Wave 4 — see MIGRATION_PLAN.md §7):
+
+  - {"type": "agent_complete", "agent": "<name>"}    (each Phase 1 agent finishing)
+  - {"type": "verdict", "data": <Verdict.model_dump>}
+  - {"type": "error",   "data": {"message": "..."}}
+  - {"type": "done"}                                  (sentinel from SSEEmitter.close)
+
+`agent_started` / `agent_failed` are deliberately deferred. The
+frontend infers in-progress from "agents in PHASE_1_AGENTS not yet
+in completed[]"; adding explicit started/failed events would touch
+every Phase 1 closure and isn't needed for the dashboard UX.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sse_starlette.sse import EventSourceResponse
 
 from ...config import settings
-from ...schemas import Session
+from ...progress import SSEEmitter
+from ...schemas import Session, UserProfile
 from ...storage import Storage
-from ..dependencies import get_current_user_id, get_storage
+from ..dependencies import get_current_user, get_current_user_id, get_storage
 from ..schemas import (
     CostSummary,
+    ForwardJobRequest,
     GeneratedFile,
     SessionDetailResponse,
     SessionListResponse,
     SessionSummary,
 )
+from ..sse import event_stream
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -156,3 +177,108 @@ async def get_session_detail(
         generated_files=_list_generated_files(session_id),
         cost_summary=CostSummary(**cost),
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/sessions/forward_job — Phase 1 pipeline as SSE stream
+# ---------------------------------------------------------------------------
+
+
+def _new_session(user_id: str, job_url: str) -> Session:
+    return Session(
+        session_id=str(uuid.uuid4()),
+        user_id=user_id,
+        intent="forward_job",
+        job_url=job_url,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+
+async def _run_forward_job(
+    *,
+    job_url: str,
+    user: UserProfile,
+    session: Session,
+    storage: Storage,
+    queue: asyncio.Queue,
+    emitter: SSEEmitter,
+) -> None:
+    """Background runner. Pushes events to the queue via the emitter,
+    then the verdict event on success or an error event on failure,
+    then closes the emitter (which enqueues the `done` sentinel).
+    """
+    # Lazy import — avoids pulling the orchestrator graph into the
+    # FastAPI startup path for routes that don't need it.
+    from ...orchestrator import handle_forward_job
+
+    try:
+        await storage.save_session(session)
+        bundle, verdict = await handle_forward_job(
+            job_url=job_url,
+            user=user,
+            session=session,
+            storage=storage,
+            emitter=emitter,
+        )
+        await queue.put({
+            "type": "verdict",
+            "data": verdict.model_dump(mode="json"),
+        })
+    except asyncio.CancelledError:
+        # Client disconnected — let the cancellation propagate so
+        # the runner task exits cleanly. Don't enqueue a final event;
+        # the consumer is gone.
+        raise
+    except Exception:
+        log.exception("forward_job failed for %s", job_url)
+        await queue.put({
+            "type": "error",
+            "data": {"message": "Research failed. Try the URL again, or paste it directly."},
+        })
+    finally:
+        await emitter.close()
+
+
+@router.post("/sessions/forward_job")
+async def forward_job(
+    req: ForwardJobRequest,
+    request: Request,
+    user: UserProfile = Depends(get_current_user),
+    storage: Storage = Depends(get_storage),
+) -> EventSourceResponse:
+    """Run Phase 1 + verdict, streaming progress to the client.
+
+    Returns an SSE stream. The runner task is cancelled if the client
+    disconnects mid-pipeline (MIGRATION_PLAN.md §6 risk #10).
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+    emitter = SSEEmitter(queue)
+    session = _new_session(user.user_id, str(req.job_url))
+
+    runner_task = asyncio.create_task(
+        _run_forward_job(
+            job_url=str(req.job_url),
+            user=user,
+            session=session,
+            storage=storage,
+            queue=queue,
+            emitter=emitter,
+        )
+    )
+
+    async def stream():
+        try:
+            async for frame in event_stream(queue):
+                yield frame
+        finally:
+            # Client disconnected (cancelled the generator) OR the
+            # stream completed naturally — either way, ensure the
+            # background runner doesn't outlive its consumer.
+            if not runner_task.done():
+                runner_task.cancel()
+                try:
+                    await runner_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+    return EventSourceResponse(stream())
