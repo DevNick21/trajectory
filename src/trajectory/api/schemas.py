@@ -17,7 +17,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, HttpUrl
+
+
+# ---------------------------------------------------------------------------
+# Requests
+# ---------------------------------------------------------------------------
+
+
+class ForwardJobRequest(BaseModel):
+    """POST /api/sessions/forward_job body."""
+
+    job_url: HttpUrl
 
 
 # ---------------------------------------------------------------------------
