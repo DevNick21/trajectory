@@ -13,6 +13,7 @@ from typing import Optional
 from telegram import Message, Update
 from telegram.ext import ContextTypes
 
+from ..config import settings
 from ..orchestrator import (
     handle_draft_cover_letter,
     handle_draft_cv,
@@ -49,38 +50,30 @@ def get_user_id(update: Update) -> str:
 
 
 async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Entry point: begin onboarding or greet returning user."""
+    """Entry point: greet returning user or point newcomers to the web.
+
+    Wave 10 of the dual-surface migration (MIGRATION_PLAN.md ADR-003)
+    moved onboarding to the web wizard. Telegram no longer runs its
+    own onboarding flow — un-onboarded users get a redirect link
+    instead. The legacy `_onboarding_sessions` dict + handlers below
+    remain for graceful handling of any in-flight session that
+    survives a server restart, but new entries are never created.
+    """
     storage = get_storage(context)
     user_id = get_user_id(update)
-    chat_id = update.effective_chat.id
 
     existing = await storage.get_user_profile(user_id)
     if existing:
         await update.message.reply_text(
-            f"Welcome back. Forward me a job URL and I'll run the full check."
+            "Welcome back. Forward me a job URL and I'll run the full check."
         )
         return
 
-    # Start onboarding. Capture the user's Telegram display name so the
-    # profile doesn't end up with the "User" placeholder — we never ask
-    # for a name explicitly during the 7-stage flow, so this is the
-    # only clean way to populate it.
-    ob = OnboardingSession(user_id=user_id)
-    tg_user = update.effective_user
-    if tg_user is not None:
-        first = (tg_user.first_name or "").strip()
-        last = (tg_user.last_name or "").strip()
-        full = (first + " " + last).strip() or (tg_user.username or "")
-        if full:
-            ob.display_name = full
-    _onboarding_sessions[chat_id] = ob
-    ob.state = OnboardingState.CAREER
-
     await update.message.reply_text(
-        "Hi — I'm Trajectory, your UK job-search assistant.\n\n"
-        "I need about 5 minutes to set up your profile. "
-        "After that, forward me any job and I'll tell you whether to bother applying.\n\n"
-        + ob.current_prompt()
+        "👋 Welcome to Trajectory.\n\n"
+        "Set up your profile on the web app first:\n"
+        f"{settings.web_url}\n\n"
+        "Takes a few minutes. Come back here to forward job URLs."
     )
 
 
@@ -102,7 +95,9 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     user = await storage.get_user_profile(user_id)
     if not user:
         await update.message.reply_text(
-            "Use /start to set up your profile first."
+            "Set up your profile on the web app first:\n"
+            f"{settings.web_url}\n\n"
+            "Come back here to forward job URLs once you're done."
         )
         return
 
