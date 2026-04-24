@@ -210,9 +210,33 @@ async def handle_forward_job(
             await mark("phase_1_ghost_job_jd_scorer")
             return result
         except Exception as exc:
+            # Match the sibling Phase 1C pattern (run_red_flags, run_soc):
+            # log + mark + return a conservative fallback rather than
+            # raising, since `asyncio.gather(..., return_exceptions=False)`
+            # below would otherwise abort the entire verdict on a single
+            # detector failure. LIKELY_REAL + LOW confidence is the
+            # least-confidently-bad default — the verdict will still
+            # surface other hard blockers but won't auto-flip to NO_GO
+            # on ghost-job grounds when we have no real signal.
             log.warning("ghost_job_detector failed: %s", exc)
             await mark("phase_1_ghost_job_jd_scorer")
-            raise
+            from .schemas import GhostJobAssessment, GhostJobJDScore
+            return GhostJobAssessment(
+                probability="LIKELY_REAL",
+                signals=[],
+                confidence="LOW",
+                raw_jd_score=GhostJobJDScore(
+                    named_hiring_manager=0.0,
+                    specific_duty_bullets=0.0,
+                    specific_tech_stack=0.0,
+                    specific_team_context=0.0,
+                    specific_success_metrics=0.0,
+                    specificity_score=0.0,
+                    specificity_signals=[],
+                    vagueness_signals=["ghost_detector_unavailable"],
+                ),
+                age_days=None,
+            )
 
     async def run_red_flags():
         try:

@@ -123,6 +123,7 @@ class CareerEntry(BaseModel):
         "preference",
         "motivation",
         "deal_breaker",
+        "good_role_signal",
         "writing_sample",
         "conversation",
     ]
