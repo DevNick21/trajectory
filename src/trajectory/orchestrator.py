@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import settings
+from .progress import NoOpEmitter, ProgressEmitter
 from .schemas import (
     CareerEntry,
     Citation,
@@ -50,16 +51,41 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+PHASE_1_AGENTS: list[str] = [
+    # Phase 1A (serial)
+    "phase_1_jd_extractor",
+    "phase_1_company_scraper_summariser",
+    "companies_house",
+    # Phase 1C (parallel — ordered by typical completion latency so the
+    # visual ticking on the surface matches the order checkmarks
+    # actually appear: parquet lookups fastest, then the scraper, then
+    # the Opus xhigh agents, with red_flags last because it waits on
+    # reviews).
+    "sponsor_register",
+    "soc_check",
+    "salary_data",
+    "reviews",
+    "phase_1_ghost_job_jd_scorer",
+    "phase_1_red_flags",
+]
+
+
 async def handle_forward_job(
     job_url: str,
     user: UserProfile,
     session: Session,
     storage: Storage,
-    bot=None,
-    chat_id: Optional[int] = None,
-    message_id: Optional[int] = None,
+    emitter: Optional[ProgressEmitter] = None,
 ) -> tuple[ResearchBundle, Verdict]:
-    """Run Phase 1 (8 sub-agents) + Phase 2 (verdict). Returns bundle + verdict."""
+    """Run Phase 1 (8 sub-agents) + Phase 2 (verdict). Returns bundle + verdict.
+
+    `emitter` receives transport-agnostic progress events
+    (`{"type": "agent_complete", "agent": <name>}`). When omitted,
+    a NoOpEmitter is used — safe default for CLI runs and tests. The
+    Telegram bot wraps a `PhaseOneProgressStreamer` in a
+    `TelegramEmitter`; the FastAPI surface (Wave 4) wires an
+    `SSEEmitter` to an asyncio.Queue. See MIGRATION_PLAN.md ADR-002.
+    """
     from .sub_agents import (
         company_scraper,
         companies_house as ch_agent,
@@ -71,40 +97,12 @@ async def handle_forward_job(
         soc_check as soc_agent,
         verdict as verdict_agent,
     )
-    from .bot.progress_stream import PhaseOneProgressStreamer
 
-    # Order by typical completion latency so the visual ticking on the
-    # Telegram progress message matches the order in which checkmarks
-    # actually appear. Phase 1A runs serially (JD extract, summariser,
-    # Companies House), then Phase 1C runs in parallel — within 1C the
-    # parquet lookups resolve fastest, then the scraper, then the Opus
-    # xhigh agents, with red_flags last because it waits on reviews.
-    all_agents = [
-        # Phase 1A (serial)
-        "phase_1_jd_extractor",
-        "phase_1_company_scraper_summariser",
-        "companies_house",
-        # Phase 1C (parallel — ordered by typical completion)
-        "sponsor_register",
-        "soc_check",
-        "salary_data",
-        "reviews",
-        "phase_1_ghost_job_jd_scorer",
-        "phase_1_red_flags",
-    ]
-
-    streamer: Optional[PhaseOneProgressStreamer] = None
-    if bot and chat_id and message_id:
-        streamer = PhaseOneProgressStreamer(
-            bot=bot,
-            chat_id=chat_id,
-            message_id=message_id,
-            all_agents=all_agents,
-        )
+    if emitter is None:
+        emitter = NoOpEmitter()
 
     async def mark(name: str) -> None:
-        if streamer:
-            await streamer.mark_complete(name)
+        await emitter.emit({"type": "agent_complete", "agent": name})
 
     # ── Phase 1A: company scraper (JD + company research, serial) ─────────
     log.info("Phase 1A: company_scraper for %s", job_url)
