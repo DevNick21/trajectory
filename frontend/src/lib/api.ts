@@ -3,6 +3,8 @@
 // endpoints live in lib/sse.ts.
 
 import type {
+  OnboardingAnswers,
+  OnboardingFinaliseResponse,
   PackGeneratorName,
   PackResult,
   SessionDetailResponse,
@@ -94,6 +96,38 @@ export const generatePack = (
     `/api/sessions/${encodeURIComponent(sessionId)}/${generator}`,
     { method: "POST" },
   );
+
+// ---------------------------------------------------------------------------
+// Onboarding (Wave 9)
+// ---------------------------------------------------------------------------
+
+// Finalise payload matches OnboardingFinaliseRequest in api/schemas.py.
+// Numeric fields are nullable client-side so the wizard can defer
+// until the user fills them in; we coerce + validate before POSTing.
+export interface OnboardingFinalisePayload {
+  name: string;
+  user_type: "visa_holder" | "uk_resident";
+  visa_route?: OnboardingAnswers["visa_route"];
+  visa_expiry?: string;
+  nationality?: string;
+  base_location: string;
+  salary_floor: number;
+  salary_target?: number | null;
+  current_employment: OnboardingAnswers["current_employment"];
+  search_duration_months?: number | null;
+  motivations_text: string;
+  deal_breakers_text: string;
+  good_role_signals_text: string;
+  life_constraints: string[];
+  writing_samples: string[];
+  career_narrative: string;
+}
+
+export const finaliseOnboarding = (payload: OnboardingFinalisePayload) =>
+  request<OnboardingFinaliseResponse>("/api/onboarding/finalise", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 
 // ---------------------------------------------------------------------------
 // File download URL (no fetch — the browser navigates to it directly)

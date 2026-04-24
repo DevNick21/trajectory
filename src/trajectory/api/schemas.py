@@ -14,7 +14,7 @@ they're already shaped right.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -106,3 +106,72 @@ class PackResult(BaseModel):
     generator: PackGeneratorName
     output: dict[str, Any]
     generated_files: list[GeneratedFile] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Onboarding (Wave 9)
+# ---------------------------------------------------------------------------
+
+
+OnboardingParseStage = Literal[
+    "career",
+    "motivations",
+    "deal_breakers",
+    "money",
+    "visa",
+    "life",
+    "samples",
+]
+
+
+class OnboardingParseRequest(BaseModel):
+    """Helper for the wizard when it wants to show the user a parsed
+    summary before accepting their free-text answer. Wave 9 doesn't
+    call this per stage (finalise runs the parser silently); exposed
+    for future per-stage clarification UX."""
+
+    stage: OnboardingParseStage
+    text: str
+
+
+class OnboardingFinaliseRequest(BaseModel):
+    """Web wizard's fully-typed payload. Structured stages (name,
+    money, visa, location, life) are pre-validated by the frontend;
+    voice stages (motivations, deal_breakers, good_role_signals,
+    samples) still arrive as free text and get parsed server-side.
+    """
+
+    # Structured fields — no parser needed.
+    name: str
+    user_type: Literal["visa_holder", "uk_resident"]
+    visa_route: Optional[
+        Literal["graduate", "skilled_worker", "dependant", "student",
+                "global_talent", "other"]
+    ] = None
+    visa_expiry: Optional[date] = None
+    nationality: Optional[str] = None
+    base_location: str
+    salary_floor: int = Field(ge=0, le=10_000_000)
+    salary_target: Optional[int] = Field(default=None, ge=0, le=10_000_000)
+    current_employment: Literal["EMPLOYED", "UNEMPLOYED", "NOTICE_PERIOD"]
+    search_duration_months: Optional[int] = Field(default=None, ge=0, le=240)
+
+    # Free-text stages — parser runs server-side at finalise time.
+    # Empty list is valid (user skipped the stage).
+    motivations_text: str = ""
+    deal_breakers_text: str = ""
+    good_role_signals_text: str = ""  # optional — if given, added separately
+    life_constraints: list[str] = Field(default_factory=list)
+
+    # Writing samples — feed the style extractor directly, no parser.
+    writing_samples: list[str] = Field(default_factory=list)
+
+    # Optional career narrative — stored as a single conversation entry
+    # so Phase 4 generators can retrieve it.
+    career_narrative: str = ""
+
+
+class OnboardingFinaliseResponse(BaseModel):
+    user_id: str
+    writing_style_profile_id: Optional[str] = None
+    career_entries_written: int
