@@ -818,9 +818,14 @@ async def handle_full_prep(
             log.error("full_prep sub-task %d failed: %s", i, result)
             continue
         if i == 0:
-            cv_out, cv_docx, cv_pdf = result
+            # handle_draft_cv returns (cv, docx, pdf, latex_pdf?) since the
+            # LaTeX renderer landed (PROCESS Entry 37). The 4th element is
+            # None when pdflatex is missing or the LaTeX path failed.
+            cv_out, cv_docx, cv_pdf, cv_latex_pdf = result
             files["cv_docx"] = cv_docx
             files["cv_pdf"] = cv_pdf
+            if cv_latex_pdf is not None:
+                files["cv_latex_pdf"] = cv_latex_pdf
         elif i == 1:
             cl_out, cl_docx, cl_pdf = result
             files["cover_letter_docx"] = cl_docx
