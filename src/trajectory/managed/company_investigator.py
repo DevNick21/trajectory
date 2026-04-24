@@ -204,9 +204,15 @@ async def _run_session(
     """
     prompt_text = _build_user_prompt(job_url, company_name_hint)
 
-    # The SDK's .stream() is an async context manager on the sync path;
-    # async clients expose the same shape.
-    async with client.beta.sessions.events.stream(ma_session_id) as stream:
+    # AsyncAnthropic's events.stream(...) is itself an `async def` —
+    # the call returns a coroutine that resolves to the async context
+    # manager. Two awaits required: one to get the manager, then
+    # `async with` to enter it. The sync client docs use `with
+    # client.beta.sessions.events.stream(...) as stream:` directly;
+    # the async client needs the extra await.
+    async with await client.beta.sessions.events.stream(
+        ma_session_id,
+    ) as stream:
         await client.beta.sessions.events.send(
             ma_session_id,
             events=[
