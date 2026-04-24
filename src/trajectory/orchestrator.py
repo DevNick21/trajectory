@@ -271,8 +271,10 @@ async def handle_forward_job(
         return_exceptions=False,
     )
 
-    if streamer:
-        await streamer.flush()
+    # Emitter flush is the caller's responsibility now (Wave 1 ADR-002).
+    # bot/handlers.py calls emitter.close() → streamer.flush() on the
+    # Telegram path; api/routes/sessions.py closes the SSEEmitter in
+    # its `finally` block on the web path.
 
     bundle = ResearchBundle(
         session_id=session.session_id,
