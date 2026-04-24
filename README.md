@@ -1,6 +1,6 @@
 # Trajectory
 
-A Telegram-native personal assistant for UK job seekers. Forward a job URL, get an honest verdict grounded in live UK government data — then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
+A dual-surface personal assistant for UK job seekers — **React web app** for deep work and **Telegram bot** for on-the-go. Forward a job URL, get an honest verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
 
 Built by someone who spent 18 months job-searching in the UK on a Graduate visa. Every feature exists because a real information asymmetry existed.
 
@@ -23,6 +23,19 @@ Opening number, floor, and negotiation scripts adjust to your urgency level, rec
 **Never auto-applies.** Philosophically off-limits. The user is always in the loop.
 
 **Optional Managed Agents integration.** For stateful web investigation, Trajectory includes a sandboxed company investigator that runs inside a Claude Managed Agents session — Claude chooses which company pages to fetch based on what each page reveals, instead of running a fixed discovery list. Set `enable_managed_company_investigator=true` in your environment to opt in. See `src/trajectory/managed/company_investigator.py`.
+
+---
+
+## Two surfaces, one orchestrator
+
+| Surface | Best for | What you get |
+| --- | --- | --- |
+| **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Onboarding wizard, dashboard with live Phase 1 streaming over Server-Sent Events, per-session detail pages with evidence + pack generators + downloadable files. |
+| **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Onboarding lives on the web — new users get redirected. |
+
+Both surfaces share a single FastAPI orchestrator, a 16-agent Phase 1 pipeline, and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
+
+The full dual-surface design rationale lives in [MIGRATION_PLAN.md](MIGRATION_PLAN.md), including ADRs for web-primary scope, the `ProgressEmitter` abstraction, and ephemeral client-side onboarding state.
 
 ---
 
@@ -59,51 +72,62 @@ Hard blockers force a NO_GO regardless of everything else. Every claim cites a v
 ## Architecture
 
 ```text
-User message (Telegram)
-        │
-        ▼
-  Intent Router (Opus 4.7)
-        │
-  ┌─────┴──────┐
-  │            │
-forward_job  pack generators
-  │            │
-  ▼            ▼
-Phase 1 (8 parallel sub-agents)    Phase 4 (on-demand)
-  - JD extraction (Sonnet)           - CV tailor (Opus)
-  - Company scraper (Sonnet)         - Cover letter (Opus)
-  - Companies House                  - Likely questions (Opus)
-  - Sponsor Register (parquet)       - Salary strategist (Opus)
-  - SOC check (parquet)
-  - Ghost-job scorer (Opus)
-  - Salary data
-  - Red flags (Opus)
-        │
-        ▼
-  Verdict (Opus 4.7, xhigh)
-  + citation validation
-  + GO/NO_GO with hard blockers
+┌──────────────────┐         ┌──────────────────┐
+│  Telegram client │         │   Web (Vite +    │
+│     (mobile)     │         │    React, SSE)   │
+└────────┬─────────┘         └────────┬─────────┘
+         │ long-poll                  │ HTTP + SSE
+         ▼                            ▼
+┌──────────────────┐         ┌──────────────────┐
+│   bot/app.py     │         │   api/app.py     │
+│   handlers       │         │   routes         │
+└────────┬─────────┘         └────────┬─────────┘
+         │    TelegramEmitter │ SSEEmitter
+         └──────────┬─────────┘
+                    ▼
+        ┌───────────────────────────┐
+        │ orchestrator.py           │
+        │ ProgressEmitter protocol  │
+        │ sub_agents/ (16 agents)   │
+        │ validators/ + renderers/  │
+        └───────────┬───────────────┘
+                    ▼
+        ┌───────────────────────────┐
+        │ SQLite + FAISS + files    │
+        └───────────────────────────┘
 ```
 
-Phase 1 runs via `asyncio.as_completed` — the bot edits a single Telegram message in near-real-time as each check resolves. Phase 4 `full_prep` fans out in parallel via `asyncio.gather`.
+**Phase 1 — 8 parallel sub-agents** (JD extraction, company scraper, Companies House, Sponsor Register, SOC check, ghost-job scorer, salary data, red flags) → **Verdict** (Opus 4.7, xhigh) with citation validation.
 
-All LLM outputs are Pydantic-validated JSON. No free-form prose from sub-agents.
+**Phase 4 — on-demand pack** (CV tailor, cover letter, likely questions, salary strategist) fans out via `asyncio.gather`.
+
+Progress streams uniformly across both surfaces — Telegram edits a single message, the web app renders a checklist that ticks as each agent completes. Same orchestrator, two transports. All LLM outputs are Pydantic-validated JSON.
 
 ---
 
 ## Stack
 
-- **Python 3.11** — async throughout
+**Backend (Python 3.11, async throughout):**
+
 - **Anthropic SDK** — Opus 4.7 (quality-critical reasoning) + Sonnet 4.6 (extraction)
-- **python-telegram-bot v21** — async long-polling
+- **FastAPI + uvicorn + sse-starlette** — web surface
+- **python-telegram-bot v21** — Telegram surface (async long-polling)
 - **Playwright + trafilatura + BeautifulSoup** — web scraping
 - **python-jobspy** — public-page job listing aggregation (Indeed, LinkedIn)
 - **pandas + pyarrow** — Sponsor Register, going rates, SOC codes, ASHE Tables 2/3/15 (parquet)
 - **SQLite + aiosqlite** — sessions, career entries, cost log
 - **sentence-transformers + FAISS** — semantic retrieval over career history
 - **python-docx + reportlab** — CV and cover letter file generation
-- **Streamlit** — session history dashboard
+- **Streamlit** — legacy session history dashboard
 - **Pydantic v2** — every LLM input and output
+
+**Frontend (`frontend/`):**
+
+- **Vite + React 18 + TypeScript + Tailwind CSS** — build + UI
+- **shadcn/ui** primitives (copied into `src/components/ui/`, not installed)
+- **TanStack Query** — server state
+- **React Hook Form + Zod** — form validation
+- **React Router** — client routing
 
 No RapidAPI. No closed-source API marketplace wrappers. All salary data from ONS (ASHE) and open public sources.
 
@@ -113,7 +137,7 @@ No RapidAPI. No closed-source API marketplace wrappers. All salary data from ONS
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.11+ and Node 20+
 - A Telegram bot token ([BotFather](https://t.me/botfather))
 - Anthropic API key
 - Companies House API key (free — [register here](https://developer.company-information.service.gov.uk/))
@@ -123,10 +147,15 @@ No RapidAPI. No closed-source API marketplace wrappers. All salary data from ONS
 ```bash
 git clone https://github.com/yourusername/trajectory.git
 cd trajectory
+
+# Backend
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 playwright install chromium
+
+# Frontend
+cd frontend && npm install && cd ..
 ```
 
 ### Configure
@@ -140,6 +169,15 @@ cp .env.example .env
 ANTHROPIC_API_KEY=sk-ant-...
 TELEGRAM_BOT_TOKEN=...
 COMPANIES_HOUSE_API_KEY=...
+
+# Dual-surface identity — set to your Telegram numeric user id
+# so both surfaces resolve to the same user_profiles row.
+DEMO_USER_ID=123456789
+
+# Web surface (defaults shown)
+API_PORT=8000
+WEB_ORIGIN=http://localhost:5173
+WEB_URL=http://localhost:5173
 ```
 
 ### Fetch UK government data
@@ -152,13 +190,22 @@ Downloads the Sponsor Register, Skilled Worker going rates, Appendix Skilled Occ
 
 ### Run
 
+Three processes — all talk to the same SQLite file + FAISS index:
+
 ```bash
+# Terminal 1 — Telegram bot
 python -m trajectory.bot.app
+
+# Terminal 2 — FastAPI (web backend)
+./scripts/run_api.sh
+
+# Terminal 3 — Vite (web frontend)
+./scripts/run_web.sh
 ```
 
-Send `/start` to your bot on Telegram.
+Then visit `http://localhost:5173` in the browser, or `/start` your bot on Telegram. New users are redirected from Telegram to the web onboarding wizard — once the profile exists, both surfaces share it.
 
-**Dashboard** (session history):
+**Legacy Streamlit dashboard** (session history — superseded by the web app, kept for quick inspection):
 
 ```bash
 streamlit run src/trajectory/dashboard/app.py
@@ -169,15 +216,23 @@ streamlit run src/trajectory/dashboard/app.py
 ## Development
 
 ```bash
-pytest                    # run tests
+# Backend
+pytest                    # ~200 tests, including SSE end-to-end integration
 ruff check src/ tests/    # lint
+
+# Frontend
+cd frontend
+npm run lint              # tsc -b --noEmit
+npm run build             # vite build
 ```
 
-The required test suite covers:
+Key suites:
 
 - `tests/test_citations.py` — citation resolution (verbatim match, gov field path, career entry existence)
-- `tests/test_ghost_job_combination.py` — signal combination logic (2 HARD → LIKELY_GHOST HIGH, etc.)
+- `tests/test_ghost_job_combination.py` — signal combination logic
 - `tests/test_verdict_branching.py` — user-type hard blocker rules (visa holder vs. UK resident)
+- `tests/test_progress_emitter.py` — ProgressEmitter protocol + NoOp / SSE / Telegram implementations
+- `tests/test_api_forward_job_integration.py` — end-to-end SSE with the real orchestrator and mocked sub-agents
 
 ### Key architectural rules
 

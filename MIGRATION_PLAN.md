@@ -1,9 +1,31 @@
 # Trajectory — Dual-Surface Migration Plan
 
-**Status:** Approved, ready to execute
+**Status:** Waves 0–11 shipped. Wave 12 (demo recording) is the only remaining piece.
 **Author:** Kene (with AI assistance)
 **Last updated:** 2026-04-24
 **Target:** Hackathon submission + portfolio piece
+
+## Execution log
+
+| Wave | Status | Commit | Notes |
+| --- | --- | --- | --- |
+| (pre) Bug fixes | ✅ | `a0a0961` | Onboarding kind literal + ghost detector fallback |
+| 0. Prep | ✅ | `768a7d6` | Plan doc + dual-surface config fields |
+| 1. ProgressEmitter | ✅ | `46afa06` | Transport-agnostic progress protocol |
+| 2. FastAPI skeleton | ✅ | `f68fc13` | Lifespan + CORS + `/health` |
+| 3. Read routes | ✅ | `ff635c7` | `/api/profile`, `/api/sessions`, `/api/files/...` |
+| 4. Forward-job SSE | ✅ | `25d23e2` | `POST /api/sessions/forward_job` streaming |
+| (fix) full_prep | ✅ | `c5bd6c2` | `handle_draft_cv` returns 4-tuple now |
+| 5. Pack SSE | ✅ | `f201865` | 4 individual + parallel `full_prep` |
+| 6. Frontend scaffold | ✅ | `b2dd21a` | Vite + React + Tailwind + shadcn |
+| 7. Dashboard | ✅ | `fc4dfbd` | Live Phase 1 streaming + verdict card |
+| 8. Session detail | ✅ | `b3aad56` | Evidence + pack generator + files + cost |
+| 9. Onboarding wizard | ✅ | `d824082` | Backend endpoints + 8-stage web wizard |
+| 10. Telegram redirect | ✅ | `c1b3b42` | `/start` redirects un-onboarded users to web |
+| 11. Integration tests | ✅ | `7e807be` | End-to-end SSE + `streamer` NameError fix |
+| 12. Demo + polish | 🎬 | — | Video recording pending |
+
+Test suite: **198 pytest** passing. Frontend builds clean at **~106 kB gzipped**.
 
 ---
 
@@ -315,7 +337,7 @@ Organised as dependency waves. Execute sequentially; each wave ends in a commit.
 | `PROCESS.md` | Write ADR-001: "Dual surface, web-primary" | Capture decision |
 | `MIGRATION_PLAN.md` | This file, committed to repo | Reference during work |
 
-**Commit:** `fix: pre-migration cleanup — schema literal + ghost fallback`
+**Shipped as:** `a0a0961` bug fixes + `768a7d6` plan + config fields.
 
 ### Wave 1 — Progress abstraction (1 day)
 
@@ -329,7 +351,7 @@ Organised as dependency waves. Execute sequentially; each wave ends in a commit.
 | `src/trajectory/bot/handlers.py` | Construct `TelegramEmitter`, pass to orchestrator |
 | `scripts/smoke_tests/bot_boot.py` | Re-verify Telegram flow with emitter refactor |
 
-**Commit:** `refactor: extract ProgressEmitter protocol for transport-agnostic progress`
+**Shipped as:** `46afa06`.
 
 ### Wave 2 — FastAPI skeleton (1 day)
 
@@ -345,7 +367,7 @@ Organised as dependency waves. Execute sequentially; each wave ends in a commit.
 | `scripts/run_api.sh` | `uvicorn trajectory.api.app:app --reload --port ${API_PORT}` |
 | `scripts/smoke_tests/api_boot.py` | Start API, hit `/health`, assert 200 |
 
-**Commit:** `feat: FastAPI skeleton with health endpoint`
+**Shipped as:** `f68fc13`.
 
 ### Wave 3 — Read routes (1 day)
 
@@ -358,7 +380,7 @@ Lowest-risk endpoints first. Proves the glue works.
 | `src/trajectory/api/routes/sessions.py` | `GET /api/sessions`, `GET /api/sessions/{id}` |
 | `src/trajectory/api/routes/files.py` | `GET /api/files/{session_id}/{filename}` with path-traversal guard |
 
-**Commit:** `feat: read-only API endpoints (profile, sessions, files)`
+**Shipped as:** `ff635c7`.
 
 ### Wave 4 — Forward job + SSE (2 days)
 
@@ -400,7 +422,7 @@ async def forward_job(
     return EventSourceResponse(event_stream(queue))
 ```
 
-**Commit:** `feat: SSE forward_job endpoint with live Phase 1 progress`
+**Shipped as:** `25d23e2`.
 
 ### Wave 5 — Pack generators + full_prep SSE (1.5 days)
 
@@ -446,7 +468,7 @@ async def full_prep(
     return EventSourceResponse(event_stream(queue))
 ```
 
-**Commit:** `feat: pack generator endpoints + parallel full_prep SSE`
+**Shipped as:** `c5bd6c2` (handle_full_prep 4-tuple fix) + `f201865` (pack endpoints).
 
 ### Wave 6 — Frontend scaffold (1 day)
 
@@ -461,7 +483,7 @@ async def full_prep(
 | `frontend/src/lib/types.ts` | TypeScript types mirroring Pydantic responses |
 | `frontend/src/components/ui/` | shadcn Button, Card, Input, Dialog, Progress, Badge, Skeleton |
 
-**Commit:** `feat: frontend scaffold (Vite + React + Tailwind + shadcn)`
+**Shipped as:** `b2dd21a`.
 
 ### Wave 7 — Dashboard page (2 days) — DEMO CENTREPIECE
 
@@ -508,7 +530,7 @@ The page that sells the whole project in 15 seconds of video.
 | `<VerdictCard />` | GO / CAUTION / NO_GO badge + evidence summary |
 | `<SessionList />` | Recent sessions table |
 
-**Commit:** `feat: dashboard page with live Phase 1 streaming`
+**Shipped as:** `fc4dfbd`.
 
 ### Wave 8 — Session detail + pack generation (1.5 days)
 
@@ -527,13 +549,13 @@ Navigate to `/sessions/:id` from dashboard. Shows:
 | `<FileList />` | Generated files with download links |
 | `<CostBreakdown />` | LLM cost summary |
 
-**Commit:** `feat: session detail page with pack generators`
+**Shipped as:** `b3aad56`.
 
 ### Wave 9 — Onboarding wizard (3 days) — UX UPGRADE
 
 Web only. Telegram redirects un-onboarded users here. See [Section 8](#8-onboarding-wizard-redesign).
 
-**Commit:** `feat: web onboarding wizard with tap options + typed forms`
+**Shipped as:** `d824082`.
 
 ### Wave 10 — Telegram redirect (0.25 days)
 
@@ -566,7 +588,7 @@ async def _handle_forward_job(update, context):
     # existing forward_job flow
 ```
 
-**Commit:** `feat: telegram redirects un-onboarded users to web`
+**Shipped as:** `c1b3b42`.
 
 ### Wave 11 — Testing both surfaces (0.75 days)
 
@@ -579,7 +601,7 @@ async def _handle_forward_job(update, context):
 | Path traversal attempt on file endpoint | Unit test |
 | Parallel full_prep — all 4 generators complete | Integration test |
 
-**Commit:** `test: cross-surface integration smoke tests`
+**Shipped as:** `7e807be` (integration test + `streamer` NameError fix).
 
 ### Wave 12 — Demo video + polish (1 day)
 
