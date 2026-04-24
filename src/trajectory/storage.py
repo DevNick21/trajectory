@@ -562,6 +562,29 @@ async def total_cost_usd() -> float:
     return float(row[0]) if row else 0.0
 
 
+async def session_cost_summary(session_id: str) -> dict:
+    """Return total + per-agent cost for a single session.
+
+    Shape: {"total_usd": float, "by_agent": {agent_name: total_usd, ...}}.
+    Empty session (no logged calls) returns total=0.0, by_agent={}.
+    Used by the GET /api/sessions/{id} response to render the cost
+    breakdown (MIGRATION_PLAN.md Wave 3 / Wave 8).
+    """
+    async with await _connect() as db:
+        async with db.execute(
+            """
+            SELECT agent_name, SUM(cost_usd)
+            FROM llm_cost_log
+            WHERE session_id = ?
+            GROUP BY agent_name
+            """,
+            (session_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    by_agent = {row[0]: float(row[1]) for row in rows}
+    return {"total_usd": sum(by_agent.values()), "by_agent": by_agent}
+
+
 async def get_all_career_entries_for_user(user_id: str) -> list[CareerEntry]:
     async with await _connect() as db:
         async with db.execute(
@@ -696,6 +719,9 @@ class Storage:
 
     async def get_recent_sessions(self, user_id: str, limit: int = 5) -> list[Session]:
         return await get_recent_sessions(user_id=user_id, n=limit)
+
+    async def session_cost_summary(self, session_id: str) -> dict:
+        return await session_cost_summary(session_id=session_id)
 
     async def save_phase1_output(self, session_id: str, bundle) -> None:
         session = await get_session(session_id)
