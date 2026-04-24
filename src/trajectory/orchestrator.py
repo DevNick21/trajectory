@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from .config import settings
 from .progress import NoOpEmitter, ProgressEmitter
@@ -316,12 +316,38 @@ async def handle_forward_job(
         k=8,
     )
 
-    verdict = await verdict_agent.generate(
-        research_bundle=shielded_bundle,
-        user=user,
-        retrieved_entries=retrieved,
-        session_id=session.session_id,
-    )
+    if settings.enable_verdict_ensemble:
+        # Money-no-object path: two parallel verdict calls, conservative
+        # merge. Doubles spend but cuts the tail risk that a one-shot
+        # Opus run mis-weights the hard-blocker set.
+        v1, v2 = await asyncio.gather(
+            verdict_agent.generate(
+                research_bundle=shielded_bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                session_id=session.session_id,
+            ),
+            verdict_agent.generate(
+                research_bundle=shielded_bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                session_id=session.session_id,
+            ),
+        )
+        verdict = _ensemble_verdicts(v1, v2)
+        log.info(
+            "verdict ensemble: v1=%s(%d%%) v2=%s(%d%%) → %s(%d%%)",
+            v1.decision, v1.confidence_pct,
+            v2.decision, v2.confidence_pct,
+            verdict.decision, verdict.confidence_pct,
+        )
+    else:
+        verdict = await verdict_agent.generate(
+            research_bundle=shielded_bundle,
+            user=user,
+            retrieved_entries=retrieved,
+            session_id=session.session_id,
+        )
 
     await storage.save_verdict(session.session_id, verdict)
     return bundle, verdict
@@ -330,6 +356,87 @@ async def handle_forward_job(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _ensemble_verdicts(v1: Verdict, v2: Verdict) -> Verdict:
+    """Merge two verdict runs conservatively.
+
+    Rules:
+      - If either decision is NO_GO → the final decision is NO_GO
+        (asymmetric: a hallucinated NO_GO is easier to spot and
+        override than a hallucinated GO that gets the user to apply
+        to a ghost).
+      - Hard blockers union, deduped by (type, detail).
+      - Stretch concerns union, deduped by (type, detail).
+      - Reasoning points union — both runs' chains of evidence help
+        the user see why.
+      - Confidence: when decisions agree, take the mean; when they
+        disagree, subtract half the gap (the disagreement itself is
+        the signal to report less confidence).
+      - Headline: prefer the NO_GO side's headline on disagreement
+        (it names the blocker); otherwise v1's headline.
+      - motivation_fit: take v1 (evaluations rarely disagree
+        meaningfully run-to-run; no point building a merger).
+      - estimated_callback_probability: take the worse of the two
+        (LOW < MEDIUM < HIGH). None if either is None.
+    """
+    decision: str = "NO_GO" if "NO_GO" in (v1.decision, v2.decision) else "GO"
+
+    def _union(a: list, b: list, key: Callable) -> list:
+        seen: set = set()
+        out: list = []
+        for item in list(a) + list(b):
+            k = key(item)
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(item)
+        return out
+
+    hard_blockers = _union(
+        v1.hard_blockers, v2.hard_blockers,
+        key=lambda b: (b.type, b.detail),
+    )
+    stretch_concerns = _union(
+        v1.stretch_concerns, v2.stretch_concerns,
+        key=lambda c: (c.type, c.detail),
+    )
+    reasoning = _union(
+        v1.reasoning, v2.reasoning,
+        key=lambda r: (r.claim, r.supporting_evidence),
+    )
+
+    if v1.decision == v2.decision:
+        confidence_pct = (v1.confidence_pct + v2.confidence_pct) // 2
+    else:
+        gap = abs(v1.confidence_pct - v2.confidence_pct)
+        confidence_pct = max(0, (v1.confidence_pct + v2.confidence_pct) // 2 - gap // 2)
+
+    headline = v1.headline
+    if v1.decision != v2.decision:
+        # Use the NO_GO run's headline — it'll name the blocker.
+        headline = v1.headline if v1.decision == "NO_GO" else v2.headline
+
+    callback_rank = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+    callback = None
+    if v1.estimated_callback_probability and v2.estimated_callback_probability:
+        worse = min(
+            v1.estimated_callback_probability,
+            v2.estimated_callback_probability,
+            key=lambda x: callback_rank[x],
+        )
+        callback = worse
+
+    return Verdict(
+        decision=decision,  # type: ignore[arg-type]
+        confidence_pct=confidence_pct,
+        headline=headline,
+        reasoning=reasoning,
+        hard_blockers=hard_blockers,
+        stretch_concerns=stretch_concerns,
+        motivation_fit=v1.motivation_fit,
+        estimated_callback_probability=callback,
+    )
 
 
 async def _load_session_bundle(

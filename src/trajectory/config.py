@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     # legacy single-call path stays in production until A/B validation
     # confirms quality parity. See `sub_agents/cv_tailor_agentic.py`.
     enable_agentic_cv_tailor: bool = False
+    # Opt-in verdict ensemble: run verdict.generate twice in parallel
+    # and take the conservative merge (NO_GO wins, union of blockers).
+    # Doubles the per-verdict spend (~$1 → ~$2); intended for "money
+    # no object" demo runs where hallucination resilience matters more
+    # than cost. Default off; orchestrator falls through to single-call
+    # path when unset. See orchestrator._ensemble_verdicts.
+    enable_verdict_ensemble: bool = False
     enforce_rate_limit: bool = False
 
     # --- paths
