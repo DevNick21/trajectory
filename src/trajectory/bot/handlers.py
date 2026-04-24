@@ -272,20 +272,23 @@ async def _handle_forward_job(
     await storage.save_session(session)
 
     # Send progress message
+    from ..orchestrator import PHASE_1_AGENTS
+    from ..progress import TelegramEmitter
     from .formatting import format_phase1_progress
-    all_agents = [
-        "phase_1_jd_extractor",
-        "phase_1_company_scraper_summariser",
-        "companies_house",
-        "reviews",
-        "phase_1_ghost_job_jd_scorer",
-        "salary_data",
-        "sponsor_register",
-        "soc_check",
-        "phase_1_red_flags",
-    ]
-    progress_text = format_phase1_progress(completed_agents=[], all_agents=all_agents)
+    from .progress_stream import PhaseOneProgressStreamer
+
+    progress_text = format_phase1_progress(
+        completed_agents=[], all_agents=PHASE_1_AGENTS,
+    )
     progress_msg = await update.message.reply_html(progress_text)
+
+    streamer = PhaseOneProgressStreamer(
+        bot=context.bot,
+        chat_id=update.effective_chat.id,
+        message_id=progress_msg.message_id,
+        all_agents=PHASE_1_AGENTS,
+    )
+    emitter = TelegramEmitter(streamer)
 
     try:
         bundle, verdict = await handle_forward_job(
@@ -293,10 +296,9 @@ async def _handle_forward_job(
             user=user,
             session=session,
             storage=storage,
-            bot=context.bot,
-            chat_id=update.effective_chat.id,
-            message_id=progress_msg.message_id,
+            emitter=emitter,
         )
+        await emitter.close()
 
         for chunk in format_verdict(verdict):
             await update.message.reply_html(chunk)
