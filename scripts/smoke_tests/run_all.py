@@ -47,6 +47,7 @@ class _Entry:
 _REGISTRY: list[_Entry] = [
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True),
+    _Entry("api_boot",           "scripts.smoke_tests.api_boot",           cheap=True),
     _Entry("content_shield",     "scripts.smoke_tests.content_shield",     cheap=False),
     _Entry("onboarding_parser",  "scripts.smoke_tests.onboarding_parser",  cheap=False),
     _Entry("intent_router",      "scripts.smoke_tests.intent_router",      cheap=False),
