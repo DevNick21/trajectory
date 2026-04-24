@@ -58,7 +58,10 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     try:
-        cv, docx_path, pdf_path = await handle_draft_cv(
+        # handle_draft_cv returns (cv, docx, pdf, latex_pdf?) since the
+        # LaTeX renderer landed (PROCESS Entry 37). The 4th element is
+        # None when pdflatex is missing or the LaTeX path failed.
+        cv, docx_path, pdf_path, latex_pdf_path = await handle_draft_cv(
             session=session,
             user=user,
             storage=storage,
@@ -74,6 +77,12 @@ async def _body() -> tuple[list[str], list[str], float]:
     )
     messages.append(f"docx → {docx_path} ({_size(docx_path)} bytes)")
     messages.append(f"pdf  → {pdf_path} ({_size(pdf_path)} bytes)")
+    if latex_pdf_path is not None:
+        messages.append(
+            f"latex pdf → {latex_pdf_path} ({_size(latex_pdf_path)} bytes)"
+        )
+    else:
+        messages.append("latex pdf → skipped (pdflatex absent or render failed)")
 
     if not docx_path.exists() or docx_path.stat().st_size < 1_000:
         failures.append(f"DOCX renderer produced a tiny/missing file: {docx_path}")
