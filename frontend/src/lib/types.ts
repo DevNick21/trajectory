@@ -83,6 +83,52 @@ export interface PackResult {
 }
 
 // ---------------------------------------------------------------------------
+// Onboarding wizard
+// ---------------------------------------------------------------------------
+
+export type VisaRoute =
+  | "graduate"
+  | "skilled_worker"
+  | "dependant"
+  | "student"
+  | "global_talent"
+  | "other";
+
+export type EmploymentStatus = "EMPLOYED" | "UNEMPLOYED" | "NOTICE_PERIOD";
+
+export interface OnboardingAnswers {
+  // Basics
+  name: string;
+  base_location: string;
+  // Visa
+  user_type: UserType | "";
+  visa_route: VisaRoute | "";
+  visa_expiry: string; // ISO date
+  nationality: string;
+  // Money
+  salary_floor: number | null;
+  salary_target: number | null;
+  // Work context
+  current_employment: EmploymentStatus | "";
+  search_duration_months: number | null;
+  life_constraints: string[];
+  // Voice stages
+  motivations_text: string;
+  deal_breakers_text: string;
+  good_role_signals_text: string;
+  // Career narrative (optional)
+  career_narrative: string;
+  // Writing samples
+  writing_samples: string[];
+}
+
+export interface OnboardingFinaliseResponse {
+  user_id: string;
+  writing_style_profile_id: string | null;
+  career_entries_written: number;
+}
+
+// ---------------------------------------------------------------------------
 // SSE event vocabularies
 // ---------------------------------------------------------------------------
 
