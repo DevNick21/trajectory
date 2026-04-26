@@ -268,6 +268,26 @@ def _parse_final_json(text: str) -> Optional[dict]:
         if sanitized_largest not in candidates:
             candidates.append(sanitized_largest)
 
+    # Last-resort permissive span: from the FIRST `{` to the LAST `}`.
+    # The brace-balance scanner above can be defeated by an unescaped
+    # `"` inside a long string value — the in_string state flips early,
+    # the depth counter goes wrong, and the "balanced" block it picks
+    # is too short to contain the real payload. The full first-to-last
+    # span is the broadest sanitization target and almost always
+    # covers the real JSON when the structured one missed.
+    first_open = stripped.find("{")
+    last_close = stripped.rfind("}")
+    if (
+        first_open != -1
+        and last_close > first_open
+    ):
+        full_span = stripped[first_open : last_close + 1]
+        if full_span not in candidates:
+            candidates.append(full_span)
+        sanitized_full = _escape_unescaped_control_chars_in_strings(full_span)
+        if sanitized_full not in candidates:
+            candidates.append(sanitized_full)
+
     # Add malformation-fix variants of every candidate so far.
     # Bug 24: trailing commas / missing commas between adjacent values
     # are real Opus-emission patterns; both are cheap to patch.

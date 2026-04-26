@@ -15,6 +15,11 @@ export const SceneTelegram: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: "#0b0b0c" }}>
     <OffthreadVideo
       src={staticFile("screenrec/telegram-screencap.mov")}
+      // Recording came back at 16s; scene budget is 14s. 16/14 ≈ 1.143×
+      // is below perceptual threshold for slow scroll motion. Swap to
+      // playbackRate={1} + trim the .mov to 14s if you'd rather keep
+      // native speed.
+      playbackRate={16 / 14}
       style={{
         width: "100%",
         height: "100%",
