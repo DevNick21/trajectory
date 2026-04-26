@@ -376,6 +376,24 @@ async def handle_forward_job(
         bundle_completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
+    # PROCESS Entry 45 — find-or-create the persistent Job entity. Same
+    # role at same company across multiple URL forwards = one job_id.
+    # Stamped on the Session so the bot can locate "that Acme role"
+    # later by company + title rather than session-recency.
+    try:
+        from .storage import update_session, upsert_job
+        job_id = await upsert_job(
+            user_id=user.user_id,
+            role_title=jd.role_title,
+            company_name=company_research.company_name,
+            company_domain=company_research.company_domain,
+            last_seen_url=job_url,
+        )
+        session.job_id = job_id
+        await update_session(session)  # refresh row with job_id
+    except Exception as exc:
+        log.warning("Job entity upsert failed (non-fatal): %s", exc)
+
     await storage.save_phase1_output(session.session_id, bundle)
 
     # ── Phase 2: Verdict ───────────────────────────────────────────────────
@@ -991,15 +1009,48 @@ async def handle_draft_cover_letter(
 
     company_name = bundle.company_research.company_name
 
-    async def generator():
-        return await cover_letter.generate(
-            jd=jd,
-            research_bundle=bundle,
-            user=user,
-            retrieved_entries=retrieved,
-            style_profile=style_profile,
-            star_material=star_polishes,
-        )
+    # PROCESS Entry 45 — managed cover_letter routing.
+    # When the flag is on, dispatch to the live-web-equipped session
+    # that re-fetches culture pages targeted to this user's motivations.
+    # Falls back to the in-process path on session failure.
+    if settings.enable_managed_cover_letter:
+        from .llm import call_in_session
+
+        async def generator():
+            try:
+                return await call_in_session(
+                    "cover_letter_managed",
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    retrieved_entries=retrieved,
+                    style_profile=style_profile,
+                    star_material=star_polishes,
+                    session_id=session.session_id,
+                )
+            except Exception as exc:
+                log.warning(
+                    "cover_letter_managed failed; falling back to in-process: %s",
+                    exc,
+                )
+                return await cover_letter.generate(
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    retrieved_entries=retrieved,
+                    style_profile=style_profile,
+                    star_material=star_polishes,
+                )
+    else:
+        async def generator():
+            return await cover_letter.generate(
+                jd=jd,
+                research_bundle=bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                style_profile=style_profile,
+                star_material=star_polishes,
+            )
 
     cl = await generator()
     cl = await _audit_and_ship(
@@ -1047,14 +1098,40 @@ async def handle_predict_questions(
         career_entries=retrieved,
     )
 
-    async def generator():
-        return await likely_questions.generate(
-            jd=jd,
-            research_bundle=bundle,
-            user=user,
-            retrieved_entries=retrieved,
-            citation_ctx=citation_ctx,
-        )
+    # PROCESS Entry 45 — managed likely_questions routing.
+    if settings.enable_managed_likely_questions:
+        from .llm import call_in_session
+
+        async def generator():
+            try:
+                return await call_in_session(
+                    "likely_questions_managed",
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    retrieved_entries=retrieved,
+                    session_id=session.session_id,
+                )
+            except Exception as exc:
+                log.warning(
+                    "likely_questions_managed failed; falling back: %s", exc,
+                )
+                return await likely_questions.generate(
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    retrieved_entries=retrieved,
+                    citation_ctx=citation_ctx,
+                )
+    else:
+        async def generator():
+            return await likely_questions.generate(
+                jd=jd,
+                research_bundle=bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                citation_ctx=citation_ctx,
+            )
 
     lq = await generator()
     lq = await _audit_and_ship(
@@ -1086,6 +1163,24 @@ async def handle_salary_advice(
         user_id=user.user_id,
         career_entries=[],
     )
+
+    # PROCESS Entry 45 — managed salary_strategist routing.
+    if settings.enable_managed_salary_strategist:
+        from .llm import call_in_session
+        try:
+            return await call_in_session(
+                "salary_strategist_managed",
+                jd=bundle.extracted_jd,
+                research_bundle=bundle,
+                user=user,
+                context=ctx,
+                style_profile=style_profile,
+                session_id=session.session_id,
+            )
+        except Exception as exc:
+            log.warning(
+                "salary_strategist_managed failed; falling back: %s", exc,
+            )
 
     return await salary_strategist.generate(
         jd=bundle.extracted_jd,

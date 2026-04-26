@@ -120,7 +120,20 @@ class Settings(BaseSettings):
     # default to Opus 4.7). A provider missing its API key raises at
     # call-time; orchestrator.handle_draft_cv catches and falls back
     # to Anthropic so the demo never goes down on a misconfig.
-    enable_multi_provider_cv_tailor: bool = False
+    # Default True post-2026-04-26: routing is the canonical path; flip
+    # to False to revert to "everything Anthropic" behaviour.
+    enable_multi_provider_cv_tailor: bool = True
+    # Managed agentic Phase 4 generators (PROCESS Entry 45). When True,
+    # the corresponding generator routes through a `client.beta.sessions.*`
+    # session that has live web tools (Web Fetch / Web Search / Code
+    # Execution as appropriate) instead of the in-process single-call
+    # path. Off by default — managed sessions are slower (~30-90s) and
+    # ~$0.30-1.50/call more expensive but yield richer, live-grounded
+    # output. Each falls back to its in-process equivalent on session
+    # failure (graceful degradation).
+    enable_managed_cover_letter: bool = False
+    enable_managed_likely_questions: bool = False
+    enable_managed_salary_strategist: bool = False
 
     # --- paths
     data_dir: Path = Path("./data")

@@ -243,6 +243,28 @@ async def _body() -> tuple[list[str], list[str], float]:
                     )
 
             messages.append("storage round-trip OK: verdict + bundle reloaded")
+
+            # ── Assert: Job entity (PROCESS Entry 45) ───────────────────
+            from trajectory.storage import find_jobs_for_user
+            jobs = await find_jobs_for_user(user.user_id)
+            if not jobs:
+                failures.append(
+                    "Job entity not created — handle_forward_job should "
+                    "upsert a row in `jobs` keyed by company+role."
+                )
+            else:
+                first = jobs[0]
+                if reloaded and reloaded.job_id != first["job_id"]:
+                    failures.append(
+                        f"session.job_id ({reloaded.job_id!r}) != "
+                        f"jobs[0].job_id ({first['job_id']!r}) — orchestrator "
+                        "didn't stamp job_id on the session."
+                    )
+                messages.append(
+                    f"Job entity OK: id={first['job_id'][:8]}.. "
+                    f"company={first['company_name']!r} "
+                    f"role={first['role_title']!r}"
+                )
         finally:
             company_scraper.run = originals["company_scraper.run"]
             ch_agent.lookup = originals["ch_agent.lookup"]

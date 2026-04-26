@@ -143,7 +143,7 @@ export const DemoVideo = () => (
 ---
 
 ## ACT 1 — Job-Search Fatigue (0:00–1:00 · frames 0–1800)
-
+H
 **VO direction** — direct, slightly worn ("I've been you").
 
 | Beat | Frames | Scene component | Asset(s) — [YOU PROVIDE] | Animation (Remotion) |

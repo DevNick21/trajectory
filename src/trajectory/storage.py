@@ -108,6 +108,39 @@ CREATE TABLE IF NOT EXISTS queued_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_queued_user ON queued_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_queued_status ON queued_jobs(status);
+
+CREATE TABLE IF NOT EXISTS managed_session_cache (
+    -- Cache key = (agent_label, key_hash). e.g. agent_label="company_investigator"
+    -- + key_hash=sha256("acme.com") -> the JSON blob of the previous
+    -- successful output. Used by managed/_resources.py to skip a re-run
+    -- when we have a fresh result for the same target. PROCESS Entry 45.
+    agent_label TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    cached_at TEXT NOT NULL,
+    PRIMARY KEY (agent_label, key_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_session_cache_label_at
+    ON managed_session_cache(agent_label, cached_at DESC);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    -- A persistent Job entity (PROCESS Entry 45). Each forwarded URL
+    -- creates or reuses one of these; sessions reference job_id so the
+    -- bot can disambiguate "draft a CV for that role" by title +
+    -- company. Identity = (user_id, role_title, company_name).
+    job_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    role_title TEXT NOT NULL,
+    company_name TEXT NOT NULL,
+    company_domain TEXT,
+    last_seen_url TEXT,
+    last_seen_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_seen
+    ON jobs(user_id, last_seen_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_user_company_role
+    ON jobs(user_id, company_name, role_title);
 """
 
 
@@ -1164,3 +1197,160 @@ class Storage:
 
     async def get_cached_page(self, url: str, max_age_hours: int = 24) -> Optional[str]:
         return await get_cached_page(url=url, max_age_hours=max_age_hours)
+
+
+# ===========================================================================
+# Managed-session cache + Job entity (PROCESS Entry 45)
+# ===========================================================================
+
+
+async def cache_managed_result(
+    agent_label: str,
+    key: str,
+    payload: dict,
+) -> None:
+    """Cache a managed-session result keyed by (agent_label, hash(key))."""
+    import hashlib
+    key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
+    async with await _connect() as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO managed_session_cache "
+            "(agent_label, key_hash, payload_json, cached_at) VALUES (?, ?, ?, ?)",
+            (agent_label, key_hash, json.dumps(payload, default=str),
+             _utcnow().isoformat()),
+        )
+        await db.commit()
+
+
+async def get_cached_managed_result(
+    agent_label: str,
+    key: str,
+    max_age_hours: int = 24,
+) -> Optional[dict]:
+    """Return a cached managed-session result if fresher than max_age."""
+    import hashlib
+    key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
+    cutoff = _utcnow() - timedelta(hours=max_age_hours)
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload_json, cached_at FROM managed_session_cache "
+            "WHERE agent_label = ? AND key_hash = ?",
+            (agent_label, key_hash),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    cached_at = datetime.fromisoformat(row[1])
+    if cached_at < cutoff:
+        return None
+    try:
+        return json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+
+
+# --- Job entity --------------------------------------------------------------
+
+
+async def upsert_job(
+    *,
+    user_id: str,
+    role_title: str,
+    company_name: str,
+    company_domain: Optional[str] = None,
+    last_seen_url: Optional[str] = None,
+) -> str:
+    """Find-or-create a Job by (user_id, role_title, company_name).
+
+    Returns the job_id. Updates last_seen_url + last_seen_at on hit.
+    Identity is intentionally lax — same role at same company = same job
+    even if the URL changes (re-listing, expired-and-replaced).
+    """
+    import uuid
+    role_norm = (role_title or "").strip()
+    company_norm = (company_name or "").strip()
+    now = _utcnow().isoformat()
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT job_id FROM jobs WHERE user_id = ? AND role_title = ? "
+            "AND company_name = ? LIMIT 1",
+            (user_id, role_norm, company_norm),
+        ) as cur:
+            row = await cur.fetchone()
+        if row:
+            job_id = row[0]
+            await db.execute(
+                "UPDATE jobs SET last_seen_url = COALESCE(?, last_seen_url), "
+                "last_seen_at = ?, company_domain = COALESCE(?, company_domain) "
+                "WHERE job_id = ?",
+                (last_seen_url, now, company_domain, job_id),
+            )
+        else:
+            job_id = str(uuid.uuid4())
+            await db.execute(
+                "INSERT INTO jobs (job_id, user_id, role_title, company_name, "
+                "company_domain, last_seen_url, last_seen_at, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (job_id, user_id, role_norm, company_norm,
+                 company_domain, last_seen_url, now, now),
+            )
+        await db.commit()
+    return job_id
+
+
+async def find_jobs_for_user(
+    user_id: str,
+    *,
+    company_substring: Optional[str] = None,
+    role_substring: Optional[str] = None,
+    limit: int = 10,
+) -> list[dict]:
+    """Find recent jobs for a user, optionally filtered by company / role
+    substring (case-insensitive). Used by the bot to disambiguate
+    'draft me a CV for that Acme role' → which Acme role exactly?
+    """
+    sql = (
+        "SELECT job_id, role_title, company_name, company_domain, "
+        "last_seen_url, last_seen_at, created_at FROM jobs WHERE user_id = ?"
+    )
+    args: list = [user_id]
+    if company_substring:
+        sql += " AND LOWER(company_name) LIKE ?"
+        args.append(f"%{company_substring.lower()}%")
+    if role_substring:
+        sql += " AND LOWER(role_title) LIKE ?"
+        args.append(f"%{role_substring.lower()}%")
+    sql += " ORDER BY last_seen_at DESC LIMIT ?"
+    args.append(limit)
+    async with await _connect() as db:
+        async with db.execute(sql, args) as cur:
+            rows = await cur.fetchall()
+    return [
+        {
+            "job_id": r[0], "role_title": r[1], "company_name": r[2],
+            "company_domain": r[3], "last_seen_url": r[4],
+            "last_seen_at": r[5], "created_at": r[6],
+        }
+        for r in rows
+    ]
+
+
+async def get_session_for_job(
+    user_id: str, job_id: str,
+) -> Optional[Session]:
+    """Return the most-recent session for a job_id (used by the bot to
+    locate the research bundle for a draft request)."""
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT s.payload FROM sessions s WHERE s.user_id = ? "
+            "AND json_extract(s.payload, '$.job_id') = ? "
+            "ORDER BY s.created_at DESC LIMIT 1",
+            (user_id, job_id),
+        ) as cur:
+            row = await cur.fetchone()
+    if not row:
+        return None
+    try:
+        return Session.model_validate_json(row[0])
+    except Exception:
+        return None

@@ -338,6 +338,12 @@ class Session(BaseModel):
     user_id: str
     intent: Intent
     job_url: Optional[str] = None
+    # Persistent Job entity reference (PROCESS Entry 45). The same role
+    # at the same company gets one job_id even across multiple URL
+    # forwards / re-listings; sessions reference it so the bot can
+    # answer "draft me a CV for that role at Acme" by job, not by
+    # session-recency.
+    job_id: Optional[str] = None
     phase1_output: Optional[dict] = None
     verdict: Optional["Verdict"] = None
     generated_components: dict = Field(default_factory=dict)

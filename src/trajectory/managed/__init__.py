@@ -60,3 +60,7 @@ _safe_import("trajectory.managed.reviews_investigator")
 _safe_import("trajectory.managed.verdict_deep_research")
 _safe_import("trajectory.managed.cv_tailor_advisor")
 _safe_import("trajectory.managed.prompt_auditor_empirical")
+# PROCESS Entry 45 — managed agentic Phase 4 generators.
+_safe_import("trajectory.managed.cover_letter_session")
+_safe_import("trajectory.managed.likely_questions_session")
+_safe_import("trajectory.managed.salary_strategist_session")

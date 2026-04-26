@@ -77,6 +77,7 @@ _REGISTRY: list[_Entry] = [
     _Entry("api_queue",          "scripts.smoke_tests.api_queue",          cheap=True,  category="api"),
     _Entry("api_onboarding",     "scripts.smoke_tests.api_onboarding",     cheap=True,  category="api"),
     _Entry("api_pack",           "scripts.smoke_tests.api_pack",           cheap=True,  category="api"),
+    _Entry("api_chat",           "scripts.smoke_tests.api_chat",           cheap=True,  category="api"),
     _Entry("multi_provider_routing", "scripts.smoke_tests.multi_provider_routing", cheap=True, category="infra"),
     _Entry("multi_provider_cv_tailor_live", "scripts.smoke_tests.multi_provider_cv_tailor_live", cheap=False, category="phase4"),
 
@@ -122,6 +123,7 @@ _REGISTRY: list[_Entry] = [
     # inside the test body; runs ~$1-3 when enabled, no-ops otherwise.
     _Entry("managed_investigator",  "scripts.smoke_tests.managed_investigator",  cheap=False, category="e2e"),
     _Entry("managed_reviews",       "scripts.smoke_tests.managed_reviews",       cheap=False, category="e2e"),
+    _Entry("managed_cover_letter",  "scripts.smoke_tests.managed_cover_letter",  cheap=False, category="e2e"),
     _Entry("verdict_deep_research", "scripts.smoke_tests.verdict_deep_research", cheap=False, category="e2e"),
     _Entry("e2e_live_stress",       "scripts.smoke_tests.e2e_live_stress",       cheap=False, category="e2e"),
     # Agentic CV tailor: gated behind SMOKE_AGENTIC_CV=1 (~$0.35).
