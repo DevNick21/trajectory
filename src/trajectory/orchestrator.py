@@ -106,10 +106,15 @@ async def handle_forward_job(
 
     # ── Phase 1A: company scraper (JD + company research, serial) ─────────
     log.info("Phase 1A: company_scraper for %s", job_url)
+    # Fire the JD-extractor tick the moment _extract_jd returns inside
+    # company_scraper, BEFORE the company-page scrape + summariser run.
+    # Without this, both ticks pop together at the end of the full
+    # ~30-50s block and the UI sits at `○` the whole time.
     company_research, jd = await company_scraper.run(
-        job_url=job_url, session_id=session.session_id
+        job_url=job_url,
+        session_id=session.session_id,
+        on_jd_extracted=lambda: mark("phase_1_jd_extractor"),
     )
-    await mark("phase_1_jd_extractor")
     await mark("phase_1_company_scraper_summariser")
 
     # Cache scraped pages from company_research

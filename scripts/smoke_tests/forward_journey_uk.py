@@ -119,7 +119,11 @@ async def _body() -> tuple[list[str], list[str], float]:
 
         # Replace each sub-agent with a coroutine that returns the
         # corresponding slice of the fixture bundle.
-        async def _fake_scraper(*, job_url, session_id):
+        async def _fake_scraper(*, job_url, session_id, on_jd_extracted=None):
+            # Mirror the real scraper: fire the early-tick callback so
+            # the orchestrator's progressive-reveal contract still holds.
+            if on_jd_extracted is not None:
+                await on_jd_extracted()
             return bundle.company_research, bundle.extracted_jd
 
         async def _fake_ch(*, company_name):

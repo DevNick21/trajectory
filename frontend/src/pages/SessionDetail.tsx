@@ -51,6 +51,17 @@ export default function SessionDetail() {
     queryFn: () => getSession(id),
     enabled: Boolean(id),
     retry: false,
+    // Poll while the verdict hasn't landed yet — the runner finishes
+    // detached if the user navigated away from the dashboard. Once
+    // verdict is present we stop polling to avoid idle network noise.
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // Cast: SessionDetailResponse may have verdict in different shape;
+      // the absence of any verdict object means we're still waiting.
+      const v = (data as { verdict?: unknown } | undefined)?.verdict;
+      return v ? false : 4000;
+    },
+    refetchIntervalInBackground: false,
   });
 
   if (session.isPending) {

@@ -55,6 +55,13 @@ from ..sse import event_stream
 router = APIRouter()
 log = logging.getLogger(__name__)
 
+# Strong refs to detached forward_job runners — prevents the GC from
+# collecting in-flight Phase 1 / verdict tasks after the SSE client
+# disconnects. Each task removes itself via add_done_callback when it
+# finishes naturally, so this set is bounded by the number of
+# in-flight forwards (typically 0-2 in single-user demo mode).
+_RUNNING_TASKS: set = set()
+
 
 _FILE_KIND_BY_SUFFIX = {
     ".docx": "docx",
@@ -279,14 +286,21 @@ async def forward_job(
             async for frame in event_stream(queue):
                 yield frame
         finally:
-            # Client disconnected (cancelled the generator) OR the
-            # stream completed naturally — either way, ensure the
-            # background runner doesn't outlive its consumer.
+            # Client disconnected (changed tabs, navigated away, or
+            # closed the page) — DO NOT cancel the runner. Let Phase 1
+            # + verdict finish in the background so the session page
+            # has data when the user comes back.
+            #
+            # Trade-off: an aborted SSE leaves an orphan task running
+            # to completion. Acceptable for single-user demo; in
+            # multi-user prod we'd want a per-user task registry with
+            # deduplication. For now the runner saves bundle + verdict
+            # to SQLite; the next /api/sessions/{id} hit returns them.
             if not runner_task.done():
-                runner_task.cancel()
-                try:
-                    await runner_task
-                except (asyncio.CancelledError, Exception):
-                    pass
+                # Detach: if the request is shutting down, the task
+                # will continue under the application loop until it
+                # returns naturally.
+                _RUNNING_TASKS.add(runner_task)
+                runner_task.add_done_callback(_RUNNING_TASKS.discard)
 
     return EventSourceResponse(stream())
