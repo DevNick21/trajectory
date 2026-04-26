@@ -1305,47 +1305,8 @@ async def call_in_session(agent_name: str, *args, **kwargs):
     return await session(*args, **kwargs)
 
 
-# ---------------------------------------------------------------------------
-# Token counting (preflight cost gate)
-# ---------------------------------------------------------------------------
-
-
-async def count_tokens(
-    *,
-    model: Optional[str] = None,
-    system: str | list[dict] | None = None,
-    messages: list[dict],
-    tools: Optional[list[dict]] = None,
-) -> int:
-    """Wrapper around `client.messages.count_tokens`.
-
-    Used as a true preflight gate before non-CRITICAL calls - replaces
-    the post-hoc `estimate_cost_usd` heuristic. Returns the input-token
-    count Anthropic would charge for this exact request.
-    """
-    client = _get_anthropic_client()
-    model = model or settings.opus_model_id
-    payload: dict[str, Any] = {"model": model, "messages": messages}
-    if system is not None:
-        payload["system"] = system
-    if tools:
-        payload["tools"] = tools
-    resp = await client.messages.count_tokens(**payload)
-    return int(getattr(resp, "input_tokens", 0))
-
-
-# ---------------------------------------------------------------------------
-# 1-hour cache helper (opt-in for batch runners + bot prefixes)
-# ---------------------------------------------------------------------------
-
-
-def cache_control_block(extended: bool = False) -> dict[str, Any]:
-    """Return the right `cache_control` value depending on settings.
-
-    `extended=True` and `settings.enable_1hr_cache_for_batch=True`
-    together upgrade to the 1-hour TTL; otherwise stays on the 5-minute
-    default.
-    """
-    if extended and settings.enable_1hr_cache_for_batch:
-        return {"type": "ephemeral", "ttl": "1h"}
-    return {"type": "ephemeral"}
+# `count_tokens()` and `cache_control_block()` lived here as forward-
+# looking helpers (PROCESS Entry 43) but never gained a caller. Removed
+# 2026-04-26 in the dead-code sweep. `git log -- src/trajectory/llm.py`
+# recovers them when a real preflight gate or 1hr-cache call site
+# materialises.
