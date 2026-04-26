@@ -1,157 +1,262 @@
-# Trajectory demo — what *you* need to provide
+# Trajectory demo — what *you* need to do (non-code)
 
-Companion to [`demo_script.md`](./demo_script.md). Every asset, recording, and code change you (Kene) need to do before `npx remotion render` will produce the final `.mp4`.
+Companion to [`demo_script.md`](./demo_script.md). Everything outside the codebase that has to happen before `npx remotion render` produces the final `.mp4`.
+
+Motion patterns are already wired into the frontend — see [`demo_script.md`](./demo_script.md) §"Concrete Motion Patterns". This list is what's left.
 
 Organised by work-session, not by act — that's how it actually gets done.
 
 ---
 
-## 1. Assets to source
+## 1. Pre-flight verifications
 
-### Article-headline screenshots → `demo/public/headlines/`
+Five-minute checks. Do these first. If anything fails, fix before any recording starts.
 
-Real publications. Redact author bylines if needed. PNG, ≥1200 px wide so they don't pixelate.
-
-- [ ] `ai-screeners-prefer-ai.png` — research finding that AI résumé screeners prefer AI-written CVs (UW / Northwestern study, Bloomberg coverage)
-- [ ] `recruiters-spot-ai-cv.png` — recruiters say AI cover letters are "instantly recognisable" (FT, BBC, HBR)
-- [ ] `770-applications.png` — UK volume / fatigue piece (Guardian, FT, BBC)
-- [ ] `ai-cv-instantly.png` — second "hiring managers spot AI" piece, used in the Act 1 second-headline-pair beat
-
-### Rejection email crops → `demo/public/rejections/`
-
-Six PNGs. Crop tight to the subject line + sender + first preview line. From your real `Applications_Archive` folder. Anonymise sender domains if you want, but real emails read more honest than mock-ups.
-
-- [ ] `inbox-1.png` … `inbox-6.png` — six different rejection emails
-
-### Brand → `demo/public/brand/`
-
-- [ ] `logomark.svg` — Trajectory logomark, white-on-transparent so it sits on the closing black card
-- [ ] `fonts/` — display face (Inter, Söhne, or chosen). TTF/WOFF2 + CSS `@font-face` declarations
-
-### Music bed → `demo/public/music/`
-
-- [ ] `bed.mp3` — single track, ~3:00, three movements: sparse piano (0:00–1:00) → low pulsing synth that builds (1:00–2:20) → ambient pad tail (2:20–3:00). Source from a royalty-free library (Artlist, Musicbed, Epidemic) or commission. Mix it loud — the `duckMusic` function in `DemoVideo.tsx` will pull it down to 0.06 under VO automatically.
+- [ ] **`PHASE_1_AGENTS` constant order** in `frontend/src/lib/constants.ts` matches the VO list: *"Sponsor Register, Companies House, salary, reviews, ghost-job signals"*. Constant order = visual tick order. If they don't match, change the constant (not the VO).
+- [ ] **Capital on Tap A-rated status** — download the gov.uk Sponsor Register CSV on recording day, search for "Capital on Tap" or its legal entity, confirm "A (Premium)" or "A (SME+)". Sponsor ratings change.
+- [ ] **Capital on Tap job URL still live** — `https://job-boards.greenhouse.io/capitalontap/jobs/8520481002`. If posting was filled, swap to another role on their Greenhouse board (any non-senior tech role works).
+- [ ] **No console errors** when running a real Phase 1 → verdict → CV cycle locally. Motion animations fire reliably. No race conditions in the SSE stream.
 
 ---
 
-## 2. Recordings to make
+## 2. ElevenLabs voice clone
 
-### Voiceover → `demo/public/vo/`
+### Calibration (15 minutes, do once)
 
-Three separate `.wav` files. 48 kHz / 24-bit. Record to a click track if you want frame-accurate cuts; otherwise read each act in one continuous take.
+- [ ] Generate a 15s test clip with this paragraph at your chosen voice settings:
+      *"Trajectory is a job-search assistant. It runs research agents in parallel, grounds every claim in a live source, and writes a CV in your voice. Built for the U-K market."*
+- [ ] Time it. If ~14–16s → you're at ~140 wpm and the script will time correctly. Adjust speed if not.
+- [ ] **Phonetic landmine pass** — generate each of these in isolation, confirm pronunciation:
+  - [ ] "U-R-L" → "you-are-ell"
+  - [ ] "C-V" → "see-vee"
+  - [ ] "A-I" → "ay-eye"
+  - [ ] "gov dot you-kay"
+  - [ ] "Opus four-point-seven"
+  - [ ] "U-K" → "you-kay"
+  - [ ] "Seven hundred and seventy"
 
-- [ ] `act1.wav` — Act 1 VO, ~22 s of speech (lines from `demo_script.md` Act 1 VO block)
-- [ ] `act2.wav` — Act 2 VO, ~62 s
-- [ ] `act3.wav` — Act 3 VO, ~28 s
+If any one is broken, rewrite that line in the script before generating the full act.
 
-Voice direction:
-- Act 1 — direct, slightly worn ("I've been you")
-- Act 2 — product-confident, no oversell
-- Act 3 — quiet; let *"never auto-applies"* land without flourish
+### Generate the three acts → `demo/public/vo/`
 
-After recording, **measure each file's duration in frames** and update `VO_WINDOWS` in `DemoVideo.tsx` so the music ducks the right ranges:
+48 kHz / 24-bit if your plan allows. Otherwise the default ElevenLabs export is fine.
 
-```tsx
-const VO_WINDOWS: Array<[number, number]> = [
-  [0, ACT1_VO_FRAMES],
-  [1800, 1800 + ACT2_VO_FRAMES],
-  [4200, 4200 + ACT3_VO_FRAMES],
-];
-```
+- [ ] `act1.wav` — Act 1 VO (~37s of speech). Tone: direct, slightly worn.
+- [ ] `act2.wav` — Act 2 VO (~78s). Tone: product-confident, no oversell.
+- [ ] `act3.wav` — Act 3 VO (~24s). Tone: quiet. Let *"never auto-applies"* land.
 
-### Screen recordings → `demo/public/screenrec/`
+Generate 3 takes per act. Pick the best. Keep the others until final render is locked.
 
-Capture **independently per Scene** against pre-seeded fixture data. Native 1920×1080. HiDPI displays: set the recorder to 1× scaling. MP4, H.264, ≥10 Mbps to survive the second encode.
+### After recording — update Remotion timing
 
-Tool suggestion: macOS `Cmd+Shift+5` set to 1× + ScreenStudio for cursor styling, or OBS for full control.
-
-- [ ] `dashboard.mp4` (~5 s) — `Dashboard.tsx` with profile loaded, sidebar showing real career history + writing samples
-- [ ] `phase1-stream.mp4` (~12 s) — eight agents ticking green in `Phase1Stream`. Run a real session, do not fake it
-- [ ] `verdict-citation.mp4` (~8 s) — `VerdictHeadline` reveal + cursor hovering a `CitationLink` so the verbatim-snippet tooltip shows + click that opens gov.uk in a new tab
-- [ ] `pack-picker.mp4` (~3 s) — `PackPicker` four cards, click "Tailored CV → Generate"
-- [ ] `session-pack.mp4` (~14 s) — `SessionPack` split-pane, CV writing in real time, click a bullet, watch the violet ring jump to the cited career entry on the left
-- [ ] `routing-flicks.mp4` (~4 s) — three quick labels: *"Greenhouse → OpenAI"*, *"Workday → Anthropic"*, *"Oracle → Cohere"*. Can be three separate sessions cut together
-- [ ] `sessions-list.mp4` (~4 s) — sessions list with mix of GO / NO_GO + cost ticker reading ≤£0.40
-
-### Telegram handheld → `demo/public/screenrec/`
-
-- [ ] `telegram-handheld.mov` (~8 s) — iPhone in hand, real Telegram chat with `@TrajectoryBot`, forward a job URL, message edits show Phase 1 ticking through, final verdict bubble lands. Shoot landscape. Natural light. Don't fake the shake — handheld is the point.
-
----
-
-## 3. Real-session prep
-
-Before recording any of the screen clips, run **one real end-to-end session** against the live stack and verify the on-screen numbers. The script's specifics are placeholders.
-
-- [ ] Pick a real Greenhouse job URL to use as the demo session
-- [ ] Run it end-to-end: Phase 1 → verdict → CV → cover letter → salary → questions
-- [ ] **Capture the actual numbers** — update them in the VO before recording if any differ:
-  - [ ] Application count (currently `770` in script — use the real current count)
-  - [ ] Confidence pct (currently `87%`)
-  - [ ] SOC code (currently `SOC 2136` — depends on the role you pick)
-  - [ ] Cost per pack (currently `≤£0.40`)
-- [ ] Pre-seed fixture data so each scene clip can be recorded cleanly without dragging the whole pipeline through every retake
+- [ ] Measure each `.wav` file's actual duration (in milliseconds).
+- [ ] Convert to frames: `frames = ceil(ms / 1000 * 30)`.
+- [ ] Update `VO_WINDOWS` in `demo/src/DemoVideo.tsx`:
+      ```tsx
+      const VO_WINDOWS: Array<[number, number]> = [
+        [0, ACT1_VO_FRAMES],
+        [1800, 1800 + ACT2_VO_FRAMES],
+        [4200, 4200 + ACT3_VO_FRAMES],
+      ];
+      ```
+- [ ] Preview in Remotion to verify music ducks under speech and rests in the gaps.
 
 ---
 
-## 4. Frontend work — Motion wiring
+## 3. Music bed → `demo/public/music/`
 
-`npm i motion` in `frontend/`, then wire the patterns from `demo_script.md` §"Concrete Motion patterns" into the live components. These animations get *recorded*, not composited in Remotion.
-
-- [ ] [`frontend/src/components/Phase1Stream.tsx`](../frontend/src/components/Phase1Stream.tsx) — `motion.ul` parent with `staggerChildren: 0.08`, `motion.li layout` rows, `AnimatePresence` tick icon spring
-- [ ] [`frontend/src/components/VerdictHeadline.tsx`](../frontend/src/components/VerdictHeadline.tsx) — parent variants with `delayChildren: 0.2, staggerChildren: 0.08` for badge → headline → confidence
-- [ ] [`frontend/src/components/CitationLink.tsx`](../frontend/src/components/CitationLink.tsx) — `whileHover={{ y: -1 }}` + `AnimatePresence` tooltip pop
-- [ ] [`frontend/src/components/PackPicker.tsx`](../frontend/src/components/PackPicker.tsx) — staggered card entry + `whileHover={{ y: -4, scale: 1.01 }}` + `layoutId="active-pack"` on the selected card
-- [ ] [`frontend/src/components/CareerHistory.tsx`](../frontend/src/components/CareerHistory.tsx) (used inside `SplitPane`) — `motion.li layout` so the cited entry can re-order; violet ring via `animate={{ boxShadow: "0 0 0 3px #8b5cf6" }}`
-- [ ] [`frontend/src/pages/SessionPack.tsx`](../frontend/src/pages/SessionPack.tsx) right-pane CV bullets — per-line `motion.span` opacity-in as SSE token chunks arrive
-- [ ] [`frontend/src/components/SessionList.tsx`](../frontend/src/components/SessionList.tsx) — `motion.div layout` rows + `motion.span key={cost}` opacity-in on cost ticker
-
-Rule: **don't break existing tests**. Motion wraps existing markup, doesn't replace it. Run `npm run lint && npm run build` after each component.
+- [ ] Generate via ElevenLabs Music using the **Music Bed Prompt** in [`demo_script.md`](./demo_script.md). Generate 3 takes.
+- [ ] Pick the best. If after 5 generations nothing lands, fall back to **Pixabay Music** — search "tech documentary build", "warm corporate cinematic", or "minimal corporate build 3 minute".
+- [ ] Reference targets: Tycho "Awake" intro, Bonobo "Cirrus" intro, Hammock's quieter moments. If the AI gives you something that sounds like Ólafur Arnalds or a memorial, regenerate.
+- [ ] Save as `bed.mp3` (MP3, 192kbps+ is fine — Remotion ducks the volume programmatically).
 
 ---
 
-## 5. Remotion build
+## 4. Article-headline screenshots → `demo/public/headlines/`
 
-- [ ] `npx create-video@latest demo --template hello-world` (TypeScript) at the repo root
-- [ ] Drop the layout from `demo_script.md` §"Remotion project layout" into `demo/src/`
-- [ ] Implement the scene components per the Act tables (one file per beat in `demo/src/scenes/`)
-- [ ] Implement the primitives (`FadeIn`, `SlideUp`, `Cursor`) in `demo/src/primitives/`
-- [ ] Implement the overlays (`RejectedStamp`, `HeadlineCard`, `BlackTitleCard`, `CitationTooltip`) in `demo/src/overlays/`
-- [ ] Update `VO_WINDOWS` in `DemoVideo.tsx` to the real VO file durations (see §2)
-- [ ] `npx remotion preview` — scrub every act, fix timing collisions
-- [ ] `npx remotion render trajectory-demo out/trajectory-demo.mp4 --codec=h264 --crf=18`
+Real publications. PNG, ≥1200px wide. Crop tight: headline, byline, publication name, date. No paywalls or ad rails visible.
+
+- [ ] `ai-screeners-prefer-ai.png` — research finding that AI résumé screeners prefer AI-written CVs. Search: "AI screeners prefer AI-written CVs UW Northwestern study" or Bloomberg coverage.
+- [ ] `ai-cv-instantly.png` — second "hiring managers spot AI" piece, used in Act 1's second-headline-pair beat. Wired or HBR-style angle.
+
+**If you can't find perfect matches:** the VO already works with two strong headlines — don't pad with weak ones. Delete the third asset reference from the Remotion scene if needed.
 
 ---
 
-## 6. Taste calls — decide before recording
+## 5. Rejection email crops → `demo/public/rejections/`
 
-- [ ] **Tube line vs desk line** in Act 2 ("Forward a URL on the Tube…" vs "…from your phone, the verdict's waiting when you sit down"). Tube only works if you can shoot a real Underground / commute frame
-- [ ] **Final URLs on the end card** — `trajectory.app` and `github.com/your-repo`. Replace `your-repo` with the real org/name
-- [ ] **Headline-screenshot publications** — pick four real ones before recording so the visuals match the VO's "studies show" framing
-- [ ] **Music selection** — sign off on the bed before VO recording so you can read into its rhythm
+- [ ] Six PNGs (`inbox-1.png` … `inbox-6.png`) from your real `Applications_Archive` folder.
+- [ ] Crop format: ~1200×120 strips showing one inbox row each — sender name, subject line, date, snippet preview.
+- [ ] Greyscale optional but more cinematic.
+- [ ] Redact your email address. Keep the sender domains (Capital on Tap, KnowBe4, etc. — *real* company names land harder than redacted ones).
+- [ ] **The script claim is *"that's the folder on this machine."* These have to be real.**
 
 ---
 
-## 7. Pre-flight before render
+## 6. Brand → `demo/public/brand/`
 
-- [ ] All assets in `demo/public/` per the layout in `demo_script.md`
-- [ ] All Motion patterns wired into the frontend and visible in a real session
-- [ ] All eight `screenrec/*.mp4` clips captured at 1920×1080
-- [ ] `telegram-handheld.mov` shot
-- [ ] All three `vo/act*.wav` files recorded and `VO_WINDOWS` updated to match
-- [ ] Music bed in place
-- [ ] `npx remotion preview` — every act scrubs cleanly, music ducks under VO
-- [ ] One full render at `--crf=18` — watch end-to-end for collisions, audio sync, off-by-one timing
+- [ ] `logomark.svg` — Trajectory logomark, white-on-transparent so it sits on the closing black card.
+- [ ] `fonts/` — display face (Inter, Söhne, or chosen). TTF/WOFF2 + CSS `@font-face` declarations.
+
+---
+
+## 7. Recording environment setup (one-time)
+
+Do these once, before any recording. Skipping causes 80% of common screen-rec failures.
+
+### Hardware & display
+
+- [ ] Display set to 1920×1080 native resolution. No scaling.
+- [ ] If HiDPI/Retina: configure OBS to capture at 1× pixel ratio (not 2×).
+- [ ] External monitor preferred. Disconnect laptop screen if you can.
+- [ ] System audio muted. Notifications globally silenced. Do Not Disturb on.
+- [ ] Wallpaper set to solid `#0b0b0c` or pure black (matches Remotion bg if anything flashes).
+- [ ] Dock / taskbar set to auto-hide.
+
+### Cursor highlight tool (single biggest visual upgrade)
+
+Pick one based on platform:
+
+- [ ] **macOS**: Cursor Pro (free) or Mouseposé. Settings: ~30px circle, 30% opacity, click-flash enabled, no key visualisation.
+- [ ] **Windows**: Mouseinc or PointerFocus. Same settings.
+- [ ] **Linux**: key-mon or custom xdotool overlay.
+
+### Browser
+
+- [ ] Chrome or Brave. Fresh profile. **Zero extensions** (1Password, Grammarly, etc. inject UI that ruins takes).
+- [ ] Zoom set to exactly 100% (Cmd/Ctrl+0).
+- [ ] Bookmark bar populated with: Trajectory localhost, Capital on Tap Greenhouse URL, gov.uk Sponsor Register page, Companies House search.
+
+### Recording software
+
+- [ ] **OBS Studio** installed (not QuickTime, not Game Bar).
+- [ ] OBS settings:
+  - Output mode: Advanced
+  - Recording format: MP4
+  - Encoder: x264 (or hardware H.264)
+  - Rate Control: CRF, value 18
+  - FPS: **30** (must match Remotion)
+  - Resolution (Base + Output): **1920×1080** for both
+  - Audio: **disable all audio inputs** — VO is separate
+
+### Take-naming convention
+
+Save every take as: `trajectory-{shotname}-{takenum}.mp4`
+e.g. `trajectory-phase1-stream-04.mp4`. Keep all takes until final render is locked.
+
+---
+
+## 8. Fixture data prep (before any recording)
+
+- [ ] **Build SSE replay flag** for `streamForwardJob` (~30 min):
+      Read events from a JSON fixture file when `import.meta.env.VITE_REPLAY_PHASE1=true`. Run one good Capital on Tap session live, capture the SSE event stream to a fixture file, replay deterministically. Saves you from API-timeout hell across 6+ takes.
+- [ ] **Onboarding complete** — career history, motivations, deal-breakers, writing samples all populated.
+- [ ] **`SessionList` populated** with 6+ prior sessions, mixed GO/NO_GO verdicts.
+- [ ] **One Capital on Tap CV pack pre-generated** with bullets that have known `career_entry` citations. Verify which bullets bind to which entries via React DevTools or console — you'll need to click those specific bullets during the SessionPack take.
+
+---
+
+## 9. Screen recordings → `demo/public/screenrec/`
+
+Capture independently per scene. Native 1920×1080. Plan for 3–6 takes per shot, more for the hero shots. **Do them in the suggested order** — emotional intensity climbs gradually, dependencies make sense.
+
+### Order of recording
+
+- [ ] **`dashboard.mp4`** (5s) — warm-up shot. Hard refresh, capture the stagger fire-on-load.
+- [ ] **`pack-picker.mp4`** (3s) — easy. Hover lift on Tailored CV card → click Generate → navigation.
+- [ ] **`sessions-list.mp4`** (4s) — easy. Hover GO/NO_GO badges. **No cost ticker** (cut from spec).
+- [ ] **`phase1-stream.mp4`** (~12s) — hero shot. Paste URL, click Check, capture all 9 agents ticking through. Use the SSE replay flag.
+- [ ] **`verdict-citation.mp4`** (8s) — hover a `gov_data` citation chip → click → gov.uk opens. Then hover a `url_snippet` chip → tooltip pops with verbatim quote → click → source opens.
+- [ ] **`session-pack.mp4`** (~14s) — hardest. Click Generate → CV bullets cascade in → click a bullet with `career_entry` citation → violet ring jumps to the cited career entry on the left → click a *different* bullet → ring moves.
+- [ ] **`telegram-screencap.mov`** (8s) — separate session. iPhone via QuickTime → File → New Movie Recording → select iPhone. Telegram chat with `@TrajectoryBot`. Paste URL → bot replies with verdict via message edits.
+
+### Critical setup details per shot
+
+- [ ] **Phase 1 shot:** confirm agent ordering matches VO before recording.
+- [ ] **Verdict shot:** pre-load gov.uk in the browser tab cache before recording so the second load is near-instant.
+- [ ] **SessionPack shot:** identify which CV bullets have `career_entry` citations *before* recording. Plan cursor path to land on those specific bullets.
+- [ ] **Telegram shot:** clear chat history first. Phone brightness max. Status bar should show normal time of day (not 3am).
+
+### Common failure modes to watch for
+
+- [ ] Toast notifications covering content mid-take → shorten toast duration to 1500ms or move position.
+- [ ] Browser dev tools visible → close before each take.
+- [ ] Autofocus on URL input → blinking cursor on first frame ruins the cold open. Remove autofocus.
+- [ ] OS notifications mid-take → DND on, system sounds muted.
+- [ ] HiDPI capture artifacts → confirm OBS is at 1× scaling.
+
+---
+
+## 10. Remotion build (once recordings are in)
+
+- [ ] `npx create-video@latest demo --template hello-world` (TypeScript) at the repo root.
+- [ ] Drop the layout from [`demo_script.md`](./demo_script.md) §"Remotion Project Layout" into `demo/src/`.
+- [ ] Implement scene components per the Act tables (one file per beat in `demo/src/scenes/`).
+- [ ] Implement primitives (`FadeIn`, `SlideUp`, `Cursor`) in `demo/src/primitives/`.
+- [ ] Implement overlays (`RejectedStamp`, `HeadlineCard`, `BlackTitleCard`, `ProviderRoutingChip`) in `demo/src/overlays/`.
+- [ ] Drop screen-recs, headline PNGs, rejection PNGs, VO files, music bed, brand assets into `demo/public/` per the layout.
+- [ ] Update `VO_WINDOWS` in `DemoVideo.tsx` to actual VO durations (see §2 above).
+- [ ] `npx remotion preview` → scrub every act, fix timing collisions.
+- [ ] `npx remotion render trajectory-demo out/trajectory-demo.mp4 --codec=h264 --crf=18`.
+
+---
+
+## 11. Final taste calls
+
+Decide before recording, not during.
+
+- [ ] **End-card URLs** — `trajectory.app` and `github.com/<your-repo>`. Replace `<your-repo>` with the real org/name.
+- [ ] **Headline screenshot publications** — pick three real ones before recording so the visuals match the VO's "studies show" framing.
+- [ ] **Music bed sign-off** — generate and approve before VO recording so you can read into its rhythm.
+
+---
+
+## 12. Pre-flight before final render
+
+Last check before hitting `npx remotion render`.
+
+- [ ] All assets in `demo/public/` per the layout.
+- [ ] All Motion patterns wired in the frontend and visible in a real session.
+- [ ] All seven `screenrec/*.mp4` clips captured at 1920×1080 (note: only 7, not 8 — `routing-flicks.mp4` was cut).
+- [ ] `telegram-screencap.mov` captured.
+- [ ] All three `vo/act*.wav` files recorded; `VO_WINDOWS` updated to match.
+- [ ] Music bed in place at `public/music/bed.mp3`.
+- [ ] `npx remotion preview` — every act scrubs cleanly, music ducks under VO, end-card lands at frame 5400.
+- [ ] One full render at `--crf=18` — watch end-to-end for collisions, audio sync, off-by-one timing.
+
+---
+
+## Time estimate
+
+| Phase | Hours |
+|---|---|
+| ElevenLabs VO (calibration + 3 acts) | 1.5 |
+| Music bed generation | 0.5 |
+| Source headlines + rejection crops | 1.0 |
+| Recording environment setup | 0.5 |
+| SSE replay flag + fixture data | 1.0 |
+| 7 screen recordings (with retakes) | 4.0 |
+| Telegram recording | 0.5 |
+| Remotion scaffold + scene implementation | 2.0 |
+| Asset wiring + VO_WINDOWS tuning | 1.0 |
+| Preview + iterate | 1.5 |
+| Final render + revision pass | 1.5 |
+| **Total** | **~15 hours** |
+
+Spread across however many days you have. Bulk is in recording (4 hours) and Remotion implementation (3.5 hours).
 
 ---
 
 ## Out of scope for v1
 
-Cut from the script intentionally — don't add unless you re-cut:
+Cut intentionally. Don't add unless you re-cut:
 
+- Multi-provider routing screen-rec (replaced by `ProviderRoutingChip` overlay)
+- Cost-per-session ticker (Option B — drop entirely)
 - Verdict ensemble + deep-research toggle
 - Story-bank retrieval weighting
 - Batch job queue
-- Offer analyser (recently removed from Act 2 per v3)
+- Offer analyser
 - Cross-application memory (recruiter interactions, negotiation outcomes)
 - Onboarding wizard internals
+- 12-second timing claim (no longer in VO; visual carries it)

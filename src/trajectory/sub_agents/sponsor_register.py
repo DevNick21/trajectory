@@ -1,7 +1,12 @@
 """Phase 1 — Sponsor Register lookup.
 
 Pandas lookup against `data/processed/sponsor_register.parquet`. Fuzzy
-name match at 92% rapidfuzz ratio, configurable via `_FUZZY_THRESHOLD`.
+name match via `rapidfuzz.fuzz.token_set_ratio` at 92% threshold
+(configurable via `_FUZZY_THRESHOLD`). token_set_ratio handles the
+common "X Ltd t/a Brand" pattern on the Home Office register where
+the trade name on a careers page differs from the registered legal
+entity (e.g. "Capital on Tap" → "New Wave Capital Ltd t/a Capital
+on Tap").
 
 Returned `SponsorStatus.status`:
   - LISTED      -> company present, rating A
@@ -14,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import threading
 from datetime import date, datetime
 from typing import Optional
@@ -32,8 +38,29 @@ _STALE_WINDOW_DAYS = 14
 
 _FUZZY_THRESHOLD = 92
 
+# "X Ltd t/a Brand", "X t/as Brand", "X trading as Brand" — splits the
+# legal entity from the public-facing trade name. Common on the Home
+# Office register; the careers page nearly always carries the trade
+# name, not the legal entity.
+_TRADING_AS_RE = re.compile(r"\s+t/?a?s?\s+|\s+trading\s+as\s+", re.IGNORECASE)
+
+# Legal-entity suffixes stripped to produce a "bare brand" alias. Without
+# this, "Octopus Energy" misses "Octopus Energy Limited" — WRatio scores
+# the suffix-only difference at 90, just below threshold. Order matters:
+# multi-word suffixes first so "Plc Limited" hits "Plc Limited" not "Plc".
+_LEGAL_SUFFIX_RE = re.compile(
+    r"\s+(?:limited|ltd\.?|plc|llp|llc|inc\.?|co\.?|company)\s*$",
+    re.IGNORECASE,
+)
+
 _df = None
 _df_lock = threading.Lock()
+
+# Cached search index: list of (alias, row_idx). Rebuilt only when the
+# DataFrame is reloaded. ~280k entries on the current Sponsor Register;
+# rebuilding per-lookup would dominate latency.
+_search_index: Optional[list[tuple[str, int]]] = None
+_search_aliases: Optional[list[str]] = None
 
 
 def _parquet_path():
@@ -133,6 +160,56 @@ def _last_updated(df, col: Optional[str]) -> Optional[date]:
     return None
 
 
+def _build_search_index(df, name_col: str) -> tuple[list[tuple[str, int]], list[str]]:
+    """Build (or return cached) (alias, row_idx) list + bare-aliases list.
+
+    Aliases per row include: registered legal name, trade name after
+    "t/a", legal-suffix-stripped bare brand, and bare-brand variants
+    of t/a names. Without these, "Capital on Tap" misses
+    "New Wave Capital Ltd t/a Capital on Tap" (WRatio 90 < threshold 92)
+    and "Octopus Energy" misses "Octopus Energy Limited" (also 90).
+    Switching the scorer to token_set_ratio fixes those but produces
+    false positives on short queries ("Wise" → "Aaron Wise Limited"),
+    so we keep WRatio and pre-process the candidate set instead.
+
+    The result is cached across calls because rebuilding ~280k tuples
+    every lookup dominates the agent's latency.
+    """
+    global _search_index, _search_aliases
+    if _search_index is not None and _search_aliases is not None:
+        return _search_index, _search_aliases
+
+    names: list[str] = df[name_col].astype(str).tolist()
+    search: list[tuple[str, int]] = []
+    seen: set[tuple[str, int]] = set()
+
+    def add(alias: str, row_idx: int) -> None:
+        a = alias.strip()
+        if not a:
+            return
+        key = (a.lower(), row_idx)
+        if key in seen:
+            return
+        seen.add(key)
+        search.append((a, row_idx))
+
+    for i, n in enumerate(names):
+        add(n, i)
+        parts = _TRADING_AS_RE.split(n, maxsplit=1)
+        if len(parts) > 1:
+            add(parts[1], i)
+        bare = _LEGAL_SUFFIX_RE.sub("", n)
+        if bare != n:
+            add(bare, i)
+            if len(parts) > 1:
+                add(_LEGAL_SUFFIX_RE.sub("", parts[1]), i)
+
+    aliases = [a for a, _ in search]
+    _search_index = search
+    _search_aliases = aliases
+    return search, aliases
+
+
 def _lookup_sync(company_name: str) -> SponsorStatus:
     try:
         df = _load_df()
@@ -161,10 +238,10 @@ def _lookup_sync(company_name: str) -> SponsorStatus:
             source_status=_freshness_status(),
         )
 
-    names: list[str] = df[name_col].astype(str).tolist()
-    # process.extractOne returns (choice, score, index)
+    search, aliases = _build_search_index(df, name_col)
+    # process.extractOne returns (choice, score, index_in_aliases)
     match = process.extractOne(
-        company_name, names, scorer=fuzz.WRatio, score_cutoff=_FUZZY_THRESHOLD
+        company_name, aliases, scorer=fuzz.WRatio, score_cutoff=_FUZZY_THRESHOLD
     )
     if not match:
         return SponsorStatus(
@@ -173,8 +250,12 @@ def _lookup_sync(company_name: str) -> SponsorStatus:
             source_status=_freshness_status(),
         )
 
-    matched_name, _score, idx = match
-    row = df.iloc[idx]
+    matched_alias, _score, alias_idx = match
+    # Map alias index back to the original row index — aliases include
+    # the t/a-split brand variant which points at the same row.
+    row_idx = search[alias_idx][1]
+    row = df.iloc[row_idx]
+    matched_name = str(row[name_col])
 
     rating = str(row[rating_col]) if rating_col else ""
     routes_raw = str(row[routes_col]) if routes_col else ""

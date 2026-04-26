@@ -1031,6 +1031,54 @@ class PromptAuditReport(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# CV import (PROCESS Entry 49)
+# Onboarding accepts a base CV file; cv_parser extracts a structured
+# representation that pre-fills the wizard and seeds CareerEntry rows.
+# ---------------------------------------------------------------------------
+
+
+class CVImportRole(BaseModel):
+    """One employment row extracted from the CV."""
+    title: str
+    company: str
+    dates: str
+    bullets: list[str]
+
+
+class CVImportEducation(BaseModel):
+    institution: str
+    qualification: str
+    dates: str
+
+
+class CVImportProject(BaseModel):
+    name: str
+    description: str
+
+
+class CVImportLLMOutput(BaseModel):
+    """Sonnet's output shape — no `raw_text`, the caller supplies that."""
+    name: Optional[str] = None
+    base_location: Optional[str] = None
+    contact_email: Optional[str] = None
+    professional_summary: Optional[str] = None
+    roles: list[CVImportRole] = Field(default_factory=list)
+    education: list[CVImportEducation] = Field(default_factory=list)
+    projects: list[CVImportProject] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    extraction_confidence: int = Field(ge=1, le=10)
+
+
+class CVImport(CVImportLLMOutput):
+    """Structured extraction of a candidate's existing CV. Used to
+    pre-fill the onboarding wizard so users review/edit instead of
+    re-typing what they already have on paper. Adds `raw_text` to the
+    LLM output — used as a writing sample for the style profile and
+    as a structural reference for cv_tailor downstream."""
+    raw_text: str
+
+
+# ---------------------------------------------------------------------------
 # Resolve forward references
 # ---------------------------------------------------------------------------
 

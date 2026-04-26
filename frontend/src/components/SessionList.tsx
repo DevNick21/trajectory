@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 
 import { listSessions } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface Props {
   enabled?: boolean;
 }
+
+const listVariants = {
+  animate: { transition: { staggerChildren: 0.05 } },
+} as const;
+
+const itemVariants = {
+  initial: { opacity: 0, x: -6 },
+  animate: { opacity: 1, x: 0, transition: { duration: 0.25 } },
+} as const;
 
 export default function SessionList({ enabled = true }: Props) {
   const sessions = useQuery({
@@ -32,10 +42,20 @@ export default function SessionList({ enabled = true }: Props) {
         ) : sessions.isError ? (
           <p className="text-sm text-destructive">Failed to load sessions.</p>
         ) : sessions.data?.sessions.length ? (
-          <ul className="divide-y">
+          <motion.ul
+            className="divide-y"
+            variants={listVariants}
+            initial="initial"
+            animate="animate"
+            // Replay stagger when a new session lands at the top of
+            // the list (e.g. after forward_job completes).
+            key={sessions.data.sessions.length}
+          >
             {sessions.data.sessions.map((s) => (
-              <li
+              <motion.li
                 key={s.id}
+                variants={itemVariants}
+                layout
                 className="flex items-center justify-between gap-3 py-2"
               >
                 <Link
@@ -54,9 +74,9 @@ export default function SessionList({ enabled = true }: Props) {
                     {s.verdict}
                   </Badge>
                 )}
-              </li>
+              </motion.li>
             ))}
-          </ul>
+          </motion.ul>
         ) : (
           <p className="text-sm text-muted-foreground">
             Forward a job URL above to start a session.

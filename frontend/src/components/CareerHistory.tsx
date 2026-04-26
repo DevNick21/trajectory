@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import { Briefcase, FileText, Quote, Sparkles } from "lucide-react";
 
 import { listCareerEntries } from "@/lib/api";
@@ -93,6 +95,15 @@ export default function CareerHistory({
   );
 }
 
+const listVariants = {
+  animate: { transition: { staggerChildren: 0.04 } },
+} as const;
+
+const itemVariants = {
+  initial: { opacity: 0, y: 4 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.25 } },
+} as const;
+
 function CareerList({
   entries,
   highlightedEntryIds,
@@ -122,7 +133,12 @@ function CareerList({
   }
 
   return (
-    <ul className="space-y-2">
+    <motion.ul
+      className="space-y-2"
+      variants={listVariants}
+      initial="initial"
+      animate="animate"
+    >
       {primary.map((e) => (
         <EntryCard
           key={e.entry_id}
@@ -131,7 +147,7 @@ function CareerList({
           shouldScroll={scrollKey === e.entry_id}
         />
       ))}
-    </ul>
+    </motion.ul>
   );
 }
 
@@ -145,24 +161,36 @@ function EntryCard({
   shouldScroll: boolean;
 }) {
   const Icon = KIND_ICON[entry.kind] ?? FileText;
+  const ref = useRef<HTMLLIElement>(null);
 
-  // Self-scroll when this entry is the citation target. Stable id +
-  // ref-callback keeps the behaviour decoupled from the parent.
-  const scrollRef = (el: HTMLLIElement | null) => {
-    if (el && shouldScroll) {
-      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // Smooth-scroll into view when this entry becomes the citation target.
+  // Tracks `shouldScroll` flips so the same entry can be re-targeted by
+  // re-clicking a bullet (the parent reducer already mints a fresh
+  // scrollKey on every select_bullet action).
+  useEffect(() => {
+    if (shouldScroll && ref.current) {
+      ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  };
+  }, [shouldScroll]);
 
   return (
-    <li
-      ref={scrollRef}
+    <motion.li
+      ref={ref}
+      variants={itemVariants}
+      layout
       data-entry-id={entry.entry_id}
+      animate={{
+        boxShadow: highlighted
+          ? "0 0 0 3px hsl(var(--ring) / 0.5)"
+          : "0 0 0 0px hsl(var(--ring) / 0)",
+        backgroundColor: highlighted
+          ? "hsl(var(--accent))"
+          : "hsl(var(--card))",
+      }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className={cn(
-        "rounded-md border p-3 text-sm transition-all",
-        highlighted
-          ? "border-primary bg-accent ring-2 ring-primary/40"
-          : "border-border",
+        "rounded-md border p-3 text-sm",
+        highlighted ? "border-primary" : "border-border",
       )}
     >
       <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
@@ -170,6 +198,6 @@ function EntryCard({
         {KIND_LABEL[entry.kind] ?? entry.kind}
       </div>
       <p className="line-clamp-3 leading-snug">{entry.raw_text}</p>
-    </li>
+    </motion.li>
   );
 }

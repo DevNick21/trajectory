@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { motion } from "motion/react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -49,16 +50,21 @@ export default function ForwardJobForm({ onSubmit, disabled }: Props) {
           aria-invalid={Boolean(errors.job_url)}
           {...register("job_url")}
         />
-        <Button type="submit" disabled={disabled}>
-          {disabled ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Checking…
-            </>
-          ) : (
-            "Check"
-          )}
-        </Button>
+        <motion.div
+          whileTap={{ scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        >
+          <Button type="submit" disabled={disabled}>
+            {disabled ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Checking…
+              </>
+            ) : (
+              "Check"
+            )}
+          </Button>
+        </motion.div>
       </div>
       {errors.job_url && (
         <p className="text-xs text-destructive" role="alert">

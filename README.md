@@ -9,7 +9,7 @@ Built by someone who spent months job-searching in the UK on a Graduate visa. Ev
 ## What it does
 
 **Forward a job → instant verdict.**
-Trajectory runs 8 parallel research checks, combines them into a GO / NO_GO decision, and explains exactly why — with citations you can click.
+Trajectory runs 9 parallel research checks, combines them into a GO / NO_GO decision, and explains exactly why — with citations you can click.
 
 **Designs three targeted questions to guide generation.**
 Rather than producing a generic pack, it generates questions designed around the specific role's gaps: what's missing in your background relative to this JD, what the company's culture signals suggest you need to address, what the salary situation demands.
@@ -33,7 +33,7 @@ Opening number, floor, and negotiation scripts adjust to your urgency level, rec
 | **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Onboarding wizard, dashboard with live Phase 1 streaming over Server-Sent Events, per-session detail pages with evidence + pack generators + downloadable files. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Onboarding lives on the web — new users get redirected. |
 
-Both surfaces share a single FastAPI orchestrator, an 8-agent Phase 1 pipeline (with five Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
+Both surfaces share a single FastAPI orchestrator, a 9-agent Phase 1 pipeline (with five Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
 
 The full dual-surface design rationale lives in [MIGRATION_PLAN.md](MIGRATION_PLAN.md), including ADRs for web-primary scope, the `ProgressEmitter` abstraction, and ephemeral client-side onboarding state.
 
@@ -204,6 +204,8 @@ python -m trajectory.bot.app
 ```
 
 Then visit `http://localhost:5173` in the browser, or `/start` your bot on Telegram. New users are redirected from Telegram to the web onboarding wizard — once the profile exists, both surfaces share it.
+
+The wizard's first stage accepts a CV upload (PDF / DOCX / TXT). A Sonnet pass extracts roles, education, skills, and the candidate's writing voice in a single shot, pre-fills the rest of the wizard, and uses the raw CV text as the primary writing sample for the style profile. Users review and edit instead of re-typing what's already on their CV.
 
 **Legacy Streamlit dashboard** (session history — superseded by the web app, kept for quick inspection):
 

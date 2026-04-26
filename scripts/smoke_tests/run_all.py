@@ -78,6 +78,7 @@ _REGISTRY: list[_Entry] = [
     _Entry("api_onboarding",     "scripts.smoke_tests.api_onboarding",     cheap=True,  category="api"),
     _Entry("api_pack",           "scripts.smoke_tests.api_pack",           cheap=True,  category="api"),
     _Entry("api_chat",           "scripts.smoke_tests.api_chat",           cheap=True,  category="api"),
+    _Entry("cv_parser",          "scripts.smoke_tests.cv_parser",          cheap=False, category="agent-util"),
     _Entry("multi_provider_routing", "scripts.smoke_tests.multi_provider_routing", cheap=True, category="infra"),
     _Entry("multi_provider_cv_tailor_live", "scripts.smoke_tests.multi_provider_cv_tailor_live", cheap=False, category="phase4"),
 

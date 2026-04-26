@@ -64,6 +64,15 @@ build/
 playwright-report/
 test-results/
 
+# Remotion demo (3-min video composition). Source committed; node_modules,
+# public assets (mp3 / mp4 / png / otf), and render outputs ignored — they
+# can run to hundreds of MB and are recording-day-specific.
+demo/node_modules/
+demo/public/
+demo/out/
+demo/dist/
+demo/.cache/
+
 # OS
 .DS_Store
 Thumbs.db

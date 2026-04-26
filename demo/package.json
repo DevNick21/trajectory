@@ -1,0 +1,24 @@
+{
+  "name": "trajectory-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "3-minute Remotion demo for Trajectory hackathon submission.",
+  "scripts": {
+    "dev": "remotion preview src/index.ts",
+    "build": "remotion render src/index.ts trajectory-demo out/trajectory-demo.mp4 --codec=h264 --crf=18",
+    "build:draft": "remotion render src/index.ts trajectory-demo out/draft.mp4 --codec=h264 --crf=28",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.230",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.230"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -10,9 +10,23 @@ adding an endpoint in Wave 3+ doesn't touch this file.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+
+# Windows + Playwright fix: subprocess_exec is only implemented on the
+# Proactor event loop. uvicorn defaults to Selector under --reload on
+# some setups, which makes `playwright.async_api` raise
+# NotImplementedError when launching the chromium subprocess. Setting
+# the policy at import time covers both the API process and any tests
+# that import this module before starting their own loop.
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:  # pragma: no cover — policy already set, etc.
+        pass
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
