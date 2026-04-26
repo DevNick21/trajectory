@@ -31,11 +31,33 @@ def _set_event_loop_policy() -> None:
               file=sys.stderr)
 
 
+def _patch_uvicorn_asyncio_setup() -> None:
+    """Belt-and-braces: even with `loop="none"` in uvicorn.run(),
+    a forked --reload child can pick up a different config path and
+    re-import uvicorn.loops.asyncio. Replace its `asyncio_setup` with
+    our Proactor-preserving version so even if it IS called, it does
+    the right thing.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        from uvicorn.loops import asyncio as _ucloop_asyncio
+
+        def _proactor_setup(use_subprocess: bool = False) -> None:  # noqa: D401
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+        _ucloop_asyncio.asyncio_setup = _proactor_setup
+    except Exception as exc:  # pragma: no cover
+        print(f"[run_api] could not patch uvicorn asyncio_setup: {exc}",
+              file=sys.stderr)
+
+
 def main() -> None:
     _set_event_loop_policy()
     # Lazy import — uvicorn pulls in asyncio internals; we want our
     # policy set first.
-    import uvicorn
+    import uvicorn  # noqa: F401  (imported by patcher below)
+    _patch_uvicorn_asyncio_setup()
 
     port = int(os.environ.get("API_PORT", "8000"))
     uvicorn.run(
@@ -44,6 +66,13 @@ def main() -> None:
         port=port,
         reload=True,
         log_level="info",
+        # CRITICAL on Windows: uvicorn's default `loop="auto"` calls
+        # asyncio_setup() which OVERWRITES our ProactorEventLoopPolicy
+        # with SelectorEventLoopPolicy (uvicorn/loops/asyncio.py),
+        # killing Playwright's subprocess_exec. `loop="none"` skips
+        # uvicorn's setup entirely so the policy we set above survives
+        # all the way to the actual event loop creation.
+        loop="none",
     )
 
 
