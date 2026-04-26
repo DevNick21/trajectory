@@ -4,26 +4,41 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Dark canvas + violet brand. Cards are near-white surfaces lifted
+       onto the dark shell — matches the Deep Work / Empty State mocks. */
+
+    /* Canvas (page background, top nav, between cards) */
+    --background: 240 8% 10%;
+    --foreground: 0 0% 98%;
+
+    /* Card surface (most content lives here) */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --success: 142.1 76.2% 36.3%;
-    --success-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --card-foreground: 240 10% 8%;
+
+    /* Violet primary — buttons, focus rings, highlight outlines */
+    --primary: 258 90% 66%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Soft surfaces for use *inside* cards (banners, callouts) */
+    --secondary: 258 30% 96%;
+    --secondary-foreground: 258 50% 25%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 40%;
+    --accent: 258 100% 96%;
+    --accent-foreground: 258 90% 30%;
+
+    /* Status */
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 142 70% 40%;
+    --success-foreground: 0 0% 98%;
+
+    /* Borders default to card-internal (light gray). Header / canvas
+       borders override to a subtle dark variant inline. */
+    --border: 240 5% 90%;
+    --input: 240 5% 90%;
+    --ring: 258 90% 66%;
+    --radius: 0.75rem;
   }
 }
 
@@ -33,7 +48,16 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-      "Helvetica Neue", Arial, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Border tone for elements rendered directly on the dark canvas
+     (top nav, header dividers). The default --border reads invisible
+     on dark; this gives a subtle separation. */
+  .border-canvas {
+    border-color: hsl(0 0% 100% / 0.08);
   }
 }

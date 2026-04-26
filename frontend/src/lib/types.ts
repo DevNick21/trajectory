@@ -101,6 +101,122 @@ export interface OfferComponent {
   citation: Citation;
 }
 
+// ---------------------------------------------------------------------------
+// Career entries (GET /api/career-entries)
+// ---------------------------------------------------------------------------
+
+export type CareerEntryKind =
+  | "cv_bullet"
+  | "qa_answer"
+  | "star_polish"
+  | "project_note"
+  | "preference"
+  | "motivation"
+  | "deal_breaker"
+  | "good_role_signal"
+  | "writing_sample"
+  | "conversation";
+
+export interface CareerEntry {
+  entry_id: string;
+  user_id: string;
+  kind: CareerEntryKind;
+  raw_text: string;
+  structured?: Record<string, unknown> | null;
+  source_session_id?: string | null;
+  created_at: string;
+}
+
+export interface CareerEntriesResponse {
+  entries: CareerEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// CV pack output (PackResult.output when generator === "cv")
+// Mirrors trajectory.schemas.CVOutput / CVRole / CVBullet.
+// ---------------------------------------------------------------------------
+
+export interface CVBullet {
+  text: string;
+  citations: Citation[];
+}
+
+export interface CVRole {
+  title: string;
+  company: string;
+  dates: string;
+  bullets: CVBullet[];
+}
+
+export interface CVOutput {
+  name: string;
+  contact: Record<string, unknown>;
+  professional_summary: string;
+  experience: CVRole[];
+  education: Array<Record<string, unknown>>;
+  skills: string[];
+  projects?: Array<Record<string, unknown>> | null;
+}
+
+// ---------------------------------------------------------------------------
+// Cover letter pack output
+// ---------------------------------------------------------------------------
+
+export interface CoverLetterOutput {
+  addressed_to: string;
+  paragraphs: string[];
+  citations: Citation[];
+  word_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Salary recommendation pack output
+// ---------------------------------------------------------------------------
+
+export interface ReasoningPoint {
+  claim: string;
+  supporting_evidence: string;
+  citation: Citation;
+}
+
+export interface SalaryRecommendation {
+  opening_number: number;
+  opening_phrasing: string;
+  floor: number;
+  ceiling: number;
+  reasoning: ReasoningPoint[];
+  sponsor_constraint_active: boolean;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  scripts: Record<string, string>;
+  data_gaps: string[];
+  urgency_note?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Likely interview questions pack output
+// ---------------------------------------------------------------------------
+
+export type QuestionBucket =
+  | "technical"
+  | "experience"
+  | "behavioural"
+  | "motivation_fit"
+  | "commercial_strategic";
+
+export interface LikelyQuestion {
+  question: string;
+  bucket: QuestionBucket;
+  likelihood: "HIGH" | "MEDIUM" | "LOW";
+  why_likely: string;
+  citation: Citation;
+  strategy_note: string;
+  relevant_career_entry_ids: string[];
+}
+
+export interface LikelyQuestionsOutput {
+  questions: LikelyQuestion[];
+}
+
 export interface OfferAnalysis {
   company_name: string;
   role_title: string | null;

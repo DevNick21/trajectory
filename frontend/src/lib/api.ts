@@ -3,6 +3,8 @@
 // endpoints live in lib/sse.ts.
 
 import type {
+  CareerEntriesResponse,
+  CareerEntryKind,
   OfferAnalysisResponse,
   OnboardingAnswers,
   OnboardingFinaliseResponse,
@@ -99,6 +101,15 @@ export const generatePack = (
     `/api/sessions/${encodeURIComponent(sessionId)}/${generator}`,
     { method: "POST" },
   );
+
+// ---------------------------------------------------------------------------
+// Career entries (powers Deep Work left pane)
+// ---------------------------------------------------------------------------
+
+export const listCareerEntries = (kinds?: CareerEntryKind[]) => {
+  const qs = kinds && kinds.length > 0 ? `?kinds=${kinds.join(",")}` : "";
+  return request<CareerEntriesResponse>(`/api/career-entries${qs}`);
+};
 
 // ---------------------------------------------------------------------------
 // Onboarding (Wave 9)
