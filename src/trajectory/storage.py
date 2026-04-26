@@ -696,22 +696,44 @@ async def get_cached_page(url: str, max_age_hours: int = 24) -> Optional[str]:
 # numbers in `llm_cost_log` ever diverge meaningfully from the
 # admin API, that's the cue to wire a reconciliation job rather
 # than nudge these constants.
-_PRICING_LAST_VERIFIED = "2026-04-25"
+_PRICING_LAST_VERIFIED = "2026-04-26"
 _PRICING_USD_PER_MTOK = {
+    # Anthropic
     "opus":   {"input": 15.0, "output": 75.0},
     "sonnet": {"input":  3.0, "output": 15.0},
     "haiku":  {"input":  0.80, "output":  4.0},
+    # OpenAI (PROCESS Entry 44 — multi-provider CV tailor)
+    # gpt-4o-2024-08-06: $2.50 / $10 per Mtok.
+    "gpt-4o": {"input":  2.50, "output": 10.0},
+    "gpt-5":  {"input":  5.0, "output": 20.0},   # placeholder — verify on launch
+    # Cohere (Command R+ Aug 2024): $2.50 / $10 per Mtok.
+    "command-r-plus": {"input": 2.50, "output": 10.0},
+    "command-r":      {"input": 0.50, "output":  1.50},
 }
 
 
 def _price_bucket(model: str) -> dict[str, float]:
     m = model.lower()
+    # Anthropic family
     if "opus" in m:
         return _PRICING_USD_PER_MTOK["opus"]
     if "sonnet" in m:
         return _PRICING_USD_PER_MTOK["sonnet"]
     if "haiku" in m:
         return _PRICING_USD_PER_MTOK["haiku"]
+    # OpenAI family
+    if "gpt-4o" in m or "gpt4o" in m:
+        return _PRICING_USD_PER_MTOK["gpt-4o"]
+    if "gpt-5" in m or "gpt5" in m:
+        return _PRICING_USD_PER_MTOK["gpt-5"]
+    # Cohere family
+    if "command-r-plus" in m or "command-r+" in m:
+        return _PRICING_USD_PER_MTOK["command-r-plus"]
+    if "command-r" in m or "command" in m:
+        return _PRICING_USD_PER_MTOK["command-r"]
+    # Unknown — use Sonnet pricing as a conservative default. Better to
+    # overestimate than have an unknown-priced call sneak under the
+    # credit-budget refusal.
     return _PRICING_USD_PER_MTOK["sonnet"]
 
 

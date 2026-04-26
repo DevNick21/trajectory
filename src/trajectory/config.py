@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     telegram_bot_token: str = ""
     companies_house_api_key: str = ""
+    # Multi-provider CV tailor (PROCESS Entry 44). Required when
+    # `enable_multi_provider_cv_tailor=True` AND a routed CV lands on
+    # a non-Anthropic provider. ATS hosts that route Anthropic-only
+    # don't need any of these.
+    openai_api_key: str = ""
+    cohere_api_key: str = ""
 
     # --- feature flags
     # Opt-in Managed Agents path for the company investigator. Default
@@ -106,6 +112,15 @@ class Settings(BaseSettings):
     # off matches the project's "managed agents are opt-in" pattern
     # (`enable_managed_company_investigator`, `enable_verdict_ensemble`).
     enable_managed_cv_tailor: bool = False
+    # Multi-provider CV tailor (PROCESS Entry 44). When True,
+    # `handle_draft_cv` reads the session's job_url, detects the ATS
+    # host (`ats_routing.detect_ats_name`), and routes through the
+    # provider mapped in `ats_routing.ATS_TO_PROVIDER`. Unknown hosts
+    # default to Anthropic (CLAUDE.md Rule 7 — Phase 4 generators
+    # default to Opus 4.7). A provider missing its API key raises at
+    # call-time; orchestrator.handle_draft_cv catches and falls back
+    # to Anthropic so the demo never goes down on a misconfig.
+    enable_multi_provider_cv_tailor: bool = False
 
     # --- paths
     data_dir: Path = Path("./data")
@@ -121,6 +136,10 @@ class Settings(BaseSettings):
     opus_model_id: str = "claude-opus-4-7"
     sonnet_model_id: str = "claude-sonnet-4-6"
     haiku_model_id: str = "claude-haiku-4-5-20251001"
+    # Per-provider model defaults for the multi-provider CV tailor path.
+    # Pick capable, structured-output-reliable models per provider.
+    openai_model_id: str = "gpt-4o-2024-08-06"
+    cohere_model_id: str = "command-r-plus-08-2024"
 
     # --- embeddings
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
