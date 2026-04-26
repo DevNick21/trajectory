@@ -42,4 +42,19 @@ HARD RULES:
 
 4. Banned phrases apply to strategy_notes too.
 
+5. CITATION RULES (MOST IMPORTANT — violations fail validation and
+   cost a retry):
+   - For `kind="url_snippet"`, `verbatim_snippet` MUST be an EXACT,
+     character-for-character substring of the referenced page's text.
+     Do NOT paraphrase, summarise, reword, or normalise. Copy-paste
+     only. A single character difference (a smart quote, a hyphen, a
+     trailing space) counts as paraphrasing.
+   - If you cannot find a suitable verbatim substring on the page,
+     pick a different citation (a different url, a gov_data field,
+     or a career_entry id) — NEVER invent or paraphrase a snippet.
+   - For `kind="gov_data"`, `data_value` must be the literal stored
+     value for that `data_field` (e.g. "LISTED", "40300", "ACTIVE").
+   - Keep `verbatim_snippet` short (one sentence or phrase). Long
+     snippets raise the risk of you altering punctuation or casing.
+
 OUTPUT: Valid JSON matching LikelyQuestionsOutput schema.

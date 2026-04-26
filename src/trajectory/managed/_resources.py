@@ -152,6 +152,81 @@ def invalidate_cache(*, agent: bool = False, environment: bool = False) -> None:
     _save_cache(cache)
 
 
+# ---------------------------------------------------------------------------
+# Multi-agent registry (post-2026-04-25 migration, PROCESS Entry 43)
+#
+# Five managed agents now share one environment. Each has its own
+# (agent_id, spec_hash) cache slot keyed by name. The single-agent
+# functions above remain as-is for company_investigator backwards-compat;
+# new sessions use `get_or_create_named_agent`.
+# ---------------------------------------------------------------------------
+
+
+async def get_or_create_named_agent(
+    client: Any,
+    *,
+    name: str,
+    system_prompt: str,
+    tools: list[dict[str, Any]] | None = None,
+    model: str | None = None,
+) -> tuple[str, int]:
+    """Like `get_or_create_agent` but keyed by `name` so multiple managed
+    sessions can each have their own cached agent_id under
+    `data/managed_agents.json`.
+
+    Cache shape extends to:
+        {"agents": {<name>: {"id", "version", "spec_hash"}}, ...}
+    """
+    cache = _load_cache()
+    agents_section = cache.setdefault("agents", {})
+    cached = agents_section.get(name) or {}
+
+    tools = tools if tools is not None else _AGENT_TOOLS
+    model = model or _AGENT_MODEL
+    spec_hash = hashlib.sha256(
+        json.dumps(
+            {"system": system_prompt, "tools": tools, "model": model},
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+
+    if cached.get("id") and cached.get("spec_hash") == spec_hash:
+        return cached["id"], int(cached.get("version", 1))
+
+    if cached.get("id"):
+        logger.info(
+            "MA agent %s spec changed (%s -> %s); creating new version",
+            name, cached.get("spec_hash"), spec_hash,
+        )
+
+    agent = await client.beta.agents.create(
+        name=name,
+        model=model,
+        system=system_prompt,
+        tools=tools,
+    )
+    agent_id = getattr(agent, "id")
+    version = int(getattr(agent, "version", 1) or 1)
+    agents_section[name] = {
+        "id": agent_id,
+        "version": version,
+        "spec_hash": spec_hash,
+    }
+    _save_cache(cache)
+    logger.info("created MA agent %s -> %s (v%d)", name, agent_id, version)
+    return agent_id, version
+
+
+def invalidate_named_agent(name: str) -> None:
+    """Drop a specific named agent from the cache (for 404 recovery)."""
+    cache = _load_cache()
+    agents_section = cache.get("agents") or {}
+    agents_section.pop(name, None)
+    if "agents" in cache:
+        cache["agents"] = agents_section
+    _save_cache(cache)
+
+
 def _resolve_cache_path() -> Path:
     """Exposed for tests — lets them redirect the cache to a tempdir."""
     return _CACHE_PATH

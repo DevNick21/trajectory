@@ -286,7 +286,11 @@ async def test_happy_path_emits_cv(monkeypatch):
 async def test_hallucinated_citation_raises(monkeypatch):
     from trajectory import llm
 
-    responses = [
+    # Duplicate the response sequence — `cv_tailor_agentic.generate`
+    # retries once on post-validation failure (PROCESS Entry 47 bug 12).
+    # The hallucination must still fail after both attempts; doubling
+    # the script preserves the test's intent.
+    one_attempt_responses = [
         _make_response(_tool_use(
             "search_career_entries", {"query": "a"}, tool_id="tu_1"
         )),
@@ -303,6 +307,7 @@ async def test_hallucinated_citation_raises(monkeypatch):
             tool_id="tu_final",
         )),
     ]
+    responses = one_attempt_responses + one_attempt_responses
     call_iter = iter(responses)
 
     async def fake_create(**kwargs):
@@ -332,16 +337,37 @@ async def test_hallucinated_citation_raises(monkeypatch):
 
     monkeypatch.setattr(llm, "_enforce_credit_budget", fake_budget)
 
-    with pytest.raises(AgentCallFailed) as exc:
-        await cv_tailor_agentic.generate(
-            jd=_jd(),
-            research_bundle=_bundle(),
-            user=_user(),
-            retrieved_entries=[],
-            style_profile=_style(),
-        )
-    assert "not in retrieved set" in str(exc.value)
-    assert "e_hallucinated" in str(exc.value)
+    # PROCESS Entry 47 bugs 14 + 16:
+    #  - bug 14 relaxed the validator (entries-in-store-but-not-searched
+    #    are warnings, not failures)
+    #  - bug 16 added GRACEFUL DEGRADATION: when the only remaining
+    #    failures after retry are hallucinated citations, drop the bad
+    #    citations and ship the CV with the bullet text intact. Better
+    #    than failing the whole CV for a citation pointer issue.
+    # So this test now verifies the drop-not-raise behaviour: the CV
+    # comes back, the hallucinated citation has been removed from the
+    # bullet, and the bullet text is preserved.
+    cv = await cv_tailor_agentic.generate(
+        jd=_jd(),
+        research_bundle=_bundle(),
+        user=_user(),
+        retrieved_entries=[],
+        style_profile=_style(),
+    )
+    # The hallucinated entry_id should NOT appear in any citation now.
+    surviving_entry_ids: set[str] = set()
+    for role in cv.experience:
+        for bullet in role.bullets:
+            for c in bullet.citations:
+                if c.kind == "career_entry" and c.entry_id:
+                    surviving_entry_ids.add(c.entry_id)
+    assert "e_hallucinated" not in surviving_entry_ids, (
+        f"hallucinated citation should have been dropped; got "
+        f"{sorted(surviving_entry_ids)}"
+    )
+    # Bullets themselves still exist.
+    total_bullets = sum(len(r.bullets) for r in cv.experience)
+    assert total_bullets > 0, "expected bullets to be preserved"
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +379,11 @@ async def test_hallucinated_citation_raises(monkeypatch):
 async def test_early_emission_under_min_searches_raises(monkeypatch):
     from trajectory import llm
 
-    responses = [
+    # Same pattern as the hallucination test: retry on post-validation
+    # failure means the test sequence runs twice. Both attempts emit
+    # under the search-call minimum, so both fail and the final
+    # AgentCallFailed surfaces the post-retry status.
+    one_attempt_responses = [
         _make_response(_tool_use(
             "search_career_entries", {"query": "a"}, tool_id="tu_1"
         )),
@@ -363,6 +393,7 @@ async def test_early_emission_under_min_searches_raises(monkeypatch):
             tool_id="tu_final",
         )),
     ]
+    responses = one_attempt_responses + one_attempt_responses
     call_iter = iter(responses)
 
     async def fake_create(**kwargs):
@@ -454,96 +485,6 @@ async def test_max_iterations_raises(monkeypatch):
             style_profile=_style(),
         )
     assert "max_iterations" in str(exc.value)
-
-
-# ---------------------------------------------------------------------------
-# Dispatcher: flag off → legacy runs
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_flag_off_calls_legacy(monkeypatch):
-    from trajectory.config import settings
-    from trajectory.sub_agents import cv_tailor, cv_tailor_legacy
-
-    monkeypatch.setattr(settings, "enable_agentic_cv_tailor", False)
-
-    legacy_called = []
-
-    async def fake_legacy_generate(**kwargs):
-        legacy_called.append(True)
-        return _cv_output(["e1"])
-
-    monkeypatch.setattr(cv_tailor_legacy, "generate", fake_legacy_generate)
-
-    cv = await cv_tailor.generate(
-        jd=_jd(),
-        research_bundle=_bundle(),
-        user=_user(),
-        retrieved_entries=[_entry("e1")],
-        style_profile=_style(),
-    )
-    assert cv.name == "Test User"
-    assert legacy_called == [True]
-
-
-# ---------------------------------------------------------------------------
-# Dispatcher: flag on, agentic succeeds → returns agentic output
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_flag_on_calls_agentic(monkeypatch):
-    from trajectory.config import settings
-    from trajectory.sub_agents import cv_tailor, cv_tailor_agentic as agentic_mod
-
-    monkeypatch.setattr(settings, "enable_agentic_cv_tailor", True)
-
-    async def fake_agentic_generate(**kwargs):
-        return _cv_output(["agentic_e"])
-
-    monkeypatch.setattr(agentic_mod, "generate", fake_agentic_generate)
-
-    cv = await cv_tailor.generate(
-        jd=_jd(),
-        research_bundle=_bundle(),
-        user=_user(),
-        retrieved_entries=[],
-        style_profile=_style(),
-    )
-    assert cv.experience[0].bullets[0].text.startswith("[ce:agentic_e]")
-
-
-# ---------------------------------------------------------------------------
-# Dispatcher: flag on, agentic raises → legacy fallback
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_dispatcher_agentic_fallback_on_error(monkeypatch):
-    from trajectory.config import settings
-    from trajectory.sub_agents import cv_tailor, cv_tailor_agentic as agentic_mod
-    from trajectory.sub_agents import cv_tailor_legacy
-
-    monkeypatch.setattr(settings, "enable_agentic_cv_tailor", True)
-
-    async def bad_agentic(**kwargs):
-        raise AgentCallFailed("simulated agentic failure")
-
-    async def fake_legacy(**kwargs):
-        return _cv_output(["legacy_e"])
-
-    monkeypatch.setattr(agentic_mod, "generate", bad_agentic)
-    monkeypatch.setattr(cv_tailor_legacy, "generate", fake_legacy)
-
-    cv = await cv_tailor.generate(
-        jd=_jd(),
-        research_bundle=_bundle(),
-        user=_user(),
-        retrieved_entries=[],
-        style_profile=_style(),
-    )
-    assert cv.experience[0].bullets[0].text.startswith("[ce:legacy_e]")
 
 
 # ---------------------------------------------------------------------------

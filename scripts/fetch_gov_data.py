@@ -24,6 +24,9 @@ from typing import Any, Optional
 import pandas as pd
 import requests
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+from trajectory.data_freshness import write_fetched_at  # noqa: E402
+
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
@@ -31,6 +34,17 @@ DATA_RAW = Path(__file__).parent.parent / "data" / "raw"
 DATA_PROCESSED = Path(__file__).parent.parent / "data" / "processed"
 DATA_RAW.mkdir(parents=True, exist_ok=True)
 DATA_PROCESSED.mkdir(parents=True, exist_ok=True)
+
+
+def _save_parquet(df, path: Path, *, index: bool = False) -> None:
+    """Write parquet AND a freshness sidecar. Use instead of df.to_parquet.
+
+    D3: pairs the parquet write with a sidecar so runtime consumers can
+    detect staleness. Failure to write the sidecar is loud — missing it
+    would silently make the freshness check fall back to "stale always".
+    """
+    df.to_parquet(path, index=index)
+    write_fetched_at(path)
 
 # ---------------------------------------------------------------------------
 # Landing-page URL resolvers
@@ -182,7 +196,7 @@ def fetch_sponsor_register() -> None:
                 "Route",
             ]
         )
-        df.to_parquet(out_parquet, index=False)
+        _save_parquet(df, out_parquet)
         return
 
     raw_path = DATA_RAW / f"sponsor_register.{resolved_ext or 'bin'}"
@@ -199,19 +213,22 @@ def fetch_sponsor_register() -> None:
                 df = pd.read_excel(io.BytesIO(content))
     except Exception as exc:
         log.error("Sponsor register parse failed: %s — writing empty skeleton", exc)
-        pd.DataFrame(
-            columns=[
-                "Organisation Name",
-                "Town/City",
-                "County",
-                "Type & Rating",
-                "Route",
-            ]
-        ).to_parquet(out_parquet, index=False)
+        _save_parquet(
+            pd.DataFrame(
+                columns=[
+                    "Organisation Name",
+                    "Town/City",
+                    "County",
+                    "Type & Rating",
+                    "Route",
+                ]
+            ),
+            out_parquet,
+        )
         return
 
     log.info("Sponsor register: %d rows, columns: %s", len(df), df.columns.tolist())
-    df.to_parquet(out_parquet, index=False)
+    _save_parquet(df, out_parquet)
     log.info("Saved: %s", out_parquet)
 
 
@@ -273,7 +290,7 @@ def fetch_going_rates() -> None:
     ]
 
     df = pd.DataFrame(going_rates)
-    df.to_parquet(out_parquet, index=False)
+    _save_parquet(df, out_parquet)
     log.info("Saved going_rates.parquet (%d rows incl. GENERAL)", len(df))
 
 
@@ -307,7 +324,7 @@ def fetch_soc_codes() -> None:
     ]
 
     df = pd.DataFrame({"soc_code": eligible_codes, "on_appendix": True})
-    df.to_parquet(out_parquet, index=False)
+    _save_parquet(df, out_parquet)
     log.info("Saved soc_codes.parquet (%d rows)", len(df))
 
 
@@ -640,7 +657,7 @@ def _fetch_ashe_table(table_number: int, out_name: str, by_region: bool) -> None
         _write_empty_ashe(out, region=by_region)
         return
 
-    df.to_parquet(out, index=False)
+    _save_parquet(df, out)
     log.info(
         "Saved %s (%d rows, sample_year=%d, source=%s)",
         out_name, len(df), sample_year, url,
@@ -667,7 +684,7 @@ def _write_empty_ashe(out: Path, region: bool) -> None:
     if region:
         cols.insert(1, "region")
     df = pd.DataFrame(columns=cols)
-    df.to_parquet(out, index=False)
+    _save_parquet(df, out)
     log.info("Wrote empty skeleton %s (ASHE download failed)", out.name)
 
 

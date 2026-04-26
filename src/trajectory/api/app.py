@@ -14,10 +14,15 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from ..config import settings
+from ..observability import (
+    bind_request_id,
+    install_correlation_filter,
+    new_request_id,
+)
 from ..storage import Storage
 from .routes import api_router
 
@@ -33,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     writes. FAISS staleness across processes is a known limitation
     (MIGRATION_PLAN.md §6 risk #2, deferred for single-user demo).
     """
+    install_correlation_filter()
     storage = Storage()
     await storage.initialise()
     app.state.storage = storage
@@ -59,6 +65,28 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _correlation_middleware(request: Request, call_next):
+        # Honour a client-supplied X-Request-ID when present, otherwise
+        # mint a new one. Propagates into every log record via the
+        # contextvars-backed CorrelationFilter.
+        rid = request.headers.get("x-request-id") or new_request_id()
+        token = bind_request_id(rid)
+        try:
+            response = await call_next(request)
+        finally:
+            # Restore the previous value so background tasks started
+            # before the request don't accidentally inherit this id.
+            # contextvars.ContextVar.reset uses the token returned by
+            # .set() — see trajectory.observability.bind_request_id.
+            try:
+                from ..observability.logging_context import _request_id_var
+                _request_id_var.reset(token)
+            except Exception:  # pragma: no cover — defensive
+                pass
+        response.headers["X-Request-ID"] = rid
+        return response
 
     app.include_router(api_router)
     return app

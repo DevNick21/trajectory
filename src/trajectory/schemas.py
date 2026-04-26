@@ -20,6 +20,16 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 # ---------------------------------------------------------------------------
 
 
+# Phase 1 sub-agents each return a typed payload. When the upstream call
+# fails (timeout, API 500, connection error), we still return a valid
+# payload shape so `asyncio.gather(return_exceptions=False)` completes —
+# but the verdict agent needs to know the difference between "no data"
+# (genuine miss) and "unreachable" (we couldn't look). See AGENTS.md
+# and orchestrator.py's run_* wrappers. "STALE" is reserved for gov
+# data older than the freshness window (see scripts/fetch_gov_data.py).
+SourceStatus = Literal["OK", "UNREACHABLE", "NO_DATA", "STALE"]
+
+
 class Citation(BaseModel):
     """Every claim in generated output must carry one of these."""
 
@@ -60,6 +70,84 @@ class Citation(BaseModel):
                     "Citation(kind='career_entry') requires entry_id."
                 )
         return self
+
+    # ------------------------------------------------------------------
+    # Citations API projector (PROCESS Entry 43, Workstream B)
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_api(
+        cls,
+        raw: dict,
+        *,
+        url_by_doc_index: Optional[dict[int, str]] = None,
+        kind_by_doc_index: Optional[dict[int, Literal["url_snippet", "gov_data", "career_entry"]]] = None,
+        gov_field_by_doc_index: Optional[dict[int, str]] = None,
+        entry_id_by_doc_index: Optional[dict[int, str]] = None,
+    ) -> "Citation":
+        """Project an Anthropic Citations-API citation dict into our domain
+        shape.
+
+        The API returns one of three citation kinds:
+          - `char_location` (plain-text documents)
+          - `page_location` (PDF documents)
+          - `content_block_location` (custom-content documents)
+
+        Each carries a `document_index` referencing the originally-supplied
+        document. Callers tell us how to interpret each document index via
+        the *_by_doc_index dicts:
+
+          - `url_by_doc_index[i] = "https://..."` -> `kind="url_snippet"`
+          - `kind_by_doc_index[i] = "gov_data"` + `gov_field_by_doc_index[i]
+            = "sponsor_status.status"` -> `kind="gov_data"` with
+            `data_value = raw["cited_text"].strip()`
+          - `entry_id_by_doc_index[i] = "entry-..."` -> `kind="career_entry"`
+
+        If no mapping covers `raw["document_index"]`, defaults to
+        `kind="url_snippet"` with the document_title as the URL — caller
+        should always pass at least `url_by_doc_index` to avoid this fallback.
+        """
+        idx = int(raw.get("document_index", 0))
+        cited_text = (raw.get("cited_text") or "").strip()
+
+        # Per-doc-index override is the cleanest path.
+        if kind_by_doc_index and idx in kind_by_doc_index:
+            kind = kind_by_doc_index[idx]
+            if kind == "gov_data":
+                if not gov_field_by_doc_index or idx not in gov_field_by_doc_index:
+                    raise ValueError(
+                        f"document_index {idx} marked gov_data but no "
+                        "gov_field_by_doc_index entry present."
+                    )
+                return cls(
+                    kind="gov_data",
+                    data_field=gov_field_by_doc_index[idx],
+                    data_value=cited_text or "unknown",
+                )
+            if kind == "career_entry":
+                if not entry_id_by_doc_index or idx not in entry_id_by_doc_index:
+                    raise ValueError(
+                        f"document_index {idx} marked career_entry but no "
+                        "entry_id_by_doc_index entry present."
+                    )
+                return cls(
+                    kind="career_entry",
+                    entry_id=entry_id_by_doc_index[idx],
+                )
+            # Otherwise fall through to url_snippet handling.
+
+        # Default: url_snippet.
+        url = (url_by_doc_index or {}).get(idx) or raw.get("document_title") or ""
+        if not url or not cited_text:
+            raise ValueError(
+                f"Cannot project citation idx={idx}: missing url or cited_text. "
+                f"raw={raw!r}"
+            )
+        return cls(
+            kind="url_snippet",
+            url=url,
+            verbatim_snippet=cited_text,
+        )
 
 
 class VisaStatus(BaseModel):
@@ -195,11 +283,54 @@ Intent = Literal[
     "salary_advice",
     "draft_reply",
     "full_prep",
+    # New post-2026-04-25 intent (PROCESS Entry 43, Workstream F):
+    # user forwards an offer letter PDF; pipeline returns OfferAnalysis.
+    "analyse_offer",
     "profile_query",
     "profile_edit",
     "recent",
     "chitchat",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Offer analysis (PROCESS Entry 43, Workstream F)
+# ---------------------------------------------------------------------------
+
+
+class OfferComponent(BaseModel):
+    """A single field extracted from an offer letter, with a citation
+    pointing at the page it came from.
+    """
+
+    label: str           # e.g. "base salary", "equity vesting", "non-compete"
+    value_text: str      # verbatim or normalised value
+    citation: "Citation"
+
+
+class OfferAnalysis(BaseModel):
+    """Output of the `analyse_offer` intent.
+
+    Every field is page-cited via the Citations API. The `unusual_clauses`
+    bucket flags terms a UK candidate should question (overly long
+    non-competes, IP assignment over personal projects, equity acceleration
+    cliffs, etc.).
+    """
+
+    company_name: str
+    role_title: Optional[str] = None
+    base_salary_gbp: Optional[OfferComponent] = None
+    bonus: Optional[OfferComponent] = None
+    equity: Optional[OfferComponent] = None
+    benefits: list[OfferComponent] = Field(default_factory=list)
+    notice_period: Optional[OfferComponent] = None
+    non_compete: Optional[OfferComponent] = None
+    ip_assignment: Optional[OfferComponent] = None
+    unusual_clauses: list[OfferComponent] = Field(default_factory=list)
+    market_comparison_note: Optional[str] = None
+    # Surfaced as warnings to the user (e.g. "below SOC threshold for
+    # Skilled Worker — sponsor unlikely to support visa").
+    flags: list[str] = Field(default_factory=list)
 
 
 class Session(BaseModel):
@@ -323,14 +454,18 @@ class CompaniesHouseSnapshot(BaseModel):
     no_filings_in_years: int = 0
     resolution_to_wind_up: bool = False
     director_disqualifications: int = 0
+    source_status: SourceStatus = "OK"
 
 
 class SponsorStatus(BaseModel):
-    status: Literal["LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED"]
+    status: Literal[
+        "LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED", "UNKNOWN"
+    ]
     matched_name: Optional[str] = None
     rating: Optional[str] = None
     visa_routes: list[str] = Field(default_factory=list)
     last_register_update: Optional[date] = None
+    source_status: SourceStatus = "OK"
 
 
 class SocCheckResult(BaseModel):
@@ -343,6 +478,7 @@ class SocCheckResult(BaseModel):
     below_threshold: bool
     shortfall_gbp: Optional[int] = None
     new_entrant_eligible: bool = False
+    source_status: SourceStatus = "OK"
 
 
 class GhostSignal(BaseModel):
@@ -412,6 +548,7 @@ class SalarySignals(BaseModel):
     aggregated_postings: Optional[AggregatedPostings] = None
     sources_consulted: list[str]
     data_citations: list[Citation]
+    source_status: SourceStatus = "OK"
 
 
 class RedFlag(BaseModel):
@@ -424,6 +561,7 @@ class RedFlag(BaseModel):
 class RedFlagsReport(BaseModel):
     flags: list[RedFlag]
     checked: bool
+    source_status: SourceStatus = "OK"
 
 
 class ResearchBundle(BaseModel):
@@ -439,6 +577,11 @@ class ResearchBundle(BaseModel):
     salary_signals: SalarySignals
     red_flags: RedFlagsReport
     bundle_completed_at: datetime
+    # Names of source fields whose text was truncated by the content
+    # shield before reaching downstream agents. Verdict and generators
+    # treat a value appearing here as "partial view, reason cautiously."
+    # A5 / content_shield.ShieldResult.truncated.
+    sources_truncated: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

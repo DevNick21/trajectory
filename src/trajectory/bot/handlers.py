@@ -5,16 +5,21 @@ One handler per intent. The on_message dispatcher routes via IntentRouter.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import pydantic
 from telegram import Message, Update
 from telegram.ext import ContextTypes
 
 from ..config import settings
+from ..observability import bind_request_id, new_request_id
 from ..orchestrator import (
+    handle_analyse_offer,
     handle_draft_cover_letter,
     handle_draft_cv,
     handle_draft_reply,
@@ -23,6 +28,7 @@ from ..orchestrator import (
     handle_predict_questions,
     handle_salary_advice,
 )
+from ..ratelimit import RateLimiter
 from ..validators.content_shield import ContentIntegrityRejected
 from ..schemas import Session
 from ..storage import Storage
@@ -33,16 +39,21 @@ from .formatting import (
     format_salary_recommendation,
     format_verdict,
 )
-from .onboarding import OnboardingSession, OnboardingState, finalise_onboarding
 
 log = logging.getLogger(__name__)
-
-# In-memory onboarding sessions (single-user demo)
-_onboarding_sessions: dict[int, OnboardingSession] = {}
 
 
 def get_storage(context: ContextTypes.DEFAULT_TYPE) -> Storage:
     return context.bot_data["storage"]
+
+
+def get_rate_limiter(context: ContextTypes.DEFAULT_TYPE) -> RateLimiter:
+    """Lazy singleton — constructed on first access per bot process."""
+    limiter = context.bot_data.get("rate_limiter")
+    if limiter is None:
+        limiter = RateLimiter()
+        context.bot_data["rate_limiter"] = limiter
+    return limiter
 
 
 def get_user_id(update: Update) -> str:
@@ -55,9 +66,8 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     Wave 10 of the dual-surface migration (MIGRATION_PLAN.md ADR-003)
     moved onboarding to the web wizard. Telegram no longer runs its
     own onboarding flow — un-onboarded users get a redirect link
-    instead. The legacy `_onboarding_sessions` dict + handlers below
-    remain for graceful handling of any in-flight session that
-    survives a server restart, but new entries are never created.
+    instead. The legacy in-memory session dict + handler were
+    deleted in PROCESS Entry 47.
     """
     storage = get_storage(context)
     user_id = get_user_id(update)
@@ -79,17 +89,43 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Main dispatcher — gates onboarding, then routes by intent."""
+    # D1: every Telegram message gets its own request_id so log lines
+    # from Phase 1 agents, retries, and shield calls can be correlated
+    # back to one user turn. contextvars propagate through asyncio.gather.
+    bind_request_id(new_request_id())
+
     chat_id = update.effective_chat.id
     user_id = get_user_id(update)
     storage = get_storage(context)
     text = update.message.text or ""
 
-    # ── Onboarding gate ───────────────────────────────────────────────────
-    if chat_id in _onboarding_sessions:
-        ob = _onboarding_sessions[chat_id]
-        if ob.is_collecting() or ob.state == OnboardingState.START:
-            await _handle_onboarding_message(update, context, ob, storage)
+    # ── PDF document fast-path: forwarded offer letters ───────────────────
+    # PROCESS Entry 43, Workstream F. A document with mime_type
+    # "application/pdf" (offer letter, contract) routes directly to the
+    # analyse_offer pipeline, bypassing the intent router. The user's
+    # caption (if any) is treated as additional context.
+    document = getattr(update.message, "document", None)
+    if document is not None and (
+        getattr(document, "mime_type", "") == "application/pdf"
+        or (getattr(document, "file_name", "") or "").lower().endswith(".pdf")
+    ):
+        user = await storage.get_user_profile(user_id)
+        if not user:
+            await update.message.reply_text(
+                "Set up your profile on the web app first:\n"
+                f"{settings.web_url}"
+            )
             return
+        try:
+            await _handle_analyse_offer_pdf(update, context, user, storage, document)
+        except ContentIntegrityRejected as exc:
+            log.warning("Content shield rejected offer PDF: %s", exc.verdict.reasoning)
+            await update.message.reply_text(
+                "I couldn't process this offer letter — content integrity check failed."
+            )
+        except Exception as exc:
+            await _handle_handler_exception(update, "analyse_offer", exc)
+        return
 
     # ── Check profile exists ───────────────────────────────────────────────
     user = await storage.get_user_profile(user_id)
@@ -134,6 +170,19 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     intent = routed.intent
 
+    # ── Rate limit ────────────────────────────────────────────────────────
+    if settings.enforce_rate_limit:
+        decision = get_rate_limiter(context).check(user_id, intent)
+        if not decision.allowed:
+            wait = max(1, int(decision.retry_after_s + 0.5))
+            await update.message.reply_text(
+                f"Slow down — try again in {wait}s. "
+                "(Rate limit on {category} calls.)".format(
+                    category=decision.category
+                )
+            )
+            return
+
     try:
         if intent == "forward_job":
             await _handle_forward_job(update, context, user, storage, routed)
@@ -149,6 +198,10 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await _handle_full_prep(update, context, user, storage, last_session)
         elif intent == "draft_reply":
             await _handle_draft_reply(update, context, user, storage, text)
+        elif intent == "analyse_offer":
+            # Text-pasted offer letter (no PDF document attached). The
+            # PDF fast-path is handled above before intent routing.
+            await _handle_analyse_offer_text(update, context, user, storage, text, last_session)
         elif intent == "profile_query":
             await _handle_profile_query(update, context, user, storage)
         elif intent == "profile_edit":
@@ -173,69 +226,80 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             "injection. The job URL may be compromised or the page was modified."
         )
     except Exception as exc:
-        log.exception("Handler error for intent %s: %s", intent, exc)
-        await update.message.reply_text(
-            "Something went wrong. Try again, or forward a new job URL."
-        )
+        await _handle_handler_exception(update, intent, exc)
 
 
-# ---------------------------------------------------------------------------
-# Onboarding message handler
-# ---------------------------------------------------------------------------
+def _is_transient_error(exc: BaseException) -> bool:
+    """Network / upstream-5xx / sqlite-busy / our own timeouts.
 
-
-async def _handle_onboarding_message(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    ob: OnboardingSession,
-    storage: Storage,
-) -> None:
-    chat_id = update.effective_chat.id
-    text = update.message.text or ""
-
-    # Show a typing indicator — parsing each reply costs a short Opus 4.7
-    # low-effort round-trip, so the user shouldn't think the bot hung.
+    Kept as a free function so tests can monkeypatch around the
+    anthropic import on bare CI environments.
+    """
+    if isinstance(exc, (asyncio.TimeoutError, sqlite3.OperationalError)):
+        return True
     try:
-        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-    except Exception:
+        import anthropic  # type: ignore
+
+        if isinstance(exc, anthropic.APIConnectionError):
+            return True
+        if isinstance(exc, anthropic.APIStatusError):
+            status = getattr(exc, "status_code", None)
+            return isinstance(status, int) and status >= 500
+    except Exception:  # pragma: no cover
         pass
+    return False
 
-    outcome = await ob.advance(text)
 
-    # abandon_session: too many off-topic replies across the session.
-    # Drop the onboarding entry so the next /start gets a clean session
-    # and let the user know they need to restart.
-    if outcome.abandon_session:
-        _onboarding_sessions.pop(chat_id, None)
-        if outcome.follow_up:
-            await update.message.reply_text(outcome.follow_up)
+def _is_user_input_error(exc: BaseException) -> bool:
+    """Malformed input — missing URL, bad onboarding fields, etc."""
+    if isinstance(exc, (ValueError, pydantic.ValidationError)):
+        return True
+    return False
+
+
+async def _handle_handler_exception(
+    update: Update, intent: str, exc: BaseException
+) -> None:
+    """Classify + reply. Fire-and-forget; never raises."""
+    if isinstance(exc, RendererEmptyOutput):
+        log.error("Renderer empty-output for intent %s: %r", intent, exc)
+        await update.message.reply_text(
+            "I generated the content but the file came back empty — "
+            "an internal bug. Type /recent to try again, or message me "
+            "for the text version."
+        )
         return
-
-    # needs_clarification or off_topic: stay on the current stage, send
-    # the one-line follow-up, wait for the user to try again.
-    if outcome.follow_up:
-        await update.message.reply_text(outcome.follow_up)
+    if isinstance(exc, DocumentDeliveryFailed):
+        log.warning("Document delivery failed for intent %s: %r", intent, exc)
+        await update.message.reply_text(
+            "I built the file but couldn't deliver it over Telegram. "
+            "Type /recent to try again — the generated text was already "
+            "sent in the previous message."
+        )
         return
-
-    if outcome.state == OnboardingState.PROCESSING:
-        msg = await update.message.reply_text("Processing your profile — one moment…")
-        try:
-            user = await finalise_onboarding(ob, storage)
-            del _onboarding_sessions[chat_id]
-            ob.state = OnboardingState.DONE
-            await msg.edit_text(
-                f"Profile ready. Forward me a job URL and I'll run the checks."
-            )
-        except Exception as exc:
-            log.exception("Onboarding finalisation failed: %s", exc)
-            await msg.edit_text(
-                "Couldn't process your profile. Type /start to try again."
-            )
+    if _is_transient_error(exc):
+        log.warning(
+            "Transient error on intent %s: %r", intent, exc,
+        )
+        await update.message.reply_text(
+            "Network hiccup on my side — try again in ~30s. "
+            "If it keeps failing, forward a fresh job URL."
+        )
         return
-
-    prompt = ob.next_prompt()
-    if prompt:
-        await update.message.reply_text(prompt)
+    if _is_user_input_error(exc):
+        log.info(
+            "User-input error on intent %s: %r", intent, exc,
+        )
+        await update.message.reply_text(
+            "I couldn't parse that — rephrase or include a job URL, "
+            "and I'll try again."
+        )
+        return
+    log.exception("Handler error for intent %s: %s", intent, exc)
+    await update.message.reply_text(
+        "Something went wrong on my end — the issue has been logged. "
+        "Try again, or forward a new job URL."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -331,18 +395,54 @@ async def _require_session(
     return last_session
 
 
-async def _send_document(context, chat_id: int, path, *, filename: Optional[str] = None) -> None:
+class RendererEmptyOutput(RuntimeError):
+    """Renderer returned None or wrote a zero-byte file.
+
+    Distinct from a Telegram network error — the CV/cover letter never
+    reached the wire in the first place. Bot surfaces a different
+    message so the user knows to retry from scratch vs retry send.
+    """
+
+
+class DocumentDeliveryFailed(RuntimeError):
+    """send_document failed (Telegram BadRequest/NetworkError).
+
+    File was rendered fine — the delivery hop broke. User sees a
+    "couldn't deliver, type /recent to retry" message so they don't
+    assume generation itself failed.
+    """
+
+
+async def _send_document(
+    context, chat_id: int, path, *, filename: Optional[str] = None
+) -> None:
     """Send a file without leaking the file handle.
 
     python-telegram-bot v21's `send_document` accepts a pathlib.Path (it
     opens + closes internally). Passing a bare `open()` leaked descriptors
     on every CV/cover-letter request.
+
+    Raises `RendererEmptyOutput` when the path is None, missing, or
+    empty. Raises `DocumentDeliveryFailed` on Telegram transport error.
+    Both surface to the bot-level dispatcher as specific user messages.
     """
-    await context.bot.send_document(
-        chat_id,
-        document=path,
-        filename=filename,
-    )
+    if path is None or not path.exists() or path.stat().st_size == 0:
+        raise RendererEmptyOutput(
+            f"renderer produced no file at {path!r}"
+        )
+    try:
+        await context.bot.send_document(
+            chat_id,
+            document=path,
+            filename=filename,
+        )
+    except Exception as exc:
+        # Telegram's error types live behind telegram.error; catch
+        # broadly and wrap so callers don't import telegram internals.
+        log.warning("send_document failed for %s: %r", path, exc)
+        raise DocumentDeliveryFailed(
+            f"Telegram rejected document {filename or path}: {exc}"
+        ) from exc
 
 
 async def _handle_draft_cv(update, context, user, storage, last_session):
@@ -488,3 +588,82 @@ async def _handle_recent(update, context, user, storage):
             verdict_str = f" — {decision}"
         lines.append(f"• {s.intent}: {s.job_url or '(no URL)'}{verdict_str}")
     await update.message.reply_text("\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# Offer analysis (PROCESS Entry 43, Workstream F)
+# ---------------------------------------------------------------------------
+
+
+def _format_offer_analysis(analysis) -> str:
+    """Pretty-print an OfferAnalysis as a single Telegram message."""
+    lines: list[str] = [f"📄 *Offer analysis: {analysis.company_name}*"]
+    if analysis.role_title:
+        lines.append(f"Role: {analysis.role_title}")
+    lines.append("")
+
+    def _comp(label: str, c) -> None:
+        if c is not None:
+            lines.append(f"• *{label}*: {c.value_text}")
+
+    _comp("Base salary", analysis.base_salary_gbp)
+    _comp("Bonus", analysis.bonus)
+    _comp("Equity", analysis.equity)
+    _comp("Notice period", analysis.notice_period)
+    _comp("Non-compete", analysis.non_compete)
+    _comp("IP assignment", analysis.ip_assignment)
+    if analysis.benefits:
+        lines.append("• *Benefits*:")
+        for b in analysis.benefits:
+            lines.append(f"  – {b.value_text}")
+    if analysis.unusual_clauses:
+        lines.append("\n*Unusual clauses to flag:*")
+        for u in analysis.unusual_clauses:
+            lines.append(f"⚠️ {u.label}: {u.value_text}")
+    if analysis.market_comparison_note:
+        lines.append(f"\n*Market comparison:* {analysis.market_comparison_note}")
+    if analysis.flags:
+        lines.append("\n*Flags:*")
+        for f in analysis.flags:
+            lines.append(f"🚩 {f}")
+    return "\n".join(lines)
+
+
+async def _handle_analyse_offer_pdf(update, context, user, storage, document):
+    """Fast-path: user forwarded a PDF offer letter."""
+    log.info("analyse_offer (PDF): user=%s file=%s", user.user_id, document.file_name)
+    await update.message.reply_text(
+        "Analysing the offer letter… this takes ~30-60s for a typical PDF."
+    )
+
+    # Download the PDF bytes via Telegram's file API.
+    tg_file = await document.get_file()
+    pdf_bytes_io = await tg_file.download_as_bytearray()
+    pdf_bytes = bytes(pdf_bytes_io)
+
+    # Use the most recent session's bundle for market comparison if any.
+    recent = await storage.get_recent_sessions(user.user_id, limit=1)
+    session = recent[0] if recent else None
+
+    analysis = await handle_analyse_offer(
+        user=user,
+        storage=storage,
+        session=session,
+        pdf_bytes=pdf_bytes,
+    )
+    await update.message.reply_markdown(_format_offer_analysis(analysis))
+
+
+async def _handle_analyse_offer_text(update, context, user, storage, text, last_session):
+    """Slow-path: user pasted the offer letter as text."""
+    log.info("analyse_offer (text): user=%s len=%d", user.user_id, len(text))
+    await update.message.reply_text(
+        "Analysing the pasted offer text… this takes ~20-40s."
+    )
+    analysis = await handle_analyse_offer(
+        user=user,
+        storage=storage,
+        session=last_session,
+        text_pasted=text,
+    )
+    await update.message.reply_markdown(_format_offer_analysis(analysis))

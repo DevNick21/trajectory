@@ -43,6 +43,25 @@ _SRC = _REPO_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+# Allow Settings to boot without DEMO_USER_ID / TELEGRAM_BOT_TOKEN in the
+# environment. Individual smoke tests that need those values set them
+# explicitly on `settings` after `prepare_environment()`. Must be set
+# BEFORE the first `from trajectory.config import settings` anywhere.
+os.environ.setdefault("TRAJECTORY_TEST_MODE", "1")
+
+# Windows console defaults to cp1252 — Unicode arrows / em-dashes /
+# emojis in `messages` (and the bot's emoji prompts) crash a standalone
+# smoke test on `print(...)` even though the test itself passed. The
+# `run_all.py` runner already does this; replicate it here so a
+# direct `python -m scripts.smoke_tests.<name>` doesn't crash the
+# trailing print loop. Mirrors run_all.py:34-39.
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # pragma: no cover
+        pass
+
 _FIXTURE_DIR = _REPO_ROOT / "tests" / "fixtures"
 FIXTURE_BUNDLE = _FIXTURE_DIR / "sample_research_bundle.json"
 
@@ -208,6 +227,99 @@ def build_test_session(user_id: str, intent: str = "forward_job"):
 # ---------------------------------------------------------------------------
 # Wrapper: converts exceptions / timing / failures-list into a SmokeResult
 # ---------------------------------------------------------------------------
+
+
+def build_synthetic_writing_style(user_id: str = "smoke_user", sample_count: int = 3):
+    """Hand-built WritingStyleProfile for tests that need a style input but
+    don't care about the LLM-extracted content."""
+    from trajectory.schemas import WritingStyleProfile
+
+    now = now_utc_naive()
+    return WritingStyleProfile(
+        profile_id=f"smoke_style_{user_id}",
+        user_id=user_id,
+        tone="plainspoken, technical",
+        sentence_length_pref="varied",
+        formality_level=6,
+        hedging_tendency="direct",
+        signature_patterns=["leads with the result", "uses numbers not adjectives"],
+        avoided_patterns=["buzzwords", "vague corporate speak"],
+        examples=["Cut p99 from 600ms to 195ms.", "Owned migration end-to-end."],
+        source_sample_ids=[f"sample_{i}" for i in range(sample_count)],
+        sample_count=sample_count,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def build_synthetic_cv_output(name: str = "Smoke Test"):
+    """Minimal, renderer-safe CVOutput. Citations point into the fixture
+    research bundle so the citation validator passes against that ctx.
+    """
+    from trajectory.schemas import CVBullet, CVOutput, CVRole, Citation
+
+    fixture_url = "https://acmetech.io/careers"
+    fixture_snippet = "Our engineering team ships autonomously."
+
+    bullet = CVBullet(
+        text="Shipped distributed payment pipeline serving 1M+ RPS.",
+        citations=[Citation(
+            kind="url_snippet",
+            url=fixture_url,
+            verbatim_snippet=fixture_snippet,
+        )],
+    )
+    role = CVRole(
+        title="Senior Software Engineer",
+        company="Example Corp",
+        dates="2022 — Present",
+        bullets=[bullet, bullet],
+    )
+    return CVOutput(
+        name=name,
+        contact={
+            "email": "smoke@example.com",
+            "phone": "+44 20 7946 0018",
+            "location": "London",
+            "linkedin": "linkedin.com/in/smoketest",
+            "github": "github.com/smoketest",
+        },
+        professional_summary=(
+            "Backend engineer with seven years shipping production Python services."
+        ),
+        experience=[role],
+        education=[{
+            "degree": "BSc Computer Science",
+            "institution": "University of Example",
+            "dates": "2015 — 2018",
+        }],
+        skills=["Python", "Kubernetes", "PostgreSQL", "AWS"],
+        projects=None,
+    )
+
+
+def build_synthetic_cover_letter_output():
+    from trajectory.schemas import Citation, CoverLetterOutput
+
+    citations = [
+        Citation(
+            kind="url_snippet",
+            url="https://acmetech.io/careers",
+            verbatim_snippet="Our engineering team ships autonomously.",
+        ),
+    ]
+    paragraphs = [
+        "Opening paragraph referencing Acme's published engineering culture.",
+        "Middle paragraph tying a specific STAR-style achievement to the role.",
+        "Closing paragraph with a concrete ask and a pointer to attached materials.",
+    ]
+    text = " ".join(paragraphs)
+    return CoverLetterOutput(
+        addressed_to="Hiring Team, Acme Tech Ltd",
+        paragraphs=paragraphs,
+        citations=citations,
+        word_count=len(text.split()),
+    )
 
 
 async def run_smoke(

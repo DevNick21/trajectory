@@ -3,6 +3,7 @@
 // endpoints live in lib/sse.ts.
 
 import type {
+  OfferAnalysisResponse,
   OnboardingAnswers,
   OnboardingFinaliseResponse,
   PackGeneratorName,
@@ -150,6 +151,56 @@ export const removeFromQueue = async (id: string): Promise<void> => {
   if (!resp.ok && resp.status !== 204) {
     throw new ApiError(resp.status, undefined, `DELETE failed: ${resp.status}`);
   }
+};
+
+// ---------------------------------------------------------------------------
+// Offer analysis (PROCESS Entry 43, Workstream F)
+//   POST /api/sessions/{id}/offer  — multipart form. Pass either a PDF
+//   File OR a text string. `sessionId="none"` runs without a research
+//   bundle for market comparison.
+// ---------------------------------------------------------------------------
+
+export interface AnalyseOfferInput {
+  sessionId?: string;             // omit or "none" -> standalone analysis
+  pdf?: File;                     // forwarded offer letter PDF
+  text?: string;                  // pasted offer letter text
+}
+
+export const analyseOffer = async (
+  input: AnalyseOfferInput,
+): Promise<OfferAnalysisResponse> => {
+  if (!input.pdf && !(input.text && input.text.trim())) {
+    throw new ApiError(400, "missing_input", "Provide a PDF file or text.");
+  }
+  const sessionId = input.sessionId && input.sessionId.trim()
+    ? input.sessionId
+    : "none";
+
+  const form = new FormData();
+  if (input.pdf) form.append("pdf", input.pdf);
+  if (input.text) form.append("text", input.text);
+
+  const resp = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/offer`,
+    { method: "POST", body: form },
+  );
+  if (!resp.ok) {
+    let code: string | undefined;
+    let message: string | undefined;
+    try {
+      const body = await resp.json();
+      const detail = body?.detail;
+      if (typeof detail === "string") message = detail;
+      else if (detail && typeof detail === "object") {
+        code = detail.code;
+        message = detail.message;
+      }
+    } catch {
+      /* non-JSON body */
+    }
+    throw new ApiError(resp.status, code, message);
+  }
+  return (await resp.json()) as OfferAnalysisResponse;
 };
 
 // ---------------------------------------------------------------------------

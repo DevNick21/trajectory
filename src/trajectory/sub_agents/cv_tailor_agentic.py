@@ -1,10 +1,9 @@
-"""Phase 4 — CV Tailor (agentic multi-turn retrieval path).
+"""Phase 4 — CV Tailor (multi-turn FAISS retrieval).
 
-PROCESS.md Entry 36. Refactor of the legacy single-call path
-(`cv_tailor_legacy.py`) into a multi-turn tool-use loop where Opus
-iteratively searches FAISS for the career entries it needs as it drafts
-the CV. Feature-flagged via `settings.enable_agentic_cv_tailor`;
-default off until A/B validation confirms parity with legacy.
+PROCESS.md Entry 36. Multi-turn tool-use loop where Opus iteratively
+searches FAISS for the career entries it needs as it drafts the CV.
+D5 (2026-04-24): promoted from the opt-in path to the only CV tailor —
+the legacy single-call path was deleted after this became the default.
 
 Two tools exposed to the agent:
   - `search_career_entries(query, kind_filter?, top_k?)` — semantic
@@ -258,41 +257,141 @@ async def generate(
     star_material: Optional[list[STARPolish]] = None,
     citation_ctx: Optional[ValidationContext] = None,
 ) -> CVOutput:
-    """Same signature as `cv_tailor_legacy.generate` for dispatcher
-    drop-in. `retrieved_entries` is accepted but unused — the agent
+    """Multi-turn CV generation. `retrieved_entries` is accepted for
+    signature compatibility with older callers but unused — the agent
     pulls career entries on demand via the search tool."""
-    executor = CVTailorToolExecutor(user, session_id=None)
-
-    user_input = _build_user_input(jd, research_bundle, style_profile, star_material)
-
-    cv = await call_agent_with_tools(
-        agent_name="cv_tailor_agentic",
-        system_prompt=SYSTEM_PROMPT,
-        user_input=user_input,
-        tools=[_SEARCH_TOOL, _PROFILE_TOOL],
-        tool_executor=executor.execute,
-        response_schema=CVOutput,
-        model=settings.opus_model_id,
-        effort="xhigh",
-        max_iterations=10,
+    base_user_input = _build_user_input(
+        jd, research_bundle, style_profile, star_material,
     )
 
-    # Post-hoc minimum-searches enforcement. Falls back to legacy.
-    if executor.search_call_count < _MIN_SEARCH_CALLS:
-        raise AgentCallFailed(
-            f"cv_tailor_agentic emitted final CV after only "
-            f"{executor.search_call_count} search call(s); minimum is "
-            f"{_MIN_SEARCH_CALLS}."
+    # One retry on post-validation failure. The agentic loop is expensive
+    # (multi-turn tool-use, ~$0.35 per attempt) but a single regenerate
+    # with feedback is much cheaper than failing the entire draft_cv.
+    # PROCESS Entry 47 surfaced the failure mode: Opus occasionally
+    # cites a career_entry_id it didn't retrieve, the validator rejects,
+    # and without retry the user gets no CV at all.
+    last_failures: list[str] = []
+    last_searches = 0
+    user_input = base_user_input
+
+    for attempt in range(2):
+        executor = CVTailorToolExecutor(user, session_id=None)
+        cv = await call_agent_with_tools(
+            agent_name="cv_tailor_agentic",
+            system_prompt=SYSTEM_PROMPT,
+            user_input=user_input,
+            tools=[_SEARCH_TOOL, _PROFILE_TOOL],
+            tool_executor=executor.execute,
+            response_schema=CVOutput,
+            model=settings.opus_model_id,
+            effort="xhigh",
+            max_iterations=10,
         )
 
-    # Post-hoc hallucination + banned-phrase + citation validation.
-    failures = _post_validate(cv, executor.retrieved_ids, citation_ctx)
-    if failures:
-        raise AgentCallFailed(
-            "cv_tailor_agentic post-validation failed: " + "; ".join(failures)
+        if executor.search_call_count < _MIN_SEARCH_CALLS:
+            last_failures = [
+                f"emitted final CV after only "
+                f"{executor.search_call_count} search call(s); minimum "
+                f"is {_MIN_SEARCH_CALLS}"
+            ]
+            last_searches = executor.search_call_count
+        else:
+            last_failures = _post_validate(
+                cv, executor.retrieved_ids, citation_ctx,
+            )
+            last_searches = executor.search_call_count
+
+        if not last_failures:
+            return cv
+
+        # Re-prompt with the rejection rationale + the actual list of
+        # entry_ids the agent saw via search_career_entries (so it
+        # has no excuse to fabricate one on retry).
+        retrieved_summary = (
+            ", ".join(sorted(executor.retrieved_ids))
+            if executor.retrieved_ids else "(none)"
+        )
+        logger.info(
+            "cv_tailor_agentic attempt %d failed post-validation; retrying with feedback: %s",
+            attempt + 1, last_failures,
+        )
+        user_input = base_user_input + (
+            "\n\n## PREVIOUS ATTEMPT REJECTED\n\n"
+            + "\n".join(f"- {f}" for f in last_failures)
+            + "\n\nFix every rejection above. Specifically: cite ONLY "
+            "entry_ids that appeared in the results of your "
+            "search_career_entries calls. The retrieved set this run "
+            f"is: [{retrieved_summary}]. Drop any bullet whose only "
+            "supporting evidence is a non-retrieved entry — do not "
+            "fabricate an entry_id to keep a bullet."
         )
 
-    return cv
+    # Graceful degradation: after one full retry, if the only remaining
+    # failures are hallucinated career_entry citations, drop the bad
+    # citations and ship the CV. The bullet TEXT is still drafted from
+    # what the agent saw; only the support pointer is wrong. Better to
+    # ship a CV with N-1 citations than fail the entire request.
+    # Banned-phrase / search-call-count failures still raise.
+    if cv is not None and _only_failure_is_hallucinated_citations(
+        last_failures
+    ):
+        store_ids = (
+            set(citation_ctx.career_store_entries)
+            if citation_ctx is not None else set()
+        )
+        dropped = _drop_hallucinated_citations(cv, store_ids)
+        if dropped:
+            logger.warning(
+                "cv_tailor_agentic: dropped %d hallucinated citation(s) "
+                "post-retry rather than failing the whole draft. Bullets "
+                "kept; only the citation pointers were removed.",
+                dropped,
+            )
+            return cv
+
+    raise AgentCallFailed(
+        "cv_tailor_agentic post-validation failed after retry: "
+        + "; ".join(last_failures)
+        + f" (final searches={last_searches})"
+    )
+
+
+_HALLUCINATION_MARKERS = (
+    "career_entry citations not in career store",
+    "not found in career store",
+)
+
+
+def _only_failure_is_hallucinated_citations(failures: list[str]) -> bool:
+    """True iff every failure message is a hallucinated-citation report.
+    Used to decide whether graceful citation-dropping is safe — banned
+    phrases or schema issues still need to fail loud."""
+    if not failures:
+        return False
+    return all(
+        any(marker in f for marker in _HALLUCINATION_MARKERS)
+        for f in failures
+    )
+
+
+def _drop_hallucinated_citations(cv: CVOutput, store_ids: set[str]) -> int:
+    """Walk the CV's bullets and remove any career_entry citation
+    whose entry_id isn't in `store_ids`. Returns the count dropped."""
+    dropped = 0
+    for role in cv.experience:
+        for bullet in role.bullets:
+            kept = []
+            for c in bullet.citations:
+                if (
+                    c.kind == "career_entry"
+                    and c.entry_id
+                    and c.entry_id not in store_ids
+                ):
+                    dropped += 1
+                    continue
+                kept.append(c)
+            bullet.citations = kept
+    return dropped
 
 
 def _build_user_input(
@@ -357,7 +456,15 @@ def _post_validate(
 ) -> list[str]:
     failures: list[str] = []
 
-    # Hallucination check — every cited entry must have been retrieved.
+    # Hallucination check — every cited entry must EITHER have been
+    # retrieved by search this session OR exist in the user's career
+    # store (validated by `validate_output` below). The original strict
+    # check failed live runs (PROCESS Entry 47) where Opus correctly
+    # cited an entry that exists in the store but didn't surface in
+    # the agent's specific search calls — those are real entries, not
+    # hallucinations. We log the discrepancy as a warning so we can
+    # still observe pattern drift, but only fail when the citation
+    # genuinely points at nothing.
     cited_ids: set[str] = set()
     for role in cv.experience:
         for bullet in role.bullets:
@@ -366,12 +473,32 @@ def _post_validate(
             for c in bullet.citations:
                 if c.kind == "career_entry" and c.entry_id:
                     cited_ids.add(c.entry_id)
-    hallucinated = cited_ids - retrieved_ids
-    if hallucinated:
-        failures.append(
-            "career_entry citations not in retrieved set: "
-            + ", ".join(sorted(hallucinated))
+    not_searched = cited_ids - retrieved_ids
+    if not_searched:
+        # `career_store_entries` is a dict {entry_id: kind} on the
+        # ValidationContext (not a bare set) — convert to its key view
+        # before set arithmetic. PROCESS Entry 47 bug 18 caught this
+        # the hard way: TypeError("unsupported operand type(s) for -:
+        # 'set' and 'dict'") killed phase4_cv on the next live run.
+        store_ids = (
+            set(citation_ctx.career_store_entries)
+            if citation_ctx is not None else set()
         )
+        truly_missing = not_searched - store_ids
+        store_resident = not_searched & store_ids
+        if store_resident:
+            logger.info(
+                "cv_tailor_agentic cited %d entry_id(s) that weren't in "
+                "the agent's retrieved set but DO exist in the career "
+                "store — accepting (likely surfaced via _PROFILE_TOOL or "
+                "from prior context): %s",
+                len(store_resident), sorted(store_resident),
+            )
+        if truly_missing:
+            failures.append(
+                "career_entry citations not in career store at all "
+                "(hallucinated): " + ", ".join(sorted(truly_missing))
+            )
 
     # Banned phrases — same check as the legacy post-validator.
     all_text_parts = [cv.professional_summary]

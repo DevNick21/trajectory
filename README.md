@@ -2,7 +2,7 @@
 
 A dual-surface personal assistant for UK job seekers — **React web app** for deep work and **Telegram bot** for on-the-go. Forward a job URL, get an honest verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
 
-Built by someone who spent 18 months job-searching in the UK on a Graduate visa. Every feature exists because a real information asymmetry existed.
+Built by someone who spent months job-searching in the UK on a Graduate visa. Every feature exists because a real information asymmetry existed.
 
 ---
 
@@ -33,7 +33,7 @@ Opening number, floor, and negotiation scripts adjust to your urgency level, rec
 | **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Onboarding wizard, dashboard with live Phase 1 streaming over Server-Sent Events, per-session detail pages with evidence + pack generators + downloadable files. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Onboarding lives on the web — new users get redirected. |
 
-Both surfaces share a single FastAPI orchestrator, a 16-agent Phase 1 pipeline, and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
+Both surfaces share a single FastAPI orchestrator, an 8-agent Phase 1 pipeline (with five Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
 
 The full dual-surface design rationale lives in [MIGRATION_PLAN.md](MIGRATION_PLAN.md), including ADRs for web-primary scope, the `ProgressEmitter` abstraction, and ephemeral client-side onboarding state.
 
@@ -88,7 +88,7 @@ Hard blockers force a NO_GO regardless of everything else. Every claim cites a v
         ┌───────────────────────────┐
         │ orchestrator.py           │
         │ ProgressEmitter protocol  │
-        │ sub_agents/ (16 agents)   │
+        │ sub_agents/ + managed/    │
         │ validators/ + renderers/  │
         └───────────┬───────────────┘
                     ▼
@@ -217,7 +217,7 @@ streamlit run src/trajectory/dashboard/app.py
 
 ```bash
 # Backend
-pytest                    # ~200 tests, including SSE end-to-end integration
+pytest                    # 243 tests (~42s), including SSE end-to-end + MA event-stream parser
 ruff check src/ tests/    # lint
 
 # Frontend
@@ -233,6 +233,23 @@ Key suites:
 - `tests/test_verdict_branching.py` — user-type hard blocker rules (visa holder vs. UK resident)
 - `tests/test_progress_emitter.py` — ProgressEmitter protocol + NoOp / SSE / Telegram implementations
 - `tests/test_api_forward_job_integration.py` — end-to-end SSE with the real orchestrator and mocked sub-agents
+
+End-to-end smoke tests (run individually or as a suite):
+
+```bash
+python -m scripts.smoke_tests.run_all --cheap   # ~30s, $0 — no LLM calls
+python -m scripts.smoke_tests.run_all           # full paid suite, ~14m, ~$5
+# Add gated Managed Agents tests:
+SMOKE_MANAGED_AGENTS=1 SMOKE_MANAGED_REVIEWS=1 SMOKE_VERDICT_DEEP=1 \
+  SMOKE_AGENTIC_CV=1 SMOKE_LATEX=1 \
+  python -m scripts.smoke_tests.run_all       # ~25m, ~$10-12
+```
+
+The rollup reports both a **budget** (sum of declared `ESTIMATED_COST_USD` per test) and the **actual** cost from the SQLite cost log (real Anthropic-token-derived USD via `storage.estimate_cost_usd`). A widening `delta` is the cue to refresh the budget estimates.
+
+The `--cheap` tier (31 tests as of Entry 46) covers infra, validators, renderers, the API surface, gov-data lookups, and **eight product-journey tests** that exercise: `forward_job → verdict` for both `uk_resident` and `visa_holder + NOT_LISTED → NO_GO` (Rule 2 guard), bot-side `draft_cv` with `.docx + .pdf` delivery (Rule 9), bot read-only intents (`profile_query`, `recent`), the bot's `analyse_offer` text path, the full web onboarding journey for both user types (parsed motivations + FAISS retrievable), and the onboarding clarification / off-topic state machine.
+
+The paid Managed Agents tests gated behind `SMOKE_MANAGED_AGENTS` / `SMOKE_MANAGED_REVIEWS` / `SMOKE_VERDICT_DEEP` cover the live `client.beta.sessions.*` surface end-to-end against real targets (GitHub careers / Monzo Bank / fixture verdict). The MA path is verified with prose-around-JSON tolerance and citation-snippet validation against the unshielded `web_fetch` text the agent actually saw — see PROCESS Entry 46 for the bugs that surfaced and the regression tests that lock the fixes in.
 
 ### Key architectural rules
 

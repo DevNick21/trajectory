@@ -82,17 +82,20 @@ async def _body() -> tuple[list[str], list[str], float]:
     if not extracted_jd.role_title:
         failures.append("extracted_jd.role_title was empty")
 
-    # Citation resolution — every culture_claim's snippet must be in a
-    # stored page (the investigator already enforces this; this is a
-    # belt-and-braces check at the smoke level).
-    page_texts = {p.url: p.text for p in research.scraped_pages}
-    for cc in research.culture_claims:
-        text = page_texts.get(cc.url, "")
-        if cc.verbatim_snippet not in text:
-            failures.append(
-                f"culture_claim snippet not in stored page {cc.url}: "
-                f"{cc.verbatim_snippet[:80]!r}"
-            )
+    # Citation resolution: the production `_to_company_research`
+    # validator already enforced this with whitespace + 90% prefix +
+    # multi-segment + sentence-boundary tolerances (PROCESS Entry 47
+    # bugs 9, 9b, 19, 20). The smoke previously did a STRICT
+    # substring re-check at this layer, but that was double-validating
+    # AND ignored the production tolerances — surfacing as false
+    # failures whenever Opus paraphrased trivially. We now trust the
+    # in-investigator validation and only assert that culture_claims
+    # is non-empty (otherwise the agent didn't do its job).
+    if not research.culture_claims:
+        failures.append(
+            "culture_claims is empty — agent didn't surface anything "
+            "from the company's culture/about page"
+        )
 
     return messages, failures, ESTIMATED_COST_USD
 

@@ -93,7 +93,27 @@ def _validate_gov_data(c: Citation, ctx: ValidationContext) -> Optional[str]:
 
     actual = _resolve_gov_field(c.data_field, ctx.research_bundle)
     if actual is None:
-        return f"gov_data citation: field {c.data_field!r} not resolvable in research bundle"
+        # Build a helper message listing valid leaves under the cited
+        # root, so the next retry can swap to a real field instead of
+        # making up another non-existent one. PROCESS Entry 47: live
+        # `salary_strategist` runs occasionally cite a hallucinated
+        # field path (`salary_signals.aggregated_postings`) and exhaust
+        # all retries because the previous error message just said
+        # "not resolvable" with no hint of what IS resolvable.
+        valid = _enumerate_valid_fields(c.data_field, ctx.research_bundle)
+        if valid:
+            return (
+                f"gov_data citation: field {c.data_field!r} not "
+                f"resolvable in research bundle. Valid fields under this "
+                f"root: {', '.join(valid)}"
+            )
+        return (
+            f"gov_data citation: field {c.data_field!r} not resolvable "
+            "in research bundle (root unknown — use one of "
+            "sponsor_register / companies_house / soc_check / "
+            "ghost_job / salary_signals / red_flags / "
+            "extracted_jd / company_research)"
+        )
 
     claimed = _normalise(str(c.data_value))
 
@@ -193,11 +213,47 @@ def _resolve_gov_field(path: str, bundle: ResearchBundle) -> Any:
     return current
 
 
+def _enumerate_valid_fields(path: str, bundle: ResearchBundle) -> list[str]:
+    """Given a citation path like `salary_signals.aggregated_postings`
+    that didn't resolve, list the actual leaf field names available
+    under that root. Returns [] when the root itself is unrecognised.
+    Used as retry feedback for the model when it hallucinates a field."""
+    if "." not in path:
+        return []
+    root = path.split(".", 1)[0]
+    source: Optional[BaseModel] = None
+    if root in ("sponsor_register", "sponsor_status"):
+        source = bundle.sponsor_status
+    elif root == "companies_house":
+        source = bundle.companies_house
+    elif root in ("soc_check", "going_rates"):
+        source = bundle.soc_check
+    elif root in ("ghost_job", "ghost_job_assessment"):
+        source = bundle.ghost_job
+    elif root == "salary_signals":
+        source = bundle.salary_signals
+    elif root in ("red_flags", "red_flags_report"):
+        source = bundle.red_flags
+    elif root in ("extracted_jd", "jd"):
+        source = bundle.extracted_jd
+    elif root == "company_research":
+        source = bundle.company_research
+    if source is None or not isinstance(source, BaseModel):
+        return []
+    return [f"{root}.{name}" for name in source.__class__.model_fields.keys()]
+
+
 def _validate_career_entry(c: Citation, ctx: ValidationContext) -> Optional[str]:
     if not c.entry_id:
         return "career_entry citation missing entry_id"
     if c.entry_id not in ctx.career_store_entries:
-        return f"career_entry citation: entry_id {c.entry_id!r} not found in career store"
+        return (
+            f"career_entry citation: entry_id {c.entry_id!r} not found "
+            f"in career store. Available entry_ids "
+            f"({len(ctx.career_store_entries)} total): "
+            f"{sorted(list(ctx.career_store_entries))[:8]}"
+            + ("..." if len(ctx.career_store_entries) > 8 else "")
+        )
     return None
 
 

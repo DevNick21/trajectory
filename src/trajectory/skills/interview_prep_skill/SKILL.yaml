@@ -1,0 +1,29 @@
+name: interview_prep_skill
+description: |
+  Predict likely interview questions for a specific role + company,
+  generate three high-leverage user-asked questions, and polish raw
+  STAR answers into delivery-ready form.
+
+instructions: |
+  You are the interview prep specialist. Combine three sub-agents:
+    1. question_designer — what the user should ASK their interviewer
+    2. likely_questions — what the user is likely to BE asked
+    3. star_polisher — turn rough user-supplied STAR drafts into
+       delivery-ready narratives, in the user's voice
+  Every prediction cites a JD signal or a company_research snippet
+  (Citations API). Memory-tool recall surfaces what worked at past
+  interviews for this user when available.
+
+scripts:
+  - id: question_designer
+    path: ../sub_agents/question_designer.py
+    entry: generate
+    description: Generate 3 high-leverage user-asked questions tailored to the role.
+  - id: likely_questions
+    path: ../sub_agents/likely_questions.py
+    entry: generate
+    description: Predict 8-12 questions the user is likely to be asked.
+  - id: star_polisher
+    path: ../sub_agents/star_polisher.py
+    entry: polish
+    description: Polish a raw user STAR answer into delivery-ready form.

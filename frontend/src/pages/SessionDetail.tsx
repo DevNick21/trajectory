@@ -6,6 +6,7 @@ import VerdictEvidence from "@/components/VerdictEvidence";
 import PackGenerator from "@/components/PackGenerator";
 import FileList from "@/components/FileList";
 import CostBreakdown from "@/components/CostBreakdown";
+import OfferAnalyser from "@/components/OfferAnalyser";
 import {
   Card,
   CardContent,
@@ -158,6 +159,10 @@ export default function SessionDetail() {
 
       {/* Pack generation — only meaningful once a verdict exists */}
       {bundle && <PackGenerator sessionId={s.id} />}
+
+      {/* Offer analyser — bundle-aware market comparison.
+          PROCESS Entry 43, Workstream F. */}
+      {bundle && <OfferAnalyser sessionId={s.id} />}
 
       {/* Files panel */}
       <FileList files={s.generated_files} />
