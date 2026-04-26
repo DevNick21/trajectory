@@ -11,8 +11,8 @@ Built by someone who spent months job-searching in the UK on a Graduate visa. Ev
 **Forward a job → instant verdict.**
 Trajectory runs 8 parallel research checks, combines them into a GO / NO_GO decision, and explains exactly why — with citations you can click.
 
-**Asks three targeted questions before generating anything.**
-Rather than producing a generic pack, it asks questions designed around the specific role's gaps: what's missing in your background relative to this JD, what the company's culture signals suggest you need to address, what the salary situation demands.
+**Designs three targeted questions to guide generation.**
+Rather than producing a generic pack, it generates questions designed around the specific role's gaps: what's missing in your background relative to this JD, what the company's culture signals suggest you need to address, what the salary situation demands.
 
 **Writes in your voice, not AI voice.**
 During onboarding you provide 3–5 writing samples. Every generated output — CV bullets, cover letter paragraphs, salary scripts — passes through your extracted style profile and a self-audit that rejects AI clichés.
@@ -22,7 +22,7 @@ Opening number, floor, and negotiation scripts adjust to your urgency level, rec
 
 **Never auto-applies.** Philosophically off-limits. The user is always in the loop.
 
-**Optional Managed Agents integration.** For stateful web investigation, Trajectory includes a sandboxed company investigator that runs inside a Claude Managed Agents session — Claude chooses which company pages to fetch based on what each page reveals, instead of running a fixed discovery list. Set `enable_managed_company_investigator=true` in your environment to opt in. See `src/trajectory/managed/company_investigator.py`.
+** Managed Agents integration.** For stateful web investigation, Trajectory includes a sandboxed company investigator that runs inside a Claude Managed Agents session — Claude chooses which company pages to fetch based on what each page reveals, instead of running a fixed discovery list. Set `enable_managed_company_investigator=true` in your environment to opt in. See `src/trajectory/managed/company_investigator.py`.
 
 ---
 

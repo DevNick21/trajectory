@@ -1,5 +1,6 @@
 import { useReducer, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { ApiError, getProfile, listSessions } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
@@ -116,14 +117,33 @@ export default function Dashboard() {
 
   const handleSubmit = async (jobUrl: string) => {
     dispatch({ kind: "submit", jobUrl, startedAt: Date.now() });
+    toast.info("Analysing job", {
+      description: "Eight research agents working in parallel.",
+    });
     try {
       await streamForwardJob(jobUrl, {
-        onEvent: (event) => dispatch({ kind: "event", event }),
-        onError: (err) =>
+        onEvent: (event) => {
+          dispatch({ kind: "event", event });
+          if (event.type === "verdict") {
+            const decision = (event.data?.decision as string | undefined) ?? "?";
+            if (decision === "GO") {
+              toast.success("Verdict: GO", {
+                description: "Worth applying.",
+              });
+            } else if (decision === "NO_GO") {
+              toast.warning("Verdict: NO_GO", {
+                description: "Hard blockers found — see reasoning.",
+              });
+            }
+          }
+        },
+        onError: (err) => {
           dispatch({
             kind: "event",
             event: { type: "error", data: { message: err.message } },
-          }),
+          });
+          toast.error("Research failed", { description: err.message });
+        },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Stream failed.";
@@ -131,6 +151,7 @@ export default function Dashboard() {
         kind: "event",
         event: { type: "error", data: { message } },
       });
+      toast.error("Research failed", { description: message });
     } finally {
       // New session lives in the DB now — refetch so SessionList
       // picks it up + capture its id for the verdict card link.
