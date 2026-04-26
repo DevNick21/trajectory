@@ -4,7 +4,11 @@
 // per-stage validation beyond "required fields filled" — that
 // happens in validateForFinalise at submit time.
 
+import { useState } from "react";
+
+import { ApiError, importCV, type CVImportResponse } from "@/lib/api";
 import type { OnboardingAnswers } from "@/lib/types";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "./Textarea";
 
@@ -21,6 +25,160 @@ const LIFE_CONSTRAINT_OPTIONS = [
   "partner / dual career constraint",
   "financial runway under 3 months",
 ];
+
+// ---------------------------------------------------------------------------
+// 0. CV upload — pre-fills the rest of the wizard from an existing CV.
+//    Optional: skip with "Fill in manually" and the rest of the stages
+//    work as before.
+// ---------------------------------------------------------------------------
+
+function applyCVImportToAnswers(
+  imp: CVImportResponse,
+  current: OnboardingAnswers,
+): Partial<OnboardingAnswers> {
+  // Build a career-narrative paragraph from the extracted roles so the
+  // free-text "Career so far" stage already has substance the user can
+  // edit. Skip if the user has already typed something there.
+  const narrative = current.career_narrative.trim()
+    ? current.career_narrative
+    : imp.roles
+        .slice(0, 3)
+        .map(
+          (r) =>
+            `${r.title} at ${r.company} (${r.dates}). ${r.bullets.slice(0, 2).join(" ")}`.trim(),
+        )
+        .filter(Boolean)
+        .join("\n\n");
+
+  // Use the raw CV text as the first writing sample. style_extractor
+  // benefits more from one full CV than from a 3-line "I am passionate
+  // about…" paragraph.
+  const samples =
+    current.writing_samples.length > 0 && current.writing_samples.some((s) => s.trim())
+      ? current.writing_samples
+      : [imp.raw_text.slice(0, 4000)];
+
+  return {
+    name: current.name.trim() || imp.name?.trim() || current.name,
+    base_location:
+      current.base_location.trim() ||
+      imp.base_location?.trim() ||
+      current.base_location,
+    career_narrative: narrative,
+    writing_samples: samples,
+  };
+}
+
+export function StageCVUpload({ answers, update }: StageProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [last, setLast] = useState<CVImportResponse | null>(null);
+
+  const onFile = async (file: File) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const out = await importCV(file);
+      setLast(out);
+      update(applyCVImportToAnswers(out, answers));
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message ?? "Upload failed."
+          : err instanceof Error
+            ? err.message
+            : "Upload failed.";
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Start from your CV (recommended)</h2>
+      <p className="text-sm text-muted-foreground">
+        Upload your existing CV and we'll pre-fill name, location, career
+        history, and writing samples — you review and edit on the next
+        screens. No CV? Skip this and fill it in manually.
+      </p>
+
+      <label
+        className={
+          "flex cursor-pointer flex-col items-center justify-center " +
+          "rounded-md border-2 border-dashed border-input bg-white " +
+          "px-6 py-10 text-center text-card-foreground transition " +
+          "hover:border-primary"
+        }
+      >
+        <input
+          type="file"
+          accept=".pdf,.docx,.txt,.md"
+          className="sr-only"
+          disabled={busy}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void onFile(f);
+            // reset so re-selecting the same file refires
+            e.target.value = "";
+          }}
+        />
+        {busy ? (
+          <span className="text-sm">Reading your CV…</span>
+        ) : (
+          <>
+            <span className="text-sm font-medium">
+              Click to upload — PDF, DOCX, or text
+            </span>
+            <span className="mt-1 text-xs text-muted-foreground">
+              5 MB max · stays on your device until you click Finish
+            </span>
+          </>
+        )}
+      </label>
+
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+
+      {last && (
+        <div className="rounded-md border bg-secondary/40 p-3 text-sm">
+          <p className="font-medium">
+            Extracted with confidence {last.extraction_confidence}/10
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+            {last.name && <li>Name: {last.name}</li>}
+            {last.base_location && <li>Location: {last.base_location}</li>}
+            {last.contact_email && <li>Email: {last.contact_email}</li>}
+            <li>{last.roles.length} role(s)</li>
+            <li>{last.education.length} education entries</li>
+            <li>{last.skills.length} skills</li>
+          </ul>
+          <p className="mt-2 text-xs">
+            Move on to the next step to review and edit.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border-t pt-3 text-xs">
+        <span className="text-muted-foreground">
+          Skipping is fine — you can paste a CV in any text field later.
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setLast(null)}
+          disabled={!last}
+        >
+          Reset
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // 1. Basics — name + location
@@ -108,7 +266,7 @@ export function StageVisa({ answers, update }: StageProps) {
               onChange={(e) =>
                 update({ visa_route: e.target.value as OnboardingAnswers["visa_route"] })
               }
-              className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="mt-1 h-10 w-full rounded-md border border-input bg-white text-card-foreground px-3 text-sm font-sans"
             >
               <option value="">Select…</option>
               {VISA_ROUTES.map((r) => (
@@ -215,7 +373,7 @@ export function StageWorkContext({ answers, update }: StageProps) {
                 .value as OnboardingAnswers["current_employment"],
             })
           }
-          className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          className="mt-1 h-10 w-full rounded-md border border-input bg-white text-card-foreground px-3 text-sm font-sans"
         >
           <option value="">Select…</option>
           <option value="EMPLOYED">Employed</option>
@@ -423,6 +581,7 @@ export interface StageDef {
 }
 
 export const STAGES: StageDef[] = [
+  { key: "cv_upload", title: "Start from your CV", component: StageCVUpload },
   { key: "basics", title: "About you", component: StageBasics },
   { key: "visa", title: "Visa", component: StageVisa },
   { key: "money", title: "Money", component: StageMoney },

@@ -1,23 +1,191 @@
-# Trajectory — 3-Minute Demo Script (Remotion + Motion)
+# Trajectory — 3-Minute Demo Script (Locked Production Spec)
 
-**Total: 3:00 · 30 fps · 5400 frames · 1920×1080 · ~430 words VO · Web-first with Telegram cameo**
+**Total: 3:00 · 30 fps · 5400 frames · 1920×1080 · ~325 words VO · Web-first with Telegram cameo**
 
-Replaces the script in `SUBMISSION.md` §3.
+This document is the **single source of truth** for the demo video. It supersedes all prior versions.
 
 ---
 
-## Tooling division
+## Tooling Division
 
 | Tool | Role |
 |---|---|
 | **Remotion** ([remotion.dev](https://remotion.dev)) | Composes the final `.mp4`. Owns the timeline (`<Composition>` + `<Sequence>`), programmatic overlays (`interpolate` / `spring` driven by `useCurrentFrame`), VO (`<Audio>`), screen-recording playback (`<OffthreadVideo>`), and music bed. |
-| **Motion** ([motion.dev](https://motion.dev), formerly Framer Motion) | Drives in-app animations *inside* the Trajectory frontend — `Phase1Stream` ticks, `VerdictHeadline` reveal, `CitationLink` tooltip pop, `PackPicker` card lift, `SessionPack` violet ring on the cited career entry. Those UIs get screen-recorded; the recordings drop into Remotion as `<OffthreadVideo>` clips. |
+| **Motion** ([motion.dev](https://motion.dev), formerly Framer Motion) | Drives in-app animations *inside* the Trajectory frontend — `Phase1Stream` ticks, `VerdictHeadline` reveal, `CitationLink` tooltip pop, `PackPicker` card lift, `DeepWork` cited-entry ring. Those UIs get screen-recorded; the recordings drop into Remotion as `<OffthreadVideo>` clips. |
+| **ElevenLabs** | Voice clone of the founder for VO. Music bed via ElevenLabs Music. |
 
-**Why split it that way.** Remotion renders frame-by-frame in headless Chromium — Motion's runtime-driven animations (`whileHover`, `useEffect`-triggered `animate`) aren't frame-deterministic in that environment. So: Remotion's `interpolate`/`spring` for anything *composed in the video file*; Motion for anything *animated in the live product* that gets recorded.
+**Why split it that way.** Remotion renders frame-by-frame in headless Chromium — Motion's runtime-driven animations (`whileHover`, state-triggered `animate`) aren't frame-deterministic in that environment. So: Remotion's `interpolate`/`spring` for anything *composed in the video file*; Motion for anything *animated in the live product* that gets recorded.
 
 ---
 
-## Remotion project layout — [YOU PROVIDE the assets in **bold**]
+## VO Script — Locked
+
+### Act 1 — The Trap (0:00–1:00, frames 0–1800)
+
+**Tone:** direct, slightly worn ("I've been you").
+**Word count:** 87 words. **VO duration target:** ~37s of speech inside the 60s act.
+
+> Seven hundred and seventy applications.
+>
+> Over a year. Most of it on a visa... so every application is ten times the work. Sponsor licence. Salary floor. Occupation code.
+>
+> All to maybe hear back.
+>
+> And the A-I tools? Caught in their own contradiction.
+>
+> Studies show A-I screeners *prefer* A-I-written C-Vs. Hiring managers bin them on sight.
+>
+> Use A-I, you clear the bot and lose the human. Don't use A-I, you drown in the volume.
+>
+> ...
+>
+> Trajectory doesn't fix the job market. It helps you navigate it.
+
+### Act 2 — The Build (1:00–2:20, frames 1800–4200)
+
+**Tone:** product-confident, no oversell. Showing your work.
+**Word count:** 182 words. **VO duration target:** ~78s of speech inside the 80s act.
+
+> Onboard once. Career history. Motivations. Deal-breakers. A few writing samples... in your real voice.
+>
+> Then you forward a job U-R-L. That's the whole interface.
+>
+> ...
+>
+> Nine research agents fan out in parallel. Sponsor Register, Companies House, salary, reviews, ghost-job signals.
+>
+> All live. All concurrent. Each agent has to ground its claim against a real source... or it fails loudly. No A-I slop.
+>
+> ...
+>
+> A verdict. *Go*, or *no-go*. Every line clickable.
+>
+> A-rated sponsor — gov dot you-kay. Salary clears the threshold — the source. Citations are validated against the original page. No invention.
+>
+> Pick a pack. Five more agents kick in. C-V tailor. Cover letter. Likely questions. Salary strategy. Draft reply.
+>
+> The C-V writes itself, line by line, in your voice. Every bullet rings the career entry that backs it. The model isn't filling in your story... it's restructuring what's already there.
+>
+> ...
+>
+> Same orchestrator on Telegram. Forward a U-R-L on the Tube — verdict's waiting before your stop.
+
+### Act 3 — The Bet (2:20–3:00, frames 4200–5400)
+
+**Tone:** quiet. Let "never auto-applies" land without flourish.
+**Word count:** 56 words. **VO duration target:** ~24s of speech inside the 40s act.
+
+> Trajectory will never auto-apply.
+>
+> You stay in the loop.
+>
+> Because the moment you automate the send button... volume beats taste. And you're the product again.
+>
+> ...
+>
+> Built on Anthropic Opus four-point-seven. Grounded in U-K government data. Open source.
+>
+> I built this because I needed it.
+>
+> ...
+>
+> Open source... if you do too.
+
+---
+
+## ElevenLabs Phonetic Cheat Sheet
+
+For the voice clone to pronounce technical terms reliably, write the script phonetically as below. Test each in isolation before generating the full act.
+
+| Written | Spoken / spelled as | Why |
+|---|---|---|
+| "770" | "Seven hundred and seventy" | ElevenLabs is unreliable on numbers above 100 — spell out |
+| "AI" | "A-I" | Otherwise rendered "ai" (rhymes with "eye") inconsistently |
+| "CV" / "CVs" | "C-V" / "C-Vs" | Forces "see-vee" not "kiv" |
+| "URL" | "U-R-L" | Otherwise pronounced "earl" half the time |
+| "UK" | "U-K" | Forces "you-kay" |
+| "gov.uk" | "gov dot you-kay" | The clone otherwise says "gov dot uke" |
+| "Opus 4.7" | "Opus four-point-seven" | Otherwise risks "four seven" or "forty-seven" |
+| "Sixteen / Nine agents" | "Nine research agents" | Spell out small numbers for safety |
+
+### Pause conventions (ElevenLabs respects these)
+
+| Marker | Effect |
+|---|---|
+| `,` | ~200ms |
+| `.` | ~400ms |
+| `...` | ~700ms |
+| `—` (em dash) | ~300ms |
+
+If your ElevenLabs plan supports SSML, you can replace `...` with `<break time="0.7s" />` for exact pause control. Otherwise the punctuation above carries the timing.
+
+### Recommended ElevenLabs settings
+
+| Setting | Recommended start |
+|---|---|
+| Stability | 50 |
+| Similarity | 75 |
+| Style exaggeration | 0–15 (low — grounded, not theatrical) |
+| Speaker boost | On |
+| Speed | 1.0× (the script is already paced) |
+| Model | `eleven_multilingual_v2` or `eleven_turbo_v2_5` |
+
+---
+
+## Music Bed Prompt (ElevenLabs Music)
+
+Use the prompt below verbatim. Generate 3 takes, pick the best. If after 5 generations nothing lands, fall back to Pixabay Music ("tech documentary build" / "warm corporate cinematic").
+
+```
+Minimal cinematic instrumental for a 3-minute tech product demo.
+No vocals, no lyrics, no spoken word, no choir.
+
+Three movements, seamless transitions:
+
+Movement 1 (0:00–1:00): Solo electric piano or Rhodes-style keys.
+Mid-tempo, warm, slightly hopeful. Single melodic line with rhythm —
+NOT sparse-and-sad. Major or modal key (think C major or Dorian,
+not minor). 75–85 BPM. Reference: Tycho "Awake" intro, Khruangbin
+quiet moments, opening of a Notion explainer video. Earnest
+and forward-leaning, not melancholic.
+
+Movement 2 (1:00–2:20): Subtle four-on-the-floor kick joins, with
+warm sub-bass and arpeggiated synth. Building energy and
+optimism — like progress. 95–100 BPM. Reference: Bonobo "Cirrus",
+Tycho "A Walk", soundtracks for Apple product launches. Confident
+but not aggressive.
+
+Movement 3 (2:20–3:00): Drums drop out. Sustained warm synth pad
+in major. Single piano motif from Movement 1 returns, resolved.
+Slow fade to silence by 3:00. Reference: Hammock's quieter moments,
+or the closing seconds of a TED talk score. Resolved, not sombre.
+
+Mood throughout: earnest, technical, optimistic, professional.
+Documentary-tech score for a product launch, not a memorial.
+Mix should leave space for voiceover — keep midrange (300Hz–3kHz)
+sparse so spoken word sits clearly on top.
+```
+
+---
+
+## GO Case Study — Capital on Tap
+
+The demo's verdict and screen-recordings use this real role:
+
+| Field | Value |
+|---|---|
+| **Company** | Capital on Tap (legal entity verified on Sponsor Register day-of-recording) |
+| **Role** | AI Operations Specialist |
+| **Location** | London (Moorgate), 3 days in office |
+| **ATS** | Greenhouse (`job-boards.greenhouse.io/capitalontap/jobs/8520481002`) |
+| **Visa sponsorship** | Application form explicitly asks visa-sponsorship status |
+| **Why this role** | Matches mid-level positioning; JD literally calls for "multi-step agentic workflows" — Trajectory's own architecture |
+
+**Day-of-recording check:** download the gov.uk Sponsor Register CSV and verify Capital on Tap is A-rated before recording. Sponsor ratings change.
+
+---
+
+## Remotion Project Layout
 
 ```text
 demo/
@@ -31,47 +199,65 @@ demo/
 │   │   ├── Act1Fatigue.tsx         # 0:00–1:00  (frames 0–1800)
 │   │   ├── Act2Product.tsx         # 1:00–2:20  (frames 1800–4200)
 │   │   └── Act3Bet.tsx             # 2:20–3:00  (frames 4200–5400)
-│   ├── scenes/                     # one file per beat (see Act tables below)
+│   ├── scenes/
+│   │   ├── act1/
+│   │   │   ├── HeadlineColdOpen.tsx        # 0–360
+│   │   │   ├── BigStat770.tsx              # 180–360
+│   │   │   ├── RejectionBurst.tsx          # 360–810
+│   │   │   ├── HeadlinePair2.tsx           # 810–1380
+│   │   │   └── TitleCard.tsx               # 1380–1800
+│   │   ├── act2/
+│   │   │   ├── SceneDashboard.tsx          # 1800–2070
+│   │   │   ├── ScenePhase1.tsx             # 2070–2430
+│   │   │   ├── SceneVerdict.tsx            # 2430–2670
+│   │   │   ├── ScenePackPicker.tsx         # 2670–2760
+│   │   │   ├── SceneSessionPack.tsx        # 2760–3300
+│   │   │   └── SceneTelegram.tsx           # 3300–4200
+│   │   └── act3/
+│   │       ├── SceneSessions.tsx           # 4200–4860
+│   │       └── ClosingCard.tsx             # 4860–5400
 │   ├── overlays/
-│   │   ├── RejectedStamp.tsx       # spring-driven slam + rotate
-│   │   ├── HeadlineCard.tsx        # article screenshot + caption
-│   │   ├── BlackTitleCard.tsx      # Act 1 closer + Act 3 quiet card
-│   │   └── CitationTooltip.tsx     # for the Remotion-side cursor hovers
+│   │   ├── RejectedStamp.tsx               # spring-driven slam + rotate
+│   │   ├── HeadlineCard.tsx                # article screenshot + caption
+│   │   ├── BlackTitleCard.tsx              # Act 1 closer + Act 3 closing card
+│   │   └── ProviderRoutingChip.tsx         # floating ATS-routing chip during SessionPack
 │   ├── primitives/
-│   │   ├── FadeIn.tsx              # interpolate(frame, [in, in+15], [0,1])
+│   │   ├── FadeIn.tsx                      # interpolate(frame, [in, in+15], [0,1])
 │   │   ├── SlideUp.tsx
-│   │   └── Cursor.tsx              # animated cursor sprite for screen-rec inserts
+│   │   └── Cursor.tsx                      # animated cursor sprite for screen-rec inserts
 │   └── audio/
-│       └── VOTrack.tsx             # <Audio src={vo}/> with per-act volumes
+│       └── VOTrack.tsx                     # <Audio src={vo}/> with per-act volumes
 └── public/
     ├── vo/
-    │   ├── act1.wav                # **VO recording, Act 1 (~22s)**
-    │   ├── act2.wav                # **VO recording, Act 2 (~62s)**
-    │   └── act3.wav                # **VO recording, Act 3 (~28s)**
+    │   ├── act1.wav                # VO recording, Act 1 (~37s)
+    │   ├── act2.wav                # VO recording, Act 2 (~78s)
+    │   └── act3.wav                # VO recording, Act 3 (~24s)
     ├── music/
-    │   └── bed.mp3                 # **sparse piano → synth → ambient pad**
+    │   └── bed.mp3                 # 3-movement instrumental bed
     ├── screenrec/
-    │   ├── dashboard.mp4           # **Dashboard.tsx screen-rec (5s)**
-    │   ├── phase1-stream.mp4       # **Phase1Stream.tsx screen-rec (~12s)**
-    │   ├── verdict-citation.mp4    # **VerdictHeadline + CitationLink hover (8s)**
-    │   ├── pack-picker.mp4         # **PackPicker card click (3s)**
-    │   ├── session-pack.mp4        # **SessionPack split-pane CV writing (~14s)**
-    │   ├── routing-flicks.mp4      # **3× Greenhouse/Workday/Oracle labels (4s)**
-    │   ├── telegram-handheld.mov   # **iPhone shot of @TrajectoryBot (8s)**
-    │   └── sessions-list.mp4       # **GO/NO_GO list with cost ticker (4s)**
+    │   ├── dashboard.mp4           # 5s
+    │   ├── phase1-stream.mp4       # ~12s
+    │   ├── verdict-citation.mp4    # 8s
+    │   ├── pack-picker.mp4         # 3s
+    │   ├── session-pack.mp4        # ~14s
+    │   ├── telegram-screencap.mov  # 8s (QuickTime-from-iPhone)
+    │   └── sessions-list.mp4       # 4s
     ├── headlines/
-    │   ├── ai-screeners-prefer-ai.png   # **screenshot, real publication**
-    │   ├── recruiters-spot-ai-cv.png    # **screenshot, real publication**
-    │   ├── 770-applications.png         # **screenshot, real source**
-    │   └── ai-cv-instantly.png          # **screenshot, real publication**
+    │   ├── ai-screeners-prefer-ai.png
+    │   ├── recruiters-spot-ai-cv.png
+    │   └── ai-cv-instantly.png
     ├── rejections/
-    │   └── inbox-{1..6}.png        # **6× rejection email subject-line crops**
+    │   └── inbox-{1..6}.png        # 6× rejection email subject-line crops
     └── brand/
-        ├── logomark.svg            # **Trajectory logomark**
-        └── fonts/                  # **Inter or chosen display face**
+        ├── logomark.svg
+        └── fonts/
 ```
 
-### `Root.tsx` shape
+**Cut from previous spec:** `routing-flicks.mp4` is no longer required — the multi-provider routing claim is now a Remotion overlay (`ProviderRoutingChip`) layered over `session-pack.mp4`, not a separate screen recording.
+
+---
+
+## `Root.tsx`
 
 ```tsx
 import { Composition } from "remotion";
@@ -89,171 +275,239 @@ export const RemotionRoot = () => (
 );
 ```
 
-### `DemoVideo.tsx` shape
+## `DemoVideo.tsx`
 
 ```tsx
-import { AbsoluteFill, Audio, Sequence, Series, staticFile } from "remotion";
+import { AbsoluteFill, Audio, Sequence, Series, staticFile, interpolate, useCurrentFrame } from "remotion";
 import { Act1Fatigue } from "./acts/Act1Fatigue";
 import { Act2Product } from "./acts/Act2Product";
 import { Act3Bet } from "./acts/Act3Bet";
 
-// Frame ranges where VO is speaking. Music ducks inside these windows
-// and rests at the bed level outside. Tune end-frames to match the
-// real VO file lengths once act{1,2,3}.wav are recorded.
+// VO speaking windows. Music ducks inside these, rests outside.
+// Tune end-frames once the VO files are generated and you know exact lengths.
 const VO_WINDOWS: Array<[number, number]> = [
-  [0, 660],      // Act 1 ~22s of VO inside the 60s act
-  [1800, 3660],  // Act 2 ~62s of VO inside the 80s act
-  [4200, 5040],  // Act 3 ~28s of VO inside the 40s act
+  [0, 1110],     // Act 1: ~37s of VO inside the 60s act
+  [1800, 3960],  // Act 2: ~72s of VO inside the 80s act
+  [4200, 4920],  // Act 3: ~24s of VO inside the 40s act
 ];
+
 const MUSIC_BED = 0.18;
 const MUSIC_DUCKED = 0.06;
+
 const duckMusic = (frame: number) =>
   VO_WINDOWS.some(([s, e]) => frame >= s && frame < e)
     ? MUSIC_DUCKED
     : MUSIC_BED;
 
-export const DemoVideo = () => (
-  <AbsoluteFill style={{ backgroundColor: "#0b0b0c" }}>
-    <Series>
-      <Series.Sequence durationInFrames={1800}><Act1Fatigue /></Series.Sequence>
-      <Series.Sequence durationInFrames={2400}><Act2Product /></Series.Sequence>
-      <Series.Sequence durationInFrames={1200}><Act3Bet /></Series.Sequence>
-    </Series>
+// Master fade-out for last 4 frames (5280–5400)
+const masterOpacity = (frame: number) =>
+  interpolate(frame, [5280, 5400], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
-    {/* Music bed — frame-aware volume ducks under VO. */}
-    <Audio src={staticFile("music/bed.mp3")} volume={duckMusic} />
+export const DemoVideo: React.FC = () => {
+  const frame = useCurrentFrame();
 
-    {/* Each VO file plays at its act's start. <Audio> has no
-        `trimBefore` — wrap in <Sequence from={...}> to delay playback. */}
-    <Sequence from={0}>
-      <Audio src={staticFile("vo/act1.wav")} />
-    </Sequence>
-    <Sequence from={1800}>
-      <Audio src={staticFile("vo/act2.wav")} />
-    </Sequence>
-    <Sequence from={4200}>
-      <Audio src={staticFile("vo/act3.wav")} />
-    </Sequence>
-  </AbsoluteFill>
-);
+  return (
+    <AbsoluteFill style={{
+      backgroundColor: "#0b0b0c",
+      opacity: masterOpacity(frame),
+    }}>
+      <Series>
+        <Series.Sequence durationInFrames={1800}><Act1Fatigue /></Series.Sequence>
+        <Series.Sequence durationInFrames={2400}><Act2Product /></Series.Sequence>
+        <Series.Sequence durationInFrames={1200}><Act3Bet /></Series.Sequence>
+      </Series>
+
+      {/* Music bed — frame-aware ducking */}
+      <Audio src={staticFile("music/bed.mp3")} volume={duckMusic} />
+
+      {/* VO files — wrapped in Sequence to delay playback to act start */}
+      <Sequence from={0}>
+        <Audio src={staticFile("vo/act1.wav")} />
+      </Sequence>
+      <Sequence from={1800}>
+        <Audio src={staticFile("vo/act2.wav")} />
+      </Sequence>
+      <Sequence from={4200}>
+        <Audio src={staticFile("vo/act3.wav")} />
+      </Sequence>
+    </AbsoluteFill>
+  );
+};
 ```
 
-> Frame math: 30 fps. 1 sec = 30 frames. Act 1 = 1800. Act 2 = 2400. Act 3 = 1200.
+> Frame math: 30fps. 1s = 30 frames. Act 1 = 1800. Act 2 = 2400. Act 3 = 1200.
 
 ---
 
-## ACT 1 — Job-Search Fatigue (0:00–1:00 · frames 0–1800)
-H
-**VO direction** — direct, slightly worn ("I've been you").
+## Act 1 — The Trap (0:00–1:00, frames 0–1800)
 
-| Beat | Frames | Scene component | Asset(s) — [YOU PROVIDE] | Animation (Remotion) |
+| Beat | Frames | Scene component | Asset(s) | Animation (Remotion) |
 |---|---|---|---|---|
-| 1A — Headline cold open | 0–180 | `HeadlineCard` (×2 stacked, cursor scrolls) | `headlines/ai-screeners-prefer-ai.png`, `headlines/ai-cv-instantly.png` | `FadeIn` 0→15. `interpolate(frame, [60, 180], [0, -240])` for cursor scroll. |
-| 1B — "770 applications" | 180–360 | `BigStat` | (procedural — number 770, label) | `spring({fps,frame:frame-180})` on the digit count-up; subtle weight on the period. |
-| 1C — Rejection burst | 360–810 | `RejectionBurst` (Series of 6 inboxes) | `rejections/inbox-1.png` … `inbox-6.png` | Each child = `Sequence from={n*60} durationInFrames={75}`. `RejectedStamp` overlay slams in via `spring({fps, frame, config:{damping:8, stiffness:200}})` rotated 8°. Cuts accelerate: durations 80, 70, 60, 50, 40, 30. Snap to black at 810. |
-| 1D — VO over burst | 360–810 | (audio only) | (VO covers the visuals) | — |
-| 1E — Second headline pair | 810–1380 | `HeadlineCard` (×2) | `headlines/recruiters-spot-ai-cv.png`, `headlines/ai-screeners-prefer-ai.png` | Cross-fade: `interpolate(frame, [810, 870], [0, 1])`, second card in at 1080. |
-| 1F — "AI paradox" VO | 870–1380 | (audio + visuals continue) | — | — |
-| 1G — Black title card | 1380–1800 | `BlackTitleCard` | text: *"Trajectory doesn't fix the job market. It helps you navigate it."* | Letter-by-letter typewriter via `interpolate(frame, [1410, 1620], [0, text.length])` + `slice()`. Hold to 1800. |
-
-**VO script (Act 1)** — keep verbatim from prior version:
-
-> "Over 770 applications. That's not a hypothetical — that's the folder on this machine.
-> More than 6 months years. Most of it on a visa — ten times the work, every application. Sponsor licence. SOC threshold. Salary floor. All to maybe hear back.
-> And the AI tools? Caught in their own contradiction. Studies show AI screeners *prefer* AI-written CVs. Hiring managers bin them on sight. Use AI, you clear the bot and lose the human. Don't use AI, you drown in the volume."
+| 1A — Headline cold open | 0–180 | `HeadlineColdOpen` | `headlines/ai-screeners-prefer-ai.png` | `FadeIn` 0→30 |
+| 1B — "770 applications" stat | 180–360 | `BigStat770` | (procedural — number 770, label) | `spring({fps,frame:frame-180})` on the digit count-up |
+| 1C — Rejection burst | 360–810 | `RejectionBurst` (Series of 6 inboxes) | `rejections/inbox-1.png` … `inbox-6.png` | Each child = `Sequence from={n*60} durationInFrames={75}`. `RejectedStamp` overlay slams in via `spring({fps, frame, config:{damping:8, stiffness:220}})` rotated -8°. Cuts accelerate: durations 80, 70, 60, 50, 40, 30. Snap to black at 810. |
+| 1D — Black hold | 810–870 | (silent) | — | — |
+| 1E — Second headline pair | 870–1380 | `HeadlinePair2` | `headlines/recruiters-spot-ai-cv.png`, `headlines/ai-cv-instantly.png` | Cross-fade: `interpolate(frame, [870, 930], [0, 1])`, second card in at 1140 |
+| 1F — Title card | 1380–1800 | `TitleCard` | text: *"Trajectory doesn't fix the job market. It helps you navigate it."* | Letter-by-letter typewriter via `interpolate(frame, [1410, 1620], [0, text.length])` + `slice()`. Hold to 1800. |
 
 ---
 
-## ACT 2 — Trajectory in 80 Seconds (1:00–2:20 · frames 1800–4200)
-
-**VO direction** — product-confident, no oversell.
+## Act 2 — The Build (1:00–2:20, frames 1800–4200)
 
 This act is mostly real product footage. Each `Scene*` wraps an `<OffthreadVideo>` plus Remotion-side caption overlays. The screen recordings themselves carry the **Motion-driven** in-app animations.
 
-| Beat | Frames | Scene component | Screen-rec asset | Motion animations IN the recording — [YOU IMPLEMENT in the frontend] |
+| Beat | Frames | Scene component | Screen-rec asset | Motion animations IN the recording |
 |---|---|---|---|---|
-| 2A — Onboarded dashboard | 1800–1950 | `SceneDashboard` | `screenrec/dashboard.mp4` | Sidebar list items: `motion.li` with `variants` parent + `staggerChildren: 0.06`. Profile card: `whileHover={{ y: -2 }}`. |
-| 2B — Forward URL form | 1950–2070 | `SceneForward` | embedded in `dashboard.mp4` tail | `ForwardJobForm` Analyse button: `whileTap={{ scale: 0.97 }}`, `transition={{ type:"spring", stiffness:400, damping:25 }}`. |
-| 2C — Phase 1 stream (8 agents tick) | 2070–2430 | `ScenePhase1` | `screenrec/phase1-stream.mp4` | Each agent row: `<AnimatePresence>` exit + `layout` for the reorder when complete. Tick icon: `initial={{scale:0, rotate:-30}} animate={{scale:1, rotate:0}}` spring. Progress bar fill: `motion.div animate={{ width: \`${pct}%\` }}`. |
-| 2D — VO: "8 agents fan out" | 2070–2430 | (audio) | — | — |
-| 2E — Verdict + citation hover | 2430–2670 | `SceneVerdict` | `screenrec/verdict-citation.mp4` | `VerdictHeadline` reveal: `variants` with parent `delayChildren: 0.2, staggerChildren: 0.08` for badge → headline → confidence. `CitationLink` hover: `whileHover={{ y:-1 }}`, tooltip via `<AnimatePresence mode="wait">` with `initial={{opacity:0, y:6}} animate={{opacity:1, y:0}} exit={{opacity:0, y:6}}`. |
-| 2F — PackPicker click | 2670–2760 | `ScenePackPicker` | `screenrec/pack-picker.mp4` | 4 cards: parent `variants` with `staggerChildren: 0.05`. Each card: `whileHover={{ y:-4, scale:1.01 }}`. Selected card: `layoutId="active-pack"` so it can morph into the next scene's header. |
-| 2G — SessionPack split-pane CV | 2760–3180 | `SceneSessionPack` | `screenrec/session-pack.mp4` | Left pane career-entry cards: `motion.div layout` so the cited entry can re-order. Cited entry violet ring: `animate={{ boxShadow: "0 0 0 3px #8b5cf6" }} transition={{ duration:0.4 }}`. Right pane CV bullets stream-typing: per-line `motion.span` with `initial={{opacity:0}} animate={{opacity:1}}` triggered as the SSE token chunk arrives. |
-| 2H — Multi-provider routing flicks | 3180–3300 | `SceneRouting` | `screenrec/routing-flicks.mp4` | 3 quick labels (Greenhouse→OpenAI / Workday→Anthropic / Oracle→Cohere): `<AnimatePresence mode="wait">` with `initial={{opacity:0, x:20}} animate={{opacity:1, x:0}} exit={{opacity:0, x:-20}}`. 30 frames each. |
-| 2I — Telegram handheld | 3300–3960 | `SceneTelegram` | `screenrec/telegram-handheld.mov` | (Real device — no Motion. Remotion just plays the clip at the right moment.) |
-| 2J — Beat to Act 3 | 3960–4200 | (audio rest) | — | Subtle Remotion vignette: `interpolate(frame, [3960, 4200], [0, 0.4])` on a radial mask opacity. |
-
-**VO script (Act 2)** — keep verbatim:
-
-> "You onboard once. Career history. Motivations. Deal-breakers. A few writing samples — your real voice. From then on, you forward a job URL.
-> Eight research agents fan out in parallel. Sponsor Register, SOC going rates, Companies House, ONS earnings data, ghost-job signals, employee reviews. All live. All cited.
-> Every claim links back to a real source. Sponsor Register, A-rated. Salary above the SOC 2136 floor. Click any badge — you land on gov.uk.
-> Click any bullet — it rings the exact career entry that backs it. No invention. Just your story, restructured.
-> This is the AI-paradox answer. The CV gets written by whichever model best clears that ATS — Greenhouse routes to OpenAI, Workday to Anthropic, Oracle to Cohere. But every line is anchored in your career entries and shaped by your writing samples. AI through the bot. *You* through the human.
-> Same engine on Telegram. Forward a URL on the Tube, the verdict's waiting before your stop."
+| 2A — Onboarded dashboard | 1800–2070 | `SceneDashboard` | `dashboard.mp4` | `SessionList` items: `motion.li` with `staggerChildren: 0.05`. Profile card `whileHover={{ y: -2 }}` |
+| 2B — Phase 1 stream | 2070–2430 | `ScenePhase1` | `phase1-stream.mp4` | Each agent row: `<AnimatePresence>` icon swap (Loader2 → Check) with `spring({stiffness: 400, damping: 18})`. `motion.li layout` for any reorder |
+| 2C — Verdict + citation hover | 2430–2670 | `SceneVerdict` | `verdict-citation.mp4` | `VerdictHeadline` reveal: parent `delayChildren: 0.15, staggerChildren: 0.08`. `CitationLink` hover: `whileHover={{ y: -1 }}`, tooltip via `<AnimatePresence mode="wait">` initial `{opacity: 0, y: 4, scale: 0.96}` |
+| 2D — PackPicker click | 2670–2760 | `ScenePackPicker` | `pack-picker.mp4` | 4 cards: `staggerChildren: 0.06`. Each card: `whileHover={{ y: -2 }}` with spring |
+| 2E — SessionPack split-pane CV | 2760–3300 | `SceneSessionPack` | `session-pack.mp4` + `ProviderRoutingChip` overlay (frames 100–230 of scene) | Left pane: `motion.div layout` on career-entry cards; cited entry ring via `animate={{ boxShadow: "0 0 0 3px hsl(var(--ring))" }} transition={{ duration: 0.4 }}`. Right pane: nested staggers, `staggerChildren: 0.5` (roles) / `0.18` (bullets), `0.4s` per-bullet fade-in. Total cascade ~2–3s for a 3-role × 4-bullet CV — reads as "writes itself, line by line" |
+| 2F — Telegram cameo | 3300–4200 | `SceneTelegram` | `telegram-screencap.mov` | (Real device, recorded via QuickTime — no Motion. Remotion just plays the clip.) |
 
 ---
 
-## ACT 3 — The Bigger Bet (2:20–3:00 · frames 4200–5400)
+## Act 3 — The Bet (2:20–3:00, frames 4200–5400)
 
-**VO direction** — quiet. Let "never auto-applies" land without flourish.
-
-| Beat | Frames | Scene component | Asset — [YOU PROVIDE] | Animation |
+| Beat | Frames | Scene component | Asset | Animation |
 |---|---|---|---|---|
-| 3A — Sessions list + cost | 4200–4500 | `SceneSessions` | `screenrec/sessions-list.mp4` | (Motion in app) Each session row: `motion.div layout`. Cost ticker: `motion.span key={cost}` with `initial={{opacity:0, y:-6}} animate={{opacity:1, y:0}}` to make the £0.40 update feel earned. |
-| 3B — "Trajectory will never auto-apply" VO | 4380–4860 | (audio) | — | — |
-| 3C — Closing card | 4860–5280 | `BlackTitleCard` | text + `brand/logomark.svg` + URL + GitHub | Logomark `spring({fps, frame:frame-4860, config:{damping:14}})` from scale 0.8→1. Text fades in 30 frames after. |
-| 3D — Hold black | 5280–5400 | (silence + ambient pad tail) | — | `interpolate(frame, [5280, 5400], [1, 0])` on master opacity. |
+| 3A — Sessions list (no cost ticker) | 4200–4860 | `SceneSessions` | `sessions-list.mp4` | (Motion in app) Each session row: `motion.div layout` + `staggerChildren: 0.05`. **Cost field intentionally omitted** — script doesn't reference it |
+| 3B — Closing card | 4860–5280 | `ClosingCard` | text + `brand/logomark.svg` + URL | Logomark `spring({fps, frame:frame-4860, config:{damping:14}})` from scale 0.8→1. Text fades in 30 frames after |
+| 3C — Hold + master fade | 5280–5400 | (silence + ambient pad tail) | — | `interpolate(frame, [5280, 5400], [1, 0])` on master opacity (in `DemoVideo.tsx`) |
 
-**VO script (Act 3)** — keep verbatim:
-
-> "Trajectory will never auto-apply. You stay in the loop. We give you a verdict you can defend, a CV you'd recognise, and a pack you'd actually send.
-> Built on Anthropic Opus 4.7. Grounded in UK government data. Open-source. I built this because I needed it — open-source if you do too."
-
-**END CARD** — `trajectory.app · github.com/your-repo`
+**END CARD** — `trajectory.app · github.com/<your-repo>`
 
 ---
 
-## Concrete Remotion patterns used
+## Concrete Remotion Patterns
+
+### `FadeIn` primitive
 
 ```tsx
 // primitives/FadeIn.tsx
 import { interpolate, useCurrentFrame } from "remotion";
-export const FadeIn: React.FC<{from: number; durationInFrames?: number; children: React.ReactNode}> =
-  ({from, durationInFrames = 15, children}) => {
+
+interface Props {
+  from: number;
+  durationInFrames?: number;
+  children: React.ReactNode;
+}
+
+export const FadeIn: React.FC<Props> = ({ from, durationInFrames = 15, children }) => {
   const frame = useCurrentFrame();
   const opacity = interpolate(frame, [from, from + durationInFrames], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp",
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
   });
   return <div style={{ opacity }}>{children}</div>;
 };
+```
 
-// overlays/RejectedStamp.tsx — physics slam
+### `RejectedStamp` — physics-driven slam
+
+```tsx
+// overlays/RejectedStamp.tsx
 import { spring, useCurrentFrame, useVideoConfig } from "remotion";
-export const RejectedStamp = () => {
+
+export const RejectedStamp: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const scale = spring({ fps, frame, config: { damping: 8, stiffness: 220 } });
+
   return (
     <div style={{
+      position: "absolute",
+      top: "50%",
+      left: "50%",
       transform: `translate(-50%, -50%) rotate(-8deg) scale(${1 + (1 - scale) * 0.4})`,
-      position: "absolute", top: "50%", left: "50%",
-      color: "#e23", border: "6px solid #e23", padding: "8px 24px",
-      fontWeight: 800, letterSpacing: 4, fontSize: 64,
-    }}>REJECTED</div>
+      color: "#e23",
+      border: "6px solid #e23",
+      padding: "8px 24px",
+      fontWeight: 800,
+      letterSpacing: 4,
+      fontSize: 64,
+      fontFamily: "Inter, sans-serif",
+    }}>
+      REJECTED
+    </div>
   );
 };
+```
 
-// scenes/ScenePhase1.tsx — wraps screen-rec + Remotion caption
+### `ProviderRoutingChip` — replaces the cut routing-flicks recording
+
+```tsx
+// overlays/ProviderRoutingChip.tsx
+import { useCurrentFrame, interpolate } from "remotion";
+
+export const ProviderRoutingChip: React.FC = () => {
+  const frame = useCurrentFrame();
+
+  // Slides in from right at frame 100, slides out at frame 240
+  const translateX = interpolate(
+    frame, [100, 130, 200, 230], [400, 0, 0, 400],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+  const opacity = interpolate(
+    frame, [100, 130, 200, 230], [0, 1, 1, 0],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
+  return (
+    <div style={{
+      position: "absolute",
+      bottom: 80,
+      right: 80,
+      transform: `translateX(${translateX}px)`,
+      opacity,
+      padding: "12px 20px",
+      backgroundColor: "rgba(255, 255, 255, 0.06)",
+      backdropFilter: "blur(12px)",
+      border: "0.5px solid rgba(255, 255, 255, 0.15)",
+      borderRadius: 12,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      fontFamily: "JetBrains Mono, monospace",
+      fontSize: 16,
+      color: "rgba(255, 255, 255, 0.85)",
+      letterSpacing: 0.3,
+    }}>
+      <span style={{ opacity: 0.6 }}>ATS routing:</span>
+      <span>Greenhouse → OpenAI</span>
+    </div>
+  );
+};
+```
+
+### Scene wrapping a screen-rec with a caption overlay
+
+```tsx
+// scenes/act2/ScenePhase1.tsx
 import { AbsoluteFill, OffthreadVideo, Sequence, staticFile } from "remotion";
-import { FadeIn } from "../primitives/FadeIn";
-export const ScenePhase1 = () => (
+import { FadeIn } from "../../primitives/FadeIn";
+
+export const ScenePhase1: React.FC = () => (
   <AbsoluteFill>
-    <OffthreadVideo src={staticFile("screenrec/phase1-stream.mp4")} />
+    <OffthreadVideo
+      src={staticFile("screenrec/phase1-stream.mp4")}
+      // Optional: speed up if real-world recording exceeds the budget
+      // playbackRate={1.2}
+    />
     <Sequence from={45} durationInFrames={120}>
       <FadeIn from={0}>
-        <div style={{ position: "absolute", bottom: 80, left: 80, fontSize: 28 }}>
-          8 agents · live · cited
+        <div style={{
+          position: "absolute",
+          bottom: 80,
+          left: 80,
+          fontSize: 28,
+          color: "rgba(255, 255, 255, 0.85)",
+          fontFamily: "JetBrains Mono, monospace",
+        }}>
+          9 agents · live · cited
         </div>
       </FadeIn>
     </Sequence>
@@ -261,69 +515,45 @@ export const ScenePhase1 = () => (
 );
 ```
 
-## Concrete Motion patterns used (in the Trajectory frontend)
+---
 
-```tsx
-// frontend/src/components/Phase1Stream.tsx — staggered ticks
-import { motion, AnimatePresence } from "motion/react";
+## Concrete Motion Patterns (Trajectory Frontend)
 
-const list = { animate: { transition: { staggerChildren: 0.08 } } };
-const row  = {
-  initial: { opacity: 0, x: -8 },
-  animate: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
-};
+All eight Motion patterns are wired into the live frontend. See [`frontend/src/components/`](../frontend/src/components/). Adapted to:
+- TypeScript + React 18 + Vite
+- TanStack Query for server state, `useReducer`/`useState` for local
+- Tailwind + shadcn primitives
+- SSE via `streamForwardJob` (POST + manual stream parse, not native EventSource)
+- The `completed: Record<string, AgentTiming>` shape (not array) for Phase 1
+- The `Citation` discriminated union (`url_snippet | gov_data | career_entry`)
+- The `highlightedEntryIds: Set<string>` + `scrollKey: string | null` cross-pane contract in `DeepWork`
 
-<motion.ul variants={list} initial="initial" animate="animate">
-  {agents.map(a => (
-    <motion.li key={a.id} variants={row} layout>
-      <AnimatePresence mode="wait">
-        {a.status === "done" && (
-          <motion.span key="tick" initial={{scale:0, rotate:-30}}
-                       animate={{scale:1, rotate:0}}
-                       transition={{type:"spring", stiffness:400, damping:18}}>✓</motion.span>
-        )}
-      </AnimatePresence>
-    </motion.li>
-  ))}
-</motion.ul>
+Component-by-component:
 
-// frontend/src/components/CitationLink.tsx — tooltip pop
-<AnimatePresence mode="wait">
-  {hover && (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.15 }}
-    >{snippet}</motion.div>
-  )}
-</AnimatePresence>
-
-// frontend/src/components/PackPicker.tsx — shared layout morph into SessionPack
-<motion.div layoutId="active-pack" whileHover={{ y: -4, scale: 1.01 }} />
-```
+| Component | Pattern |
+|---|---|
+| `Phase1Stream` | `motion.ul` + `staggerChildren: 0.06` on mount; `motion.li layout` rows; icon swap via `<AnimatePresence mode="wait">` with spring tick (`stiffness: 400, damping: 18`) |
+| `VerdictHeadline` | Parent `motion.div` with `delayChildren: 0.15, staggerChildren: 0.08` for badge → headline → reason groups |
+| `CitationLink` | Replaced native `title` with Motion-driven tooltip using `bg-card text-card-foreground` (no `bg-popover` token in this theme); tooltip only renders when `hint !== null`; `whileHover={{ y: -1 }}, whileTap={{ scale: 0.97 }}` on the chip |
+| `PackPicker` | Grid `staggerChildren: 0.06`; cards `whileHover={{ y: -2 }}` with spring; `layoutId` morph dropped (router complexity not worth ~0.5s of polish) |
+| `DeepWork` (split-pane) | Career entries: `motion.div layout` + `boxShadow` ring via `hsl(var(--ring))`; `scrollIntoView({ behavior: "smooth", block: "center" })` driven by `scrollKey` |
+| `CVPreview` (right pane) | **Nested staggers**: roles `staggerChildren: 0.5`, bullets within a role `staggerChildren: 0.18`. Each bullet `motion.button` with `initial={{opacity:0, x:-4}} animate={{opacity:1, x:0}}` over 0.4s. Total cascade ~2–3s for a typical 3-role × 4-bullet CV. **Note:** CV is a single POST, not streamed — the cascade simulates "writes itself, line by line" |
+| `SessionList` | `motion.ul` with `staggerChildren: 0.05`; `motion.li layout` for new-session insert; `key={sessions.length}` to replay stagger on count change |
+| `ForwardJobForm` submit button | Wrapped in `motion.div` with `whileTap={{ scale: 0.97 }}` (preserves shadcn `Button` styling) |
 
 ---
 
-## Build & render checklist — [YOU DO]
+## Production notes
 
-1. `npx create-video@latest demo --template hello-world` (TypeScript). Drop the layout above into `src/`.
-2. `npm i motion` in `frontend/` (Trajectory app); wire the Motion patterns into `Phase1Stream`, `VerdictHeadline`, `CitationLink`, `PackPicker`, `SessionPack`, `SessionList`.
-3. Record one **real** end-to-end session against the live stack; capture each `screenrec/*.mp4` clip *independently* (per Scene), against pre-seeded fixture data, so Phase 1 ticks, the verdict reveal, and the bullet→career-entry highlight all time cleanly. Capture at native 1920×1080 — if your display is HiDPI, set the recorder to 1× scaling so `<OffthreadVideo>` doesn't downscale-then-upscale. Don't pad — let actual numbers (770 count, 87% confidence, SOC 2136, ≤£0.40) stand.
-4. Record VO (Act 1 / Act 2 / Act 3 separately so volume can duck under the music bed independently). Place under `public/vo/`.
-5. Source music bed (sparse piano → low pulsing synth → ambient pad). Place at `public/music/bed.mp3`.
-6. Source headline screenshots from real publications (UW / Northwestern, Bloomberg, FT, BBC, HBR). Redact bylines if needed.
-7. `npx remotion preview` to scrub. `npx remotion render trajectory-demo out/trajectory-demo.mp4 --codec=h264 --crf=18`.
-
-## Production notes (carried over)
-
-- **770 figure** — verify and update before recording. Use the current count.
-- **Tube line** — assumes UK audience and a real iPhone shot. If you record at a desk, swap to *"Forward it from your phone, the verdict's waiting when you sit down."*
-- **Voice direction** — Act 1 direct/worn, Act 2 product-confident, Act 3 quiet.
+- **770 figure** — verified pre-production; reflects current Applications archive count
+- **Tube line** — kept verbatim. The QuickTime screen-cap of Telegram on iPhone carries the implication; the line sells the mobile use-case
+- **Voice direction** — Act 1 direct/worn, Act 2 product-confident, Act 3 quiet
+- **Capital on Tap status** — verify A-rated on the Sponsor Register CSV the morning of recording
+- **CV streaming claim** — the staggered cascade simulates real streaming; the implementation is a single POST. Defensible answer if pushed: "the model generates bullets in order, the frontend reveals them in that order"
 
 ## Intentional omissions
 
-The current product does more than the script shows. Cut so the demo doesn't dilute:
+The product does more than the script shows. Cut to keep the demo focused:
 
 - Verdict ensemble + deep-research toggle
 - Story-bank retrieval weighting

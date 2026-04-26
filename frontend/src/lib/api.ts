@@ -238,6 +238,67 @@ export const analyseOffer = async (
 };
 
 // ---------------------------------------------------------------------------
+// Onboarding CV import (PROCESS Entry 49)
+// ---------------------------------------------------------------------------
+
+export interface CVImportRole {
+  title: string;
+  company: string;
+  dates: string;
+  bullets: string[];
+}
+
+export interface CVImportEducation {
+  institution: string;
+  qualification: string;
+  dates: string;
+}
+
+export interface CVImportProject {
+  name: string;
+  description: string;
+}
+
+export interface CVImportResponse {
+  name: string | null;
+  base_location: string | null;
+  contact_email: string | null;
+  professional_summary: string | null;
+  roles: CVImportRole[];
+  education: CVImportEducation[];
+  projects: CVImportProject[];
+  skills: string[];
+  raw_text: string;
+  extraction_confidence: number;
+}
+
+export const importCV = async (file: File): Promise<CVImportResponse> => {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch("/api/onboarding/cv_import", {
+    method: "POST",
+    body: form,
+  });
+  if (!resp.ok) {
+    let code: string | undefined;
+    let message: string | undefined;
+    try {
+      const body = await resp.json();
+      const detail = body?.detail;
+      if (typeof detail === "string") message = detail;
+      else if (detail && typeof detail === "object") {
+        code = detail.code;
+        message = detail.message;
+      }
+    } catch {
+      /* non-JSON body */
+    }
+    throw new ApiError(resp.status, code, message);
+  }
+  return (await resp.json()) as CVImportResponse;
+};
+
+// ---------------------------------------------------------------------------
 // File download URL (no fetch — the browser navigates to it directly)
 // ---------------------------------------------------------------------------
 

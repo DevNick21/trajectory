@@ -1,6 +1,7 @@
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
+import OnboardingGate from "@/components/OnboardingGate";
 import Dashboard from "@/pages/Dashboard";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
@@ -48,14 +49,16 @@ export default function App() {
         </div>
       </header>
       <main className="flex-1 container py-8">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/queue" element={<Queue />} />
-          <Route path="/offer" element={<Offer />} />
-          <Route path="/sessions/:id" element={<SessionDetail />} />
-          <Route path="/sessions/:id/:pack" element={<SessionPack />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-        </Routes>
+        <OnboardingGate>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/queue" element={<Queue />} />
+            <Route path="/offer" element={<Offer />} />
+            <Route path="/sessions/:id" element={<SessionDetail />} />
+            <Route path="/sessions/:id/:pack" element={<SessionPack />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+          </Routes>
+        </OnboardingGate>
       </main>
       {/* App-wide toast surface. richColors maps the four
           (success / info / warning / error) variants to the colors in

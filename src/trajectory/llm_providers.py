@@ -162,6 +162,31 @@ def _get_openai_client():
     return _openai_client
 
 
+def _schema_is_strict_compatible(schema: dict) -> bool:
+    """OpenAI's strict structured-output mode requires every nested
+    object to declare `additionalProperties: false` AND list all
+    properties under `required`. An untyped `dict` field in Pydantic
+    emits `{"type": "object"}` with no `properties` — strict mode
+    rejects it ("additionalProperties is required to be supplied and
+    to be false"). Detect those cases here so we can skip the doomed
+    strict attempt and go straight to JSON mode.
+    """
+    def walk(node: object) -> bool:
+        if isinstance(node, dict):
+            t = node.get("type")
+            if t == "object" and "properties" not in node:
+                return False
+            for v in node.values():
+                if not walk(v):
+                    return False
+        elif isinstance(node, list):
+            for v in node:
+                if not walk(v):
+                    return False
+        return True
+    return walk(schema)
+
+
 async def _openai_call(
     *,
     agent_name: str,
@@ -177,6 +202,26 @@ async def _openai_call(
 
     last_feedback: Optional[str] = None
     call_start = time.perf_counter()
+
+    # Pre-flight: if the schema has untyped `dict` fields (e.g.
+    # CVOutput.contact, education[], projects[]), skip strict mode and
+    # use JSON mode directly. Strict mode would fail with HTTP 400 and
+    # log a noisy warning before falling back anyway.
+    strict_ok = _schema_is_strict_compatible(output_schema.model_json_schema())
+    if not strict_ok:
+        messages: list[dict] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ]
+        return await _openai_json_mode_call(
+            client=client,
+            agent_name=agent_name,
+            model=model,
+            messages=messages,
+            output_schema=output_schema,
+            session_id=session_id,
+            call_start=call_start,
+        )
 
     for attempt in range(max_retries + 1):
         messages: list[dict] = [

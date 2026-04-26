@@ -24,7 +24,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ...config import settings
 from ...schemas import CareerEntry, UserProfile, VisaStatus
@@ -284,3 +284,76 @@ async def finalise(
         writing_style_profile_id=writing_style_profile_id,
         career_entries_written=entries_written,
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/onboarding/cv_import (PROCESS Entry 49)
+# ---------------------------------------------------------------------------
+
+# 5 MB max — well above any realistic CV size, low enough that a
+# malicious user can't OOM the process via large multipart uploads.
+_MAX_CV_BYTES = 5 * 1024 * 1024
+
+
+@router.post("/onboarding/cv_import")
+async def cv_import(
+    file: UploadFile = File(...),
+) -> dict:
+    """Extract structured data from an uploaded CV (PDF / DOCX / TXT).
+
+    Used by the onboarding wizard's first stage to pre-fill name,
+    location, contact email, role rows, education, projects, and
+    skills. The user reviews/edits the extracted result before the
+    rest of the wizard runs. Stateless — no session or profile is
+    written here; the wizard's localStorage draft holds the result
+    until the user clicks Finish.
+    """
+    data = await file.read()
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "empty_file"},
+        )
+    if len(data) > _MAX_CV_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={
+                "code": "file_too_large",
+                "message": f"Max {_MAX_CV_BYTES // (1024 * 1024)} MB.",
+            },
+        )
+
+    from ...sub_agents.cv_parser import extract_text, parse as parse_cv
+
+    try:
+        text = extract_text(data=data, filename=file.filename or "")
+    except RuntimeError as exc:
+        # pypdf / python-docx not installed, or extraction crashed.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "extraction_failed", "message": str(exc)[:200]},
+        )
+
+    if not text or len(text.strip()) < 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "no_text_extracted",
+                "message": (
+                    "Couldn't extract enough text from the file. "
+                    "If it's a scanned PDF, OCR it first or paste the "
+                    "text directly."
+                ),
+            },
+        )
+
+    try:
+        out = await parse_cv(cv_text=text)
+    except Exception as exc:
+        log.exception("cv_parser failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "cv_parse_failed", "message": str(exc)[:200]},
+        )
+
+    return out.model_dump(mode="json")

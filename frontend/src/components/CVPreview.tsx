@@ -1,9 +1,43 @@
+import { useEffect } from "react";
+import { motion } from "motion/react";
 import { Loader2, Sparkles } from "lucide-react";
 
 import type { CVOutput, Citation } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+// TEMP — recording-prep debug. Logs every bullet's key + the
+// career_entry IDs it cites so you can identify click targets for
+// session-pack.mp4. Remove this hook before recording.
+function useDebugCitations(cv: CVOutput | null) {
+  useEffect(() => {
+    if (!cv) return;
+    const rows = cv.experience.flatMap((role, roleIdx) =>
+      role.bullets.map((bullet, bulletIdx) => {
+        const careerEntries = bullet.citations
+          .filter((c) => c.kind === "career_entry")
+          .map((c) => c.entry_id ?? "");
+        return {
+          bulletKey: `${roleIdx}-${bulletIdx}`,
+          role: role.title + " · " + role.company,
+          text: bullet.text.slice(0, 80),
+          careerEntries,
+          allCitationKinds: bullet.citations.map((c) => c.kind),
+        };
+      }),
+    );
+    const clickable = rows.filter((r) => r.careerEntries.length > 0);
+    // eslint-disable-next-line no-console
+    console.table(rows);
+    // eslint-disable-next-line no-console
+    console.log(
+      `%cCLICKABLE TARGETS for session-pack.mp4 (${clickable.length} bullets):`,
+      "color: #8b5cf6; font-weight: bold",
+      clickable,
+    );
+  }, [cv]);
+}
 
 interface Props {
   /** Generated CV — null until the user clicks Generate. */
@@ -40,6 +74,8 @@ export default function CVPreview({
   onBulletSelect,
   onGenerate,
 }: Props) {
+  useDebugCitations(output);
+
   return (
     <Card className="min-h-[28rem]">
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
@@ -124,6 +160,50 @@ function GeneratingState() {
   );
 }
 
+// CV is fetched in a single POST, but we stagger bullets in to feel
+// like the doc is writing itself. The cv prop's `name` keys the outer
+// motion.div so a Regenerate replays the cascade.
+const documentVariants = {
+  initial: { opacity: 0 },
+  animate: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.18,
+      delayChildren: 0.15,
+    },
+  },
+} as const;
+
+const sectionVariants = {
+  initial: { opacity: 0, y: 6 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: "easeOut" },
+  },
+} as const;
+
+const roleVariants = {
+  animate: {
+    transition: { staggerChildren: 0.18 },
+  },
+} as const;
+
+const bulletListVariants = {
+  animate: {
+    transition: { staggerChildren: 0.12, delayChildren: 0.1 },
+  },
+} as const;
+
+const bulletVariants = {
+  initial: { opacity: 0, x: -6 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.35, ease: "easeOut" },
+  },
+} as const;
+
 function CVDocument({
   cv,
   selectedBulletKey,
@@ -134,79 +214,99 @@ function CVDocument({
   onBulletSelect: (bulletKey: string, entryIds: string[]) => void;
 }) {
   return (
-    <article className="space-y-6 text-card-foreground">
-      <header className="border-b pb-4">
+    <motion.article
+      key={cv.name + cv.experience.length}
+      variants={documentVariants}
+      initial="initial"
+      animate="animate"
+      className="space-y-6 text-card-foreground"
+    >
+      <motion.header variants={sectionVariants} className="border-b pb-4">
         <h2 className="text-xl font-bold">{cv.name}</h2>
         {cv.professional_summary && (
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             {cv.professional_summary}
           </p>
         )}
-      </header>
+      </motion.header>
 
       {cv.experience.length > 0 && (
-        <section className="space-y-4">
+        <motion.section variants={sectionVariants} className="space-y-4">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Experience
           </h3>
-          {cv.experience.map((role, roleIdx) => (
-            <div key={roleIdx} className="space-y-2">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="font-medium">
-                  {role.title}
-                  <span className="text-muted-foreground"> · {role.company}</span>
-                </p>
-                <p className="text-xs tabular-nums text-muted-foreground">
-                  {role.dates}
-                </p>
-              </div>
-              <ul className="space-y-1">
-                {role.bullets.map((bullet, bulletIdx) => {
-                  const key = `${roleIdx}-${bulletIdx}`;
-                  const selected = key === selectedBulletKey;
-                  return (
-                    <li key={bulletIdx}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onBulletSelect(key, entryIdsFor(bullet.citations))
-                        }
-                        className={cn(
-                          "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                          selected
-                            ? "bg-accent text-accent-foreground ring-1 ring-primary/40"
-                            : "hover:bg-muted",
-                        )}
+          <motion.div variants={roleVariants} className="space-y-4">
+            {cv.experience.map((role, roleIdx) => (
+              <motion.div
+                key={roleIdx}
+                variants={sectionVariants}
+                className="space-y-2"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="font-medium">
+                    {role.title}
+                    <span className="text-muted-foreground"> · {role.company}</span>
+                  </p>
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {role.dates}
+                  </p>
+                </div>
+                <motion.ul
+                  variants={bulletListVariants}
+                  className="space-y-1"
+                >
+                  {role.bullets.map((bullet, bulletIdx) => {
+                    const key = `${roleIdx}-${bulletIdx}`;
+                    const selected = key === selectedBulletKey;
+                    return (
+                      <motion.li
+                        key={bulletIdx}
+                        variants={bulletVariants}
                       >
-                        <span
-                          aria-hidden
+                        <motion.button
+                          type="button"
+                          whileHover={{ x: 2 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                          onClick={() =>
+                            onBulletSelect(key, entryIdsFor(bullet.citations))
+                          }
                           className={cn(
-                            "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                            selected ? "bg-primary" : "bg-muted-foreground/40",
+                            "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                            selected
+                              ? "bg-accent text-accent-foreground ring-1 ring-primary/40"
+                              : "hover:bg-muted",
                           )}
-                        />
-                        <span className="leading-snug">{bullet.text}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </section>
+                        >
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                              selected ? "bg-primary" : "bg-muted-foreground/40",
+                            )}
+                          />
+                          <span className="leading-snug">{bullet.text}</span>
+                        </motion.button>
+                      </motion.li>
+                    );
+                  })}
+                </motion.ul>
+              </motion.div>
+            ))}
+          </motion.div>
+        </motion.section>
       )}
 
       {cv.skills.length > 0 && (
-        <section className="space-y-2">
+        <motion.section variants={sectionVariants} className="space-y-2">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Skills
           </h3>
           <p className="text-sm">{cv.skills.join(" · ")}</p>
-        </section>
+        </motion.section>
       )}
 
       {cv.education.length > 0 && (
-        <section className="space-y-2">
+        <motion.section variants={sectionVariants} className="space-y-2">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Education
           </h3>
@@ -223,8 +323,8 @@ function CVDocument({
               </li>
             ))}
           </ul>
-        </section>
+        </motion.section>
       )}
-    </article>
+    </motion.article>
   );
 }

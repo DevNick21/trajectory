@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { ExternalLink, FileText, Quote } from "lucide-react";
 
 import type { Citation } from "@/lib/types";
@@ -13,7 +15,7 @@ interface Props {
 interface Resolved {
   label: string;
   href: string | null;
-  /** Optional verbatim snippet for hover/title attribute. */
+  /** Optional verbatim snippet for the hover tooltip. */
   hint: string | null;
 }
 
@@ -84,6 +86,8 @@ function resolve(c: Citation): Resolved {
 
 export default function CitationLink({ citation, variant = "inline" }: Props) {
   const { label, href, hint } = resolve(citation);
+  const [hovered, setHovered] = useState(false);
+
   const Icon =
     citation.kind === "url_snippet"
       ? ExternalLink
@@ -98,25 +102,58 @@ export default function CitationLink({ citation, variant = "inline" }: Props) {
       : "rounded-md border bg-secondary/50 px-2 py-1 text-secondary-foreground",
   );
 
-  if (href) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        title={hint ?? undefined}
-        className={cn(base, "hover:bg-accent hover:underline")}
-      >
-        <Icon className="h-3 w-3" aria-hidden />
-        <span className="truncate max-w-[16rem]">{label}</span>
-      </a>
-    );
-  }
-
-  return (
-    <span title={hint ?? undefined} className={base}>
+  // Anchor or static span depending on whether we have an href.
+  // Wrapped in a relative span so the absolute-positioned tooltip
+  // anchors to the chip itself, not the document.
+  const chip = href ? (
+    <motion.a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      whileHover={{ y: -1 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      className={cn(base, "hover:bg-accent hover:underline")}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)}
+      onBlur={() => setHovered(false)}
+    >
       <Icon className="h-3 w-3" aria-hidden />
       <span className="truncate max-w-[16rem]">{label}</span>
+    </motion.a>
+  ) : (
+    <span
+      className={base}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <Icon className="h-3 w-3" aria-hidden />
+      <span className="truncate max-w-[16rem]">{label}</span>
+    </span>
+  );
+
+  return (
+    <span className="relative inline-block">
+      {chip}
+      <AnimatePresence mode="wait">
+        {hovered && hint && (
+          <motion.div
+            role="tooltip"
+            initial={{ opacity: 0, y: 4, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className={cn(
+              "absolute bottom-full left-0 mb-1.5 z-50",
+              "max-w-[20rem] rounded-md border bg-card px-2.5 py-1.5",
+              "text-xs text-card-foreground shadow-md",
+            )}
+          >
+            {hint}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </span>
   );
 }

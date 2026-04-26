@@ -1,3 +1,4 @@
+import { motion } from "motion/react";
 import { AlertOctagon, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 
 import type { Citation } from "@/lib/types";
@@ -37,6 +38,24 @@ interface Props {
   verdict: VerdictView | null;
 }
 
+const cardVariants = {
+  initial: { opacity: 0, scale: 0.98 },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      duration: 0.4,
+      delayChildren: 0.15,
+      staggerChildren: 0.08,
+    },
+  },
+} as const;
+
+const pieceVariants = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.35 } },
+} as const;
+
 /** Top-of-hub verdict block. Decision + headline + reasoning, with
  *  citations rendered as clickable source links. NO_GO gets a muted
  *  red/orange border to match the mockup. */
@@ -46,71 +65,90 @@ export default function VerdictHeadline({ verdict }: Props) {
   const isNoGo = verdict.decision === "NO_GO";
 
   return (
-    <Card
-      className={cn(
-        "border-2",
-        isNoGo ? "border-destructive/40" : "border-success/40",
-      )}
+    <motion.div
+      variants={cardVariants}
+      initial="initial"
+      animate="animate"
+      key={verdict.decision}
     >
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={isNoGo ? "destructive" : "success"}>
-            {isNoGo ? (
-              <XCircle className="mr-1 h-3.5 w-3.5" aria-hidden />
-            ) : (
-              <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+      <Card
+        className={cn(
+          "border-2",
+          isNoGo ? "border-destructive/40" : "border-success/40",
+        )}
+      >
+        <CardHeader className="space-y-3">
+          <motion.div
+            variants={pieceVariants}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <Badge variant={isNoGo ? "destructive" : "success"}>
+              {isNoGo ? (
+                <XCircle className="mr-1 h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <CheckCircle2 className="mr-1 h-3.5 w-3.5" aria-hidden />
+              )}
+              Opus 4.7 Verdict · {verdict.decision}
+            </Badge>
+            {verdict.confidence_pct !== undefined && (
+              <span className="text-xs text-muted-foreground">
+                {verdict.confidence_pct}% confidence
+              </span>
             )}
-            Opus 4.7 Verdict · {verdict.decision}
-          </Badge>
-          {verdict.confidence_pct !== undefined && (
-            <span className="text-xs text-muted-foreground">
-              {verdict.confidence_pct}% confidence
-            </span>
+          </motion.div>
+          {verdict.headline && (
+            <motion.p
+              variants={pieceVariants}
+              className="text-lg font-semibold leading-snug"
+            >
+              {verdict.headline}
+            </motion.p>
           )}
-        </div>
-        {verdict.headline && (
-          <p className="text-lg font-semibold leading-snug">
-            {verdict.headline}
-          </p>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {verdict.hard_blockers && verdict.hard_blockers.length > 0 && (
-          <ReasonGroup
-            title="Hard blockers"
-            icon={AlertOctagon}
-            tone="destructive"
-            items={verdict.hard_blockers.map((b) => ({
-              claim: b.type,
-              supporting_evidence: b.detail,
-              citation: b.citation,
-            }))}
-          />
-        )}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {verdict.hard_blockers && verdict.hard_blockers.length > 0 && (
+            <motion.div variants={pieceVariants}>
+              <ReasonGroup
+                title="Hard blockers"
+                icon={AlertOctagon}
+                tone="destructive"
+                items={verdict.hard_blockers.map((b) => ({
+                  claim: b.type,
+                  supporting_evidence: b.detail,
+                  citation: b.citation,
+                }))}
+              />
+            </motion.div>
+          )}
 
-        {verdict.reasoning && verdict.reasoning.length > 0 && (
-          <ReasonGroup
-            title="Reasoning"
-            icon={null}
-            tone="default"
-            items={verdict.reasoning}
-          />
-        )}
+          {verdict.reasoning && verdict.reasoning.length > 0 && (
+            <motion.div variants={pieceVariants}>
+              <ReasonGroup
+                title="Reasoning"
+                icon={null}
+                tone="default"
+                items={verdict.reasoning}
+              />
+            </motion.div>
+          )}
 
-        {verdict.stretch_concerns && verdict.stretch_concerns.length > 0 && (
-          <ReasonGroup
-            title="Stretch concerns"
-            icon={AlertTriangle}
-            tone="warning"
-            items={verdict.stretch_concerns.map((c) => ({
-              claim: c.type,
-              supporting_evidence: c.detail,
-              citation: c.citation,
-            }))}
-          />
-        )}
-      </CardContent>
-    </Card>
+          {verdict.stretch_concerns && verdict.stretch_concerns.length > 0 && (
+            <motion.div variants={pieceVariants}>
+              <ReasonGroup
+                title="Stretch concerns"
+                icon={AlertTriangle}
+                tone="warning"
+                items={verdict.stretch_concerns.map((c) => ({
+                  claim: c.type,
+                  supporting_evidence: c.detail,
+                  citation: c.citation,
+                }))}
+              />
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
 

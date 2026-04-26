@@ -14,6 +14,7 @@
 // valid JSON.
 
 import type { ForwardJobEvent, FullPrepEvent, QueueBatchEvent } from "./types";
+import { isReplayActive, replayForwardJob } from "./sseReplay";
 
 interface PostSSEOptions {
   signal?: AbortSignal;
@@ -85,13 +86,21 @@ export interface ForwardJobOptions extends PostSSEOptions {
   onEvent: (event: ForwardJobEvent) => void;
 }
 
-export const streamForwardJob = (jobUrl: string, opts: ForwardJobOptions) =>
-  postSSE<ForwardJobEvent>(
+export const streamForwardJob = (jobUrl: string, opts: ForwardJobOptions) => {
+  // Demo recording shortcut — bypass the real API and emit a canned
+  // event sequence with deterministic timing. Active when
+  // VITE_SSE_REPLAY=1 or the URL carries ?replay=1. Same shape as the
+  // live stream so the dashboard reducer doesn't notice the difference.
+  if (isReplayActive()) {
+    return replayForwardJob({ onEvent: opts.onEvent, signal: opts.signal });
+  }
+  return postSSE<ForwardJobEvent>(
     "/api/sessions/forward_job",
     { job_url: jobUrl },
     opts.onEvent,
     { signal: opts.signal, onError: opts.onError },
   );
+};
 
 export interface FullPrepOptions extends PostSSEOptions {
   onEvent: (event: FullPrepEvent) => void;

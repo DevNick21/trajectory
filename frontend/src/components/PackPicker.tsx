@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import {
   Briefcase,
   Check,
@@ -18,6 +19,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+
+const gridVariants = {
+  animate: { transition: { staggerChildren: 0.06 } },
+} as const;
+
+const cardVariants = {
+  initial: { opacity: 0, y: 8, scale: 0.98 },
+  animate: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.3 } },
+} as const;
 
 interface PackDef {
   generator: PackGeneratorName;
@@ -151,7 +161,12 @@ export default function PackPicker({ sessionId, roleTitle, files }: Props) {
         </Badge>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <motion.div
+          className="grid gap-3 sm:grid-cols-2"
+          variants={gridVariants}
+          initial="initial"
+          animate="animate"
+        >
           {PACKS.map((pack) => (
             <PackCard
               key={pack.generator}
@@ -163,7 +178,7 @@ export default function PackPicker({ sessionId, roleTitle, files }: Props) {
               onRegenerate={() => regenerate(pack)}
             />
           ))}
-        </div>
+        </motion.div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Need to change your answers?{" "}
@@ -195,7 +210,10 @@ function PackCard({
   const Icon = pack.Icon;
 
   return (
-    <div
+    <motion.div
+      variants={cardVariants}
+      whileHover={{ y: -2 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
       className={cn(
         "flex flex-col gap-3 rounded-md border p-4 transition-colors",
         generated && "border-success/40 bg-success/5",
@@ -263,6 +281,6 @@ function PackCard({
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
+    </motion.div>
   );
 }
