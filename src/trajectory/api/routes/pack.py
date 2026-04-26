@@ -38,7 +38,7 @@ from sse_starlette.sse import EventSourceResponse
 from ...progress import SSEEmitter
 from ...schemas import Session, UserProfile
 from ...storage import Storage
-from ..dependencies import get_current_user, get_storage
+from ..dependencies import get_current_user, get_storage, rate_limit
 from ..schemas import GeneratedFile, PackResult
 from ..sse import event_stream
 from .sessions import _list_generated_files
@@ -157,29 +157,40 @@ def _make_individual_endpoint(name: str):
     return endpoint
 
 
+_GENERATOR_INTENT = {
+    "cv": "draft_cv",
+    "cover_letter": "draft_cover_letter",
+    "questions": "predict_questions",
+    "salary": "salary_advice",
+}
+
 router.add_api_route(
     "/sessions/{session_id}/cv",
     _make_individual_endpoint("cv"),
     methods=["POST"],
     response_model=PackResult,
+    dependencies=[Depends(rate_limit(_GENERATOR_INTENT["cv"]))],
 )
 router.add_api_route(
     "/sessions/{session_id}/cover_letter",
     _make_individual_endpoint("cover_letter"),
     methods=["POST"],
     response_model=PackResult,
+    dependencies=[Depends(rate_limit(_GENERATOR_INTENT["cover_letter"]))],
 )
 router.add_api_route(
     "/sessions/{session_id}/questions",
     _make_individual_endpoint("questions"),
     methods=["POST"],
     response_model=PackResult,
+    dependencies=[Depends(rate_limit(_GENERATOR_INTENT["questions"]))],
 )
 router.add_api_route(
     "/sessions/{session_id}/salary",
     _make_individual_endpoint("salary"),
     methods=["POST"],
     response_model=PackResult,
+    dependencies=[Depends(rate_limit(_GENERATOR_INTENT["salary"]))],
 )
 
 
@@ -258,7 +269,10 @@ async def _run_full_prep(
         await emitter.close()  # enqueues the {"type": "done"} sentinel
 
 
-@router.post("/sessions/{session_id}/full_prep")
+@router.post(
+    "/sessions/{session_id}/full_prep",
+    dependencies=[Depends(rate_limit("full_prep"))],
+)
 async def full_prep(
     session_id: str,
     user: UserProfile = Depends(get_current_user),
@@ -299,3 +313,72 @@ async def full_prep(
                     pass
 
     return EventSourceResponse(stream())
+
+
+# ---------------------------------------------------------------------------
+# Offer analysis (PROCESS Entry 43, Workstream F)
+# ---------------------------------------------------------------------------
+
+
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+
+@router.post(
+    "/sessions/{session_id}/offer",
+    dependencies=[Depends(rate_limit("salary_advice"))],
+)
+async def analyse_offer(
+    session_id: str,
+    pdf: UploadFile | None = File(default=None),
+    text: str | None = Form(default=None),
+    user: UserProfile = Depends(get_current_user),
+    storage: Storage = Depends(get_storage),
+) -> dict:
+    """Analyse a forwarded offer letter.
+
+    Accepts EITHER an uploaded PDF (multipart/form-data field `pdf`) OR
+    plain text (field `text`). When `session_id="none"`, runs the analysis
+    without a research bundle (no market-comparison documents).
+    """
+    if pdf is None and not (text and text.strip()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "missing_input", "message": "Provide a `pdf` file or `text`."},
+        )
+
+    session = None
+    if session_id and session_id.lower() != "none":
+        session = await storage.get_session(session_id)
+        if session is None or session.user_id != user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "session_not_found"},
+            )
+
+    pdf_bytes = await pdf.read() if pdf is not None else None
+
+    from ...orchestrator import handle_analyse_offer
+    try:
+        analysis = await handle_analyse_offer(
+            user=user,
+            storage=storage,
+            session=session,
+            pdf_bytes=pdf_bytes,
+            text_pasted=text or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "bad_input", "message": str(exc)},
+        )
+    except Exception as exc:
+        log.exception("offer analysis failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "offer_analysis_failed", "message": str(exc)[:200]},
+        )
+
+    return {
+        "generator": "offer",
+        "output": analysis.model_dump(mode="json"),
+    }

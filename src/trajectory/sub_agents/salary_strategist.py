@@ -91,6 +91,26 @@ async def generate(
             "sample_year": sal.ashe.sample_year,
         }
 
+    # Cross-application memory recall (PROCESS Entry 43, Workstream E):
+    # surface what this user has historically asked vs accepted at past
+    # negotiations so the strategist can calibrate its opening number.
+    # Best-effort — empty list when no memory yet.
+    try:
+        from ..memory import recall
+        prior_negotiations = await recall(
+            user_id=user.user_id,
+            kind="negotiation_result",
+            limit=5,
+        )
+        prior_offers = await recall(
+            user_id=user.user_id,
+            kind="application_outcome",
+            limit=5,
+        )
+    except Exception:
+        prior_negotiations = []
+        prior_offers = []
+
     user_input = json.dumps(
         {
             "role": jd.role_title,
@@ -116,6 +136,10 @@ async def generate(
                 "signature_patterns": style_profile.signature_patterns[:5],
                 "avoided_patterns": style_profile.avoided_patterns[:5],
                 "examples": style_profile.examples[:3],
+            },
+            "cross_app_memory": {
+                "prior_negotiations": prior_negotiations,
+                "prior_offers": prior_offers,
             },
         },
         default=str,

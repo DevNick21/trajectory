@@ -50,6 +50,34 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = load_prompt("verdict")
 
 
+# A6 / A5: guidance appended to SYSTEM_PROMPT when source_status or
+# sources_truncated are in play on this bundle. Kept outside the
+# prompt file because the text is only meaningful when the fields
+# are populated — leaving it always-on would add noise to the
+# baseline prompt.
+_SOURCE_STATUS_GUIDANCE = """
+
+## Partial-data caveats (read before reasoning)
+
+Phase 1 sub-agents tag their output with `source_status`:
+  - `OK` — we successfully reached the source and have a real reading.
+  - `UNREACHABLE` — we attempted the lookup (Sponsor Register, SOC check,
+    salary data, etc.) but the upstream API failed or timed out. Treat
+    as "I don't know." Do NOT invent a reading and do NOT claim
+    "no sponsor license found" when the register was merely unreachable.
+    Downgrade confidence and surface the uncertainty in reasoning.
+  - `NO_DATA` — we reached the source and it genuinely has nothing
+    (e.g., company not on Sponsor Register). This IS a reading.
+  - `STALE` — we have data but it's older than the freshness window
+    for that source. Usable, but flag the vintage in reasoning.
+
+`research_bundle.sources_truncated` lists fields whose text was
+truncated by the content shield before you saw it. When non-empty,
+add a reasoning point acknowledging that your view of the JD or
+company page was partial, and downgrade confidence by ~10 points.
+""".strip()
+
+
 # ---------------------------------------------------------------------------
 # Input serialisation
 # ---------------------------------------------------------------------------
@@ -233,9 +261,16 @@ async def generate(
 
     user_input = _build_user_input(research_bundle, user, retrieved_entries)
 
+    system_prompt = SYSTEM_PROMPT
+    if settings.enable_source_status_verdict:
+        # Append only when the flag is on — lets us revert to the
+        # pre-A6 behaviour (verdict ignores source_status) without
+        # redeploying the prompt file.
+        system_prompt = SYSTEM_PROMPT + "\n\n" + _SOURCE_STATUS_GUIDANCE
+
     verdict = await call_agent(
         agent_name="verdict",
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         user_input=user_input,
         output_schema=Verdict,
         model=settings.opus_model_id,

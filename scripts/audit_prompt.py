@@ -155,23 +155,11 @@ _AGENT_REGISTRY: dict[str, dict] = {
             "last_session: TRUSTED",
         ],
     },
-    "cv_tailor_legacy": {
-        # Production path — flag-off default (PROCESS.md Entry 36).
-        "module": "trajectory.sub_agents.cv_tailor_legacy",
-        "system_prompt_attr": "SYSTEM_PROMPT",
-        "output_schema_symbol": "CVOutput",
-        "input_sources": [
-            "extracted_jd: UNTRUSTED (scraped)",
-            "research_bundle: UNTRUSTED (scraped)",
-            "user_profile: TRUSTED",
-            "retrieved_career_entries: TRUSTED",
-            "writing_style_profile: TRUSTED",
-        ],
-    },
     "cv_tailor_agentic": {
-        # Opt-in multi-turn FAISS retrieval path. Career entries enter
-        # via tool-call results (trusted — user's own history) rather
-        # than up-front prompt context.
+        # D5 (2026-04-24): only CV tailor path. Multi-turn FAISS
+        # retrieval; career entries enter via tool-call results
+        # (trusted — user's own history) rather than up-front prompt
+        # context. The legacy single-call path was retired.
         "module": "trajectory.sub_agents.cv_tailor_agentic",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "CVOutput",
@@ -262,7 +250,7 @@ def _describe_schema(schema_symbol: str) -> str:
     return f"{schema_symbol}({fields})" if fields else schema_symbol
 
 
-async def _audit_one(agent_name: str) -> Optional[Path]:
+async def _audit_one(agent_name: str, *, empirical: bool = False) -> Optional[Path]:
     spec = _AGENT_REGISTRY.get(agent_name)
     if spec is None:
         logger.error("unknown agent %r. Known: %s", agent_name, sorted(_AGENT_REGISTRY))
@@ -279,18 +267,30 @@ async def _audit_one(agent_name: str) -> Optional[Path]:
 
     schema_description = _describe_schema(spec["output_schema_symbol"])
 
-    logger.info("Auditing %s ...", agent_name)
-    report = await prompt_auditor.audit(
-        audited_agent_name=agent_name,
-        audited_system_prompt=prompt,
-        audited_output_schema=schema_description,
-        input_sources=spec["input_sources"],
-    )
+    if empirical:
+        logger.info("Auditing %s (empirical mode — Code Execution sandbox)...", agent_name)
+        from trajectory.llm import call_in_session
+        report = await call_in_session(
+            "prompt_auditor_empirical",
+            audited_agent_name=agent_name,
+            audited_system_prompt=prompt,
+            audited_output_schema=schema_description,
+            input_sources=spec["input_sources"],
+        )
+    else:
+        logger.info("Auditing %s ...", agent_name)
+        report = await prompt_auditor.audit(
+            audited_agent_name=agent_name,
+            audited_system_prompt=prompt,
+            audited_output_schema=schema_description,
+            input_sources=spec["input_sources"],
+        )
 
     audits_dir = Path("audits")
     audits_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%dT%H%M%S")
-    out_path = audits_dir / f"{agent_name}_{ts}.json"
+    suffix = "_empirical" if empirical else ""
+    out_path = audits_dir / f"{agent_name}{suffix}_{ts}.json"
     out_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
 
     _print_summary(report)
@@ -308,10 +308,10 @@ def _print_summary(report) -> None:
         print(f"  HIGH: {w.description}")
 
 
-async def _audit_all() -> None:
+async def _audit_all(*, empirical: bool = False) -> None:
     for name in sorted(_AGENT_REGISTRY):
         try:
-            await _audit_one(name)
+            await _audit_one(name, empirical=empirical)
         except Exception as exc:
             logger.exception("audit failed for %s: %s", name, exc)
 
@@ -325,6 +325,15 @@ def main() -> int:
     )
     parser.add_argument("--all", action="store_true", help="Audit every registered agent.")
     parser.add_argument("--list", action="store_true", help="List registered agents and exit.")
+    parser.add_argument(
+        "--empirical", action="store_true",
+        help=(
+            "Run the empirical auditor variant (Code Execution sandbox + "
+            "synthesised injection payloads against the live prompt) "
+            "instead of the predicted-behaviour auditor. Slower and more "
+            "expensive but reflects real model behaviour. PROCESS Entry 43."
+        ),
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -333,14 +342,14 @@ def main() -> int:
         return 0
 
     if args.all:
-        asyncio.run(_audit_all())
+        asyncio.run(_audit_all(empirical=args.empirical))
         return 0
 
     if not args.agent:
         parser.print_help()
         return 2
 
-    out = asyncio.run(_audit_one(args.agent))
+    out = asyncio.run(_audit_one(args.agent, empirical=args.empirical))
     return 0 if out else 1
 
 

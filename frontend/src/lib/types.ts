@@ -83,6 +83,46 @@ export interface PackResult {
 }
 
 // ---------------------------------------------------------------------------
+// Offer analysis (PROCESS Entry 43, Workstream F)
+// ---------------------------------------------------------------------------
+
+export interface Citation {
+  kind: "url_snippet" | "gov_data" | "career_entry";
+  url?: string | null;
+  verbatim_snippet?: string | null;
+  data_field?: string | null;
+  data_value?: string | null;
+  entry_id?: string | null;
+}
+
+export interface OfferComponent {
+  label: string;
+  value_text: string;
+  citation: Citation;
+}
+
+export interface OfferAnalysis {
+  company_name: string;
+  role_title: string | null;
+  base_salary_gbp: OfferComponent | null;
+  bonus: OfferComponent | null;
+  equity: OfferComponent | null;
+  benefits: OfferComponent[];
+  notice_period: OfferComponent | null;
+  non_compete: OfferComponent | null;
+  ip_assignment: OfferComponent | null;
+  unusual_clauses: OfferComponent[];
+  market_comparison_note: string | null;
+  flags: string[];
+}
+
+// Wire shape from POST /api/sessions/{id}/offer.
+export interface OfferAnalysisResponse {
+  generator: "offer";
+  output: OfferAnalysis;
+}
+
+// ---------------------------------------------------------------------------
 // Onboarding wizard
 // ---------------------------------------------------------------------------
 

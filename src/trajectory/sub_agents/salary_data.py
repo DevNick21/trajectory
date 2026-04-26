@@ -19,6 +19,7 @@ from typing import Optional
 import pandas as pd
 
 from ..config import settings
+from ..data_freshness import is_stale
 from ..schemas import (
     AggregatedPostings,
     AshePercentiles,
@@ -288,10 +289,20 @@ async def fetch(
     else:
         sources_consulted.append("jobspy_aggregation:unavailable")
 
+    # D3: ASHE tables update yearly. STALE window here is larger than
+    # sponsor register because annual refresh is normal.
+    ashe_stale = any(
+        is_stale(p, window_days=400)
+        for p in (_ASHE_SOC4_REGION, _ASHE_SOC2_REGION, _ASHE_SOC2_NATIONAL)
+        if p.exists()
+    )
+    source_status = "STALE" if ashe_stale else "OK"
+
     return SalarySignals(
         ashe=ashe,
         posted_band=parsed_band,
         aggregated_postings=agg,
         sources_consulted=sources_consulted,
         data_citations=citations,
+        source_status=source_status,
     )

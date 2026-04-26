@@ -22,6 +22,7 @@ What this does NOT do:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,6 +33,19 @@ from ._common import (
     require_env,
     run_smoke,
 )
+
+
+class _ErrorCapture(logging.Handler):
+    """Capture ERROR-level log records under `trajectory.*` so the test
+    can assert no handler swallowed an exception silently."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if record.name.startswith("trajectory.") and record.levelno >= logging.ERROR:
+            self.records.append(record)
 
 NAME = "bot_boot"
 REQUIRES_LIVE_LLM = True
@@ -45,11 +59,20 @@ def _make_update(*, user_id: int, chat_id: int, text: str):
     the handlers actually touch (effective_user.id, effective_chat.id,
     message.text, reply_text, reply_html). Anything else stays None and
     the handlers don't read it.
+
+    `message.document` is explicitly set to `None` — without this, the
+    auto-vivified MagicMock attribute is truthy and the handler's PDF
+    fast-path at bot/handlers.py:113 fires, mis-routing a chitchat
+    message into `_handle_analyse_offer_pdf`. That code then tries to
+    `await document.get_file()` and dies on a non-AsyncMock, the
+    exception is caught by `_handle_handler_exception`, and the test
+    silently still produced a reply — a false PASS.
     """
     update = MagicMock()
     update.effective_user.id = user_id
     update.effective_chat.id = chat_id
     update.message.text = text
+    update.message.document = None
     update.message.reply_text = AsyncMock()
     update.message.reply_html = AsyncMock()
     return update
@@ -84,6 +107,14 @@ async def _body() -> tuple[list[str], list[str], float]:
     messages: list[str] = []
     failures: list[str] = []
 
+    # Install an ERROR-level capture across the trajectory loggers. Any
+    # handler that catches an exception and logs it via
+    # `_handle_handler_exception` will land here, even if the bot still
+    # produces a reply afterwards (the prior false-PASS shape).
+    error_capture = _ErrorCapture()
+    root = logging.getLogger("trajectory")
+    root.addHandler(error_capture)
+
     # ── 1. Build the Application without starting polling ─────────────
     try:
         app = (
@@ -97,18 +128,13 @@ async def _body() -> tuple[list[str], list[str], float]:
         return messages, failures, 0.0
 
     from ._common import build_test_user
-    from trajectory.bot import handlers as bot_handlers
 
     user_id = "smoke_bot_user"
     chat_id = 999_900_001
 
     # Everything that touches `app.bot_data` MUST happen inside
     # `async with app:` — once the context exits, python-telegram-bot
-    # tears down the application state. Clear the in-memory onboarding
-    # session map first so a re-run from a stale state doesn't
-    # contaminate this slice.
-    bot_handlers._onboarding_sessions.pop(chat_id, None)
-
+    # tears down the application state.
     try:
         async with app:
             # ── 2. Token validation via Telegram getMe ──────────────────
@@ -157,10 +183,6 @@ async def _body() -> tuple[list[str], list[str], float]:
             user.user_id = user_id
             await storage.save_user_profile(user)
 
-            # Clear the onboarding state planted by on_start above so the
-            # gate lets the message through to intent routing.
-            bot_handlers._onboarding_sessions.pop(chat_id, None)
-
             update2 = _make_update(user_id=42, chat_id=chat_id, text="hi")
             update2.effective_user.id = user_id
             ctx2 = _make_context(storage)
@@ -184,9 +206,14 @@ async def _body() -> tuple[list[str], list[str], float]:
                     f"on_message produced {total_replies} reply(ies) for 'hi'"
                 )
     finally:
-        # Ensure the in-process onboarding state doesn't leak across
-        # smoke runs.
-        bot_handlers._onboarding_sessions.pop(chat_id, None)
+        root.removeHandler(error_capture)
+
+    if error_capture.records:
+        for rec in error_capture.records:
+            failures.append(
+                f"trajectory logger emitted ERROR during bot_boot: "
+                f"{rec.name}: {rec.getMessage()}"
+            )
 
     return messages, failures, ESTIMATED_COST_USD
 

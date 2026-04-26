@@ -90,7 +90,9 @@ CREATE TABLE IF NOT EXISTS llm_cost_log (
     input_tokens INTEGER NOT NULL,
     output_tokens INTEGER NOT NULL,
     cost_usd REAL NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_creation_tokens INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_cost_agent ON llm_cost_log(agent_name);
 
@@ -119,7 +121,20 @@ _initialised = False
 
 
 async def _ensure_db() -> None:
-    """Create the DB file and tables if they don't exist. Idempotent."""
+    """Create the DB file and tables if they don't exist. Idempotent.
+
+    journal_mode=WAL is a file-level pragma that persists in the SQLite
+    header once set; subsequent connections inherit it. We set it here
+    (plus synchronous=NORMAL, the recommended safety/perf pairing for
+    WAL) so concurrent writers from the bot + FastAPI + test harness
+    don't serialise on a single rollback-journal writer.
+
+    After the schema script runs, we apply additive ALTER TABLE
+    migrations defensively (IF NOT EXISTS isn't supported for columns
+    in SQLite < 3.35 and we want to run on DBs created before the
+    column existed). Errors are swallowed when the column is already
+    present — that's the expected path on an up-to-date DB.
+    """
     global _initialised
     if _initialised:
         return
@@ -128,9 +143,53 @@ async def _ensure_db() -> None:
             return
         settings.sqlite_db_path.parent.mkdir(parents=True, exist_ok=True)
         async with aiosqlite.connect(settings.sqlite_db_path) as db:
+            await db.execute("PRAGMA journal_mode=WAL")
+            await db.execute("PRAGMA synchronous=NORMAL")
             await db.executescript(_SCHEMA_SQL)
+            await _apply_additive_migrations(db)
             await db.commit()
         _initialised = True
+
+
+_ADDITIVE_COLUMN_MIGRATIONS: list[tuple[str, str, str]] = [
+    # (table, column, DDL fragment). One-directional: add-only, never
+    # drops or renames. See B1/B2 plan: cache token columns were added
+    # to `llm_cost_log` after the table was created in some dev DBs.
+    (
+        "llm_cost_log",
+        "cache_read_tokens",
+        "ALTER TABLE llm_cost_log ADD COLUMN "
+        "cache_read_tokens INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "llm_cost_log",
+        "cache_creation_tokens",
+        "ALTER TABLE llm_cost_log ADD COLUMN "
+        "cache_creation_tokens INTEGER NOT NULL DEFAULT 0",
+    ),
+]
+
+
+async def _apply_additive_migrations(db: Any) -> None:
+    """Apply add-only column migrations idempotently.
+
+    SQLite ALTER TABLE ADD COLUMN raises OperationalError when the
+    column already exists — catching that is how we get idempotency
+    without maintaining a version table.
+    """
+    for table, column, ddl in _ADDITIVE_COLUMN_MIGRATIONS:
+        async with db.execute(f"PRAGMA table_info({table})") as cur:
+            cols = [row[1] async for row in cur]
+        if column in cols:
+            continue
+        try:
+            await db.execute(ddl)
+        except Exception as exc:  # pragma: no cover — race/duplicate
+            # Swallow only "duplicate column" / "already exists"; surface
+            # anything else so real schema breakage isn't silenced.
+            if "duplicate column" in str(exc).lower() or "already exists" in str(exc).lower():
+                continue
+            raise
 
 
 async def _connect():
@@ -141,9 +200,49 @@ async def _connect():
     `__aenter__` as a repeat start, raising "threads can only be started
     once". Returning the connection WITHOUT awaiting it lets the caller
     both await and enter the context exactly once.
+
+    `busy_timeout` is per-connection and must be re-applied each time.
+    5s matches SQLite's undocumented default but makes it explicit.
     """
     await _ensure_db()
-    return aiosqlite.connect(settings.sqlite_db_path)
+    conn = aiosqlite.connect(settings.sqlite_db_path)
+
+    async def _connect_with_pragmas():
+        db = await conn
+        await db.execute("PRAGMA busy_timeout=5000")
+        return db
+
+    # Wrap so that the caller's `async with await _connect()` picks up
+    # the busy_timeout before the first query. aiosqlite's Connection
+    # is an async context manager that returns itself on __aenter__,
+    # so we need a thin shim that applies the pragma on open.
+    return _ConnectionWithPragmas(settings.sqlite_db_path)
+
+
+class _ConnectionWithPragmas:
+    """Wraps aiosqlite.connect to apply per-connection pragmas on open."""
+
+    def __init__(self, path: Any) -> None:
+        self._path = path
+        self._inner = None
+
+    def __await__(self):
+        return self._open().__await__()
+
+    async def _open(self):
+        self._inner = await aiosqlite.connect(self._path)
+        await self._inner.execute("PRAGMA busy_timeout=5000")
+        return self._inner
+
+    async def __aenter__(self):
+        if self._inner is None:
+            await self._open()
+        return self._inner
+
+    async def __aexit__(self, exc_type, exc, tb):
+        if self._inner is not None:
+            await self._inner.close()
+            self._inner = None
 
 
 def _dumps(model_obj: Any) -> str:
@@ -230,13 +329,25 @@ def _faiss():
     return _faiss_index, _faiss_id_map
 
 
-def _faiss_save() -> None:
+def _faiss_save_sync() -> None:
+    """Actual disk write — blocks, keep off the event loop."""
     import faiss
 
     path = settings.faiss_index_path
     path.parent.mkdir(parents=True, exist_ok=True)
     faiss.write_index(_faiss_index, str(path))
     Path(str(path) + ".ids.json").write_text(json.dumps(_faiss_id_map))
+
+
+async def _faiss_save() -> None:
+    """C4: runs `_faiss_save_sync` on a worker thread.
+
+    Without this, every `insert_career_entry` blocks the loop on the
+    index write — noticeable under the Phase 1 fan-out when multiple
+    agents return results concurrently. Matches the pattern already
+    used by `_embed`.
+    """
+    await asyncio.to_thread(_faiss_save_sync)
 
 
 async def _embed(text: str) -> list[float]:
@@ -278,7 +389,10 @@ async def insert_career_entry(entry: CareerEntry) -> None:
     with _faiss_lock:
         index.add(vec)
         id_map.append(entry.entry_id)
-        _faiss_save()
+    # Release the threading.Lock before the to_thread hop — the save
+    # doesn't need it (write is reading module-level state once) and
+    # holding it across an await is a liveness hazard.
+    await _faiss_save()
 
 
 # Kinds that represent user-validated "master stories" — polished STAR
@@ -563,10 +677,30 @@ async def get_cached_page(url: str, max_age_hours: int = 24) -> Optional[str]:
 
 # Approximate $/token prices (verify before production).
 # Opus 4.7 and Sonnet 4.6 pricing intentionally conservative here.
+# Public Anthropic list prices in USD per 1M tokens. Cross-checked
+# against https://www.anthropic.com/pricing on 2026-04-25 for:
+#   - claude-opus-4-7
+#   - claude-sonnet-4-6
+#   - claude-haiku-4-5
+# These feed `estimate_cost_usd` to populate `llm_cost_log.cost_usd`
+# at every `log_llm_cost(...)` call. Update this table when Anthropic
+# revises list prices, or when a new model bucket lands. The runtime
+# already records the upstream `usage` block (real Anthropic-side
+# token counts) — only the per-token-class USD rate is local.
+#
+# Anthropic also exposes a retrospective billing API at
+# `/v1/organizations/usage_report/messages` for true post-hoc
+# reconciliation; this codebase doesn't pull from it (the local
+# computation is good enough for credit-budget refusal and the
+# smoke rollup, both of which run pre-billing-cycle). If the
+# numbers in `llm_cost_log` ever diverge meaningfully from the
+# admin API, that's the cue to wire a reconciliation job rather
+# than nudge these constants.
+_PRICING_LAST_VERIFIED = "2026-04-25"
 _PRICING_USD_PER_MTOK = {
-    "opus": {"input": 15.0, "output": 75.0},
-    "sonnet": {"input": 3.0, "output": 15.0},
-    "haiku": {"input": 0.80, "output": 4.0},
+    "opus":   {"input": 15.0, "output": 75.0},
+    "sonnet": {"input":  3.0, "output": 15.0},
+    "haiku":  {"input":  0.80, "output":  4.0},
 }
 
 
@@ -581,9 +715,31 @@ def _price_bucket(model: str) -> dict[str, float]:
     return _PRICING_USD_PER_MTOK["sonnet"]
 
 
-def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+def estimate_cost_usd(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+) -> float:
+    """Anthropic prompt-caching pricing (B1/B2):
+
+    - cache_creation_tokens: ~1.25x the base input rate (write).
+    - cache_read_tokens: ~0.1x the base input rate (read hit).
+    - regular input_tokens: full input rate.
+
+    `input_tokens` from the API is the "fresh input" count — cache reads
+    and cache creations are reported separately on the `usage` object
+    and are NOT double-counted in input_tokens. Pricing sums all three.
+    """
     p = _price_bucket(model)
-    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000
+    fresh_input_cost = input_tokens * p["input"]
+    cache_read_cost = cache_read_tokens * p["input"] * 0.1
+    cache_creation_cost = cache_creation_tokens * p["input"] * 1.25
+    output_cost = output_tokens * p["output"]
+    return (
+        fresh_input_cost + cache_read_cost + cache_creation_cost + output_cost
+    ) / 1_000_000
 
 
 async def log_llm_cost(
@@ -592,15 +748,24 @@ async def log_llm_cost(
     model: str,
     input_tokens: int,
     output_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_creation_tokens: int = 0,
 ) -> None:
-    cost = estimate_cost_usd(model, input_tokens, output_tokens)
+    cost = estimate_cost_usd(
+        model,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens=cache_read_tokens,
+        cache_creation_tokens=cache_creation_tokens,
+    )
     async with await _connect() as db:
         await db.execute(
             """
             INSERT INTO llm_cost_log
                 (session_id, agent_name, model,
-                 input_tokens, output_tokens, cost_usd, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                 input_tokens, output_tokens, cost_usd, created_at,
+                 cache_read_tokens, cache_creation_tokens)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
@@ -610,6 +775,8 @@ async def log_llm_cost(
                 output_tokens,
                 cost,
                 _utcnow().isoformat(),
+                cache_read_tokens,
+                cache_creation_tokens,
             ),
         )
         await db.commit()
@@ -825,7 +992,7 @@ async def rebuild_faiss_index(entries: list[CareerEntry]) -> None:
 
     _faiss_index = index
     _faiss_id_map = ids
-    _faiss_save()
+    await _faiss_save()
 
 
 # ---------------------------------------------------------------------------

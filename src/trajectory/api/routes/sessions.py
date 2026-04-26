@@ -36,7 +36,12 @@ from ...config import settings
 from ...progress import SSEEmitter
 from ...schemas import Session, UserProfile
 from ...storage import Storage
-from ..dependencies import get_current_user, get_current_user_id, get_storage
+from ..dependencies import (
+    get_current_user,
+    get_current_user_id,
+    get_storage,
+    rate_limit,
+)
 from ..schemas import (
     CostSummary,
     ForwardJobRequest,
@@ -239,7 +244,10 @@ async def _run_forward_job(
         await emitter.close()
 
 
-@router.post("/sessions/forward_job")
+@router.post(
+    "/sessions/forward_job",
+    dependencies=[Depends(rate_limit("forward_job"))],
+)
 async def forward_job(
     req: ForwardJobRequest,
     request: Request,

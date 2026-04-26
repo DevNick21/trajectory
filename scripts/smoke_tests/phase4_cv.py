@@ -54,6 +54,33 @@ async def _body() -> tuple[list[str], list[str], float]:
     await storage.save_phase1_output(session.session_id, bundle)
     session = await storage.get_session(session.session_id)  # reload with phase1
 
+    # Seed a small career history. Without this, the agentic CV path's
+    # `search_career_entries` tool returns nothing — and PROCESS Entry 47
+    # showed Opus occasionally hallucinates a `career_entry` citation
+    # against an empty store, which the post-validator then rejects
+    # ("entry_id not found in career store"). With ≥3 real entries to
+    # cite, the model has correct material and the rejection rate
+    # drops to zero. Mirrors the cv_tailor_agentic smoke pattern.
+    import uuid
+    from datetime import datetime, timezone
+    from trajectory.schemas import CareerEntry
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    seeds = [
+        ("project_note", "Migrated payments backend Postgres → CockroachDB; zero downtime over a 6-week cutover."),
+        ("project_note", "Cut p99 from 600ms to 195ms on the hot path via protobuf reuse + connection pool."),
+        ("star_polish", "Mentored two new engineers through their first oncall rotation; built a runbook from their shadow shifts."),
+        ("project_note", "Owned the TypeScript types refactor for an 800-line form layer (react-hook-form + zod)."),
+        ("conversation", "Eight years backend Python + Go. Last role: tech lead, four-person platform team."),
+    ]
+    for kind, text in seeds:
+        await storage.insert_career_entry(CareerEntry(
+            entry_id=str(uuid.uuid4()),
+            user_id=user.user_id,
+            kind=kind,
+            raw_text=text,
+            created_at=now,
+        ))
+
     messages: list[str] = []
     failures: list[str] = []
 
@@ -71,9 +98,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         return messages, failures, ESTIMATED_COST_USD
 
     messages.append(
-        f"CVOutput: roles={len(cv.roles) if hasattr(cv, 'roles') else '?'}, "
+        f"CVOutput: experience_roles={len(cv.experience)}, "
         f"bullet_count="
-        f"{sum(len(r.bullets) for r in getattr(cv, 'roles', []) or [])}"
+        f"{sum(len(r.bullets) for r in cv.experience)}"
     )
     messages.append(f"docx → {docx_path} ({_size(docx_path)} bytes)")
     messages.append(f"pdf  → {pdf_path} ({_size(pdf_path)} bytes)")
@@ -84,16 +111,27 @@ async def _body() -> tuple[list[str], list[str], float]:
     else:
         messages.append("latex pdf → skipped (pdflatex absent or render failed)")
 
-    if not docx_path.exists() or docx_path.stat().st_size < 1_000:
+    if docx_path is None:
+        failures.append(
+            "handle_draft_cv returned docx_path=None — renderer path broken."
+        )
+    elif not docx_path.exists() or docx_path.stat().st_size < 1_000:
         failures.append(f"DOCX renderer produced a tiny/missing file: {docx_path}")
-    if not pdf_path.exists() or pdf_path.stat().st_size < 1_000:
+
+    if pdf_path is None:
+        failures.append(
+            "handle_draft_cv returned pdf_path=None — renderer path broken."
+        )
+    elif not pdf_path.exists() or pdf_path.stat().st_size < 1_000:
         failures.append(f"PDF renderer produced a tiny/missing file: {pdf_path}")
 
     await storage.close()
     return messages, failures, ESTIMATED_COST_USD
 
 
-def _size(p: Path) -> int:
+def _size(p: Path | None) -> int:
+    if p is None:
+        return 0
     try:
         return p.stat().st_size
     except OSError:

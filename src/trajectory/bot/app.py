@@ -12,13 +12,15 @@ from telegram import BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
 from ..config import settings
+from ..observability import install_correlation_filter
 from ..storage import Storage
 from .handlers import on_message, on_start
 
 logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s req=%(request_id)s ses=%(session_id)s — %(message)s",
     level=logging.INFO,
 )
+install_correlation_filter()
 log = logging.getLogger(__name__)
 
 

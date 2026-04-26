@@ -73,6 +73,23 @@ Every reasoning_point MUST cite one of:
 Claims without resolvable citations are rejected by the validator.
 Do not invent citations. If you cannot cite, do not claim.
 
+CITATION FIELD RULES (validator is strict — violations cost a retry):
+
+- `kind="url_snippet"` → `verbatim_snippet` MUST be an EXACT
+  character-for-character substring of the referenced page. Do not
+  paraphrase, summarise, reword, or normalise punctuation. Copy-paste
+  only. If no verbatim substring supports your claim, pick a
+  different citation — never invent one.
+
+- `kind="gov_data"` → `data_value` MUST be the raw stored value for
+  `data_field`, with NO decoration. Correct: `"LISTED"`, `"70000"`,
+  `"LIKELY_REAL"`, `"ACTIVE"`. Wrong: `"LISTED (A-rated)"`,
+  `"70000 (vs going_rate 40300)"`, `"LIKELY_REAL (HIGH)"`. Put the
+  surrounding context in `supporting_evidence`, NOT in `data_value`.
+
+- Keep `verbatim_snippet` short — one sentence or phrase. Longer
+  quotes are harder to reproduce exactly and commonly fail validation.
+
 CONFIDENCE CALIBRATION:
 
 - 85+ : hard blockers all green, strong motivation alignment,

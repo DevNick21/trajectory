@@ -136,78 +136,158 @@ async def handle_forward_job(
     # red_flags can await its actual result instead of being given [].
     reviews_future: asyncio.Future = asyncio.get_running_loop().create_future()
 
+    timeout = settings.phase1_agent_timeout_s
+
     async def run_reviews():
+        # Preferred path: Managed Agents reviews_investigator session.
+        # Falls back to the legacy jobspy/playwright path on failure.
+        if settings.enable_managed_reviews_investigator:
+            try:
+                from .llm import call_in_session
+                managed_out = await asyncio.wait_for(
+                    call_in_session(
+                        "reviews_investigator",
+                        company_name=company_research.company_name,
+                        company_domain=company_research.company_domain,
+                        session_id=session.session_id,
+                    ),
+                    timeout=max(timeout * 3, 120),  # MA sessions take longer
+                )
+                # Convert ReviewsInvestigatorOutput.excerpts (list of
+                # managed.ReviewExcerpt) into the legacy
+                # sub_agents.reviews.ReviewExcerpt shape downstream
+                # red_flags expects.
+                from .sub_agents.reviews import ReviewExcerpt as LegacyReviewExcerpt
+                converted = [
+                    LegacyReviewExcerpt(
+                        source=ex.source,
+                        rating=ex.rating,
+                        title=ex.title,
+                        text=ex.text,
+                        url=ex.url,
+                    )
+                    for ex in managed_out.excerpts
+                ]
+                log.info(
+                    "reviews_investigator: %d excerpt(s) for %s",
+                    len(converted), company_research.company_name,
+                )
+                await mark("reviews")
+                if not reviews_future.done():
+                    reviews_future.set_result(converted)
+                return converted
+            except (Exception, asyncio.TimeoutError) as exc:
+                timed_out = isinstance(exc, asyncio.TimeoutError)
+                log.warning(
+                    "reviews_investigator failed (timed_out=%s); "
+                    "falling back to legacy path: %s",
+                    timed_out, exc,
+                )
+                # Fall through to legacy path below.
+
         try:
-            result = await rev_agent.fetch(
-                company_name=company_research.company_name,
+            result = await asyncio.wait_for(
+                rev_agent.fetch(company_name=company_research.company_name),
+                timeout=timeout,
             )
             await mark("reviews")
             if not reviews_future.done():
                 reviews_future.set_result(result)
             return result
-        except Exception as exc:
-            log.warning("reviews failed: %s", exc)
+        except (Exception, asyncio.TimeoutError) as exc:
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning("reviews failed (timed_out=%s): %s", timed_out, exc)
             await mark("reviews")
             if not reviews_future.done():
                 reviews_future.set_result([])
             return []
 
     async def run_salary():
+        from .schemas import SalarySignals
         try:
-            result = await sal_agent.fetch(
-                role=jd.role_title,
-                location=jd.location,
-                soc_code=jd.soc_code_guess,
-                posted_band=dict(jd.salary_band) if jd.salary_band else None,
+            result = await asyncio.wait_for(
+                sal_agent.fetch(
+                    role=jd.role_title,
+                    location=jd.location,
+                    soc_code=jd.soc_code_guess,
+                    posted_band=dict(jd.salary_band) if jd.salary_band else None,
+                ),
+                timeout=timeout,
             )
             await mark("salary_data")
             return result
-        except Exception as exc:
-            log.warning("salary_data failed: %s", exc)
+        except (Exception, asyncio.TimeoutError) as exc:
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning("salary_data failed (timed_out=%s): %s", timed_out, exc)
             await mark("salary_data")
-            from .schemas import SalarySignals
-            return SalarySignals(sources_consulted=[], data_citations=[])
+            return SalarySignals(
+                sources_consulted=[],
+                data_citations=[],
+                source_status="UNREACHABLE",
+            )
 
     async def run_sponsor():
         if user.user_type != "visa_holder":
             await mark("sponsor_register")
             return None
         try:
-            result = await sr_agent.lookup(
-                company_name=company_research.company_name,
+            result = await asyncio.wait_for(
+                sr_agent.lookup(company_name=company_research.company_name),
+                timeout=timeout,
             )
             await mark("sponsor_register")
             return result
-        except Exception as exc:
-            log.warning("sponsor_register failed: %s", exc)
+        except (Exception, asyncio.TimeoutError) as exc:
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning(
+                "sponsor_register failed (timed_out=%s): %s", timed_out, exc
+            )
             await mark("sponsor_register")
-            return None
+            from .schemas import SponsorStatus
+            return SponsorStatus(
+                status="UNKNOWN",
+                source_status="UNREACHABLE",
+            )
 
     async def run_soc():
         if user.user_type != "visa_holder":
             await mark("soc_check")
             return None
         try:
-            result = await soc_agent.verify(jd=jd, user=user)
+            result = await asyncio.wait_for(
+                soc_agent.verify(jd=jd, user=user),
+                timeout=timeout,
+            )
             await mark("soc_check")
             return result
-        except Exception as exc:
-            log.warning("soc_check failed: %s", exc)
+        except (Exception, asyncio.TimeoutError) as exc:
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning("soc_check failed (timed_out=%s): %s", timed_out, exc)
             await mark("soc_check")
-            return None
+            from .schemas import SocCheckResult
+            return SocCheckResult(
+                soc_code=jd.soc_code_guess or "unknown",
+                soc_title="",
+                on_appendix_skilled_occupations=False,
+                below_threshold=False,
+                source_status="UNREACHABLE",
+            )
 
     async def run_ghost():
         try:
-            result = await ghost_job_detector.score(
-                jd=jd,
-                company_research=company_research,
-                companies_house=ch_snapshot,
-                job_url=job_url,
-                session_id=session.session_id,
+            result = await asyncio.wait_for(
+                ghost_job_detector.score(
+                    jd=jd,
+                    company_research=company_research,
+                    companies_house=ch_snapshot,
+                    job_url=job_url,
+                    session_id=session.session_id,
+                ),
+                timeout=timeout,
             )
             await mark("phase_1_ghost_job_jd_scorer")
             return result
-        except Exception as exc:
+        except (Exception, asyncio.TimeoutError) as exc:
             # Match the sibling Phase 1C pattern (run_red_flags, run_soc):
             # log + mark + return a conservative fallback rather than
             # raising, since `asyncio.gather(..., return_exceptions=False)`
@@ -216,7 +296,10 @@ async def handle_forward_job(
             # least-confidently-bad default — the verdict will still
             # surface other hard blockers but won't auto-flip to NO_GO
             # on ghost-job grounds when we have no real signal.
-            log.warning("ghost_job_detector failed: %s", exc)
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning(
+                "ghost_job_detector failed (timed_out=%s): %s", timed_out, exc
+            )
             await mark("phase_1_ghost_job_jd_scorer")
             from .schemas import GhostJobAssessment, GhostJobJDScore
             return GhostJobAssessment(
@@ -240,16 +323,20 @@ async def handle_forward_job(
         try:
             # Wait for reviews to complete (or fail to []) before scoring.
             reviews_for_flags = await reviews_future
-            result = await rf_agent.detect(
-                company_research=company_research,
-                companies_house=ch_snapshot,
-                reviews=reviews_for_flags,
-                session_id=session.session_id,
+            result = await asyncio.wait_for(
+                rf_agent.detect(
+                    company_research=company_research,
+                    companies_house=ch_snapshot,
+                    reviews=reviews_for_flags,
+                    session_id=session.session_id,
+                ),
+                timeout=timeout,
             )
             await mark("phase_1_red_flags")
             return result
-        except Exception as exc:
-            log.warning("red_flags failed: %s", exc)
+        except (Exception, asyncio.TimeoutError) as exc:
+            timed_out = isinstance(exc, asyncio.TimeoutError)
+            log.warning("red_flags failed (timed_out=%s): %s", timed_out, exc)
             await mark("phase_1_red_flags")
             from .schemas import RedFlagsReport
             return RedFlagsReport(flags=[], checked=True)
@@ -320,6 +407,35 @@ async def handle_forward_job(
         # Money-no-object path: two parallel verdict calls, conservative
         # merge. Doubles spend but cuts the tail risk that a one-shot
         # Opus run mis-weights the hard-blocker set.
+        #
+        # Slot 2 swaps to the deep-research variant (Web Search + Web
+        # Fetch) when `enable_verdict_ensemble_deep_research=True` —
+        # that turns the ensemble from "two same-data runs" to "one
+        # static-data run + one live-web-augmented run" which catches
+        # signal the static bundle missed (recent news, leaver patterns).
+        async def _v2():
+            if settings.enable_verdict_ensemble_deep_research:
+                try:
+                    from .llm import call_in_session
+                    return await call_in_session(
+                        "verdict_deep_research",
+                        user=user,
+                        research_bundle=shielded_bundle,
+                        session_id=session.session_id,
+                    )
+                except Exception as exc:
+                    log.warning(
+                        "verdict_deep_research failed; falling back to "
+                        "standard second-slot verdict: %s", exc,
+                    )
+                    # Fall through to the symmetric path.
+            return await verdict_agent.generate(
+                research_bundle=shielded_bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                session_id=session.session_id,
+            )
+
         v1, v2 = await asyncio.gather(
             verdict_agent.generate(
                 research_bundle=shielded_bundle,
@@ -327,16 +443,12 @@ async def handle_forward_job(
                 retrieved_entries=retrieved,
                 session_id=session.session_id,
             ),
-            verdict_agent.generate(
-                research_bundle=shielded_bundle,
-                user=user,
-                retrieved_entries=retrieved,
-                session_id=session.session_id,
-            ),
+            _v2(),
         )
         verdict = _ensemble_verdicts(v1, v2)
         log.info(
-            "verdict ensemble: v1=%s(%d%%) v2=%s(%d%%) → %s(%d%%)",
+            "verdict ensemble%s: v1=%s(%d%%) v2=%s(%d%%) → %s(%d%%)",
+            " (deep-research)" if settings.enable_verdict_ensemble_deep_research else "",
             v1.decision, v1.confidence_pct,
             v2.decision, v2.confidence_pct,
             verdict.decision, verdict.confidence_pct,
@@ -492,37 +604,53 @@ async def _shield_bundle(
     The returned bundle holds the cleaned strings; callers should pass it
     to both `build_context` and the agent so citation resolution stays
     consistent with what the model actually saw.
+
+    A5: any source whose Tier 1 pass truncated the content is recorded
+    in `new_bundle.sources_truncated`. The verdict agent surfaces this
+    to the user as a "partial view" caveat and downgrades confidence.
     """
     worst: Optional[ContentShieldVerdict] = None
+    truncated_sources: list[str] = []
 
-    cleaned_jd_text, jd_v = await shield_content(
+    jd_result = await shield_content(
         content=bundle.extracted_jd.jd_text_full,
         source_type="scraped_jd",
         downstream_agent=downstream_agent,
     )
-    worst = _worse(worst, jd_v)
+    cleaned_jd_text = jd_result.cleaned_text
+    worst = _worse(worst, jd_result.verdict)
+    if jd_result.truncated:
+        truncated_sources.append("extracted_jd")
 
     cleaned_pages = []
-    for p in bundle.company_research.scraped_pages:
-        cleaned_text, page_v = await shield_content(
+    for idx, p in enumerate(bundle.company_research.scraped_pages):
+        page_result = await shield_content(
             content=p.text,
             source_type="scraped_company_page",
             downstream_agent=downstream_agent,
         )
-        cleaned_pages.append(p.model_copy(update={"text": cleaned_text}))
-        worst = _worse(worst, page_v)
+        cleaned_pages.append(p.model_copy(update={"text": page_result.cleaned_text}))
+        worst = _worse(worst, page_result.verdict)
+        if page_result.truncated:
+            truncated_sources.append(f"scraped_page:{idx}:{p.url}")
 
     cleaned_claims = []
     for claim in bundle.company_research.culture_claims:
-        cleaned_snippet, val_v = await shield_content(
+        claim_result = await shield_content(
             content=claim.verbatim_snippet,
             source_type="scraped_company_page",
             downstream_agent=downstream_agent,
         )
         cleaned_claims.append(
-            claim.model_copy(update={"verbatim_snippet": cleaned_snippet})
+            claim.model_copy(
+                update={"verbatim_snippet": claim_result.cleaned_text}
+            )
         )
-        worst = _worse(worst, val_v)
+        worst = _worse(worst, claim_result.verdict)
+        # Culture snippets are small by design; truncation here would
+        # mean a pathological input, but track it for completeness.
+        if claim_result.truncated:
+            truncated_sources.append("culture_claim")
 
     new_bundle = bundle.model_copy(
         update={
@@ -534,6 +662,9 @@ async def _shield_bundle(
                     "scraped_pages": cleaned_pages,
                     "culture_claims": cleaned_claims,
                 }
+            ),
+            "sources_truncated": list(
+                dict.fromkeys(list(bundle.sources_truncated) + truncated_sources)
             ),
         }
     )
@@ -690,7 +821,7 @@ async def handle_draft_cv(
     agent failed, or the repair loop exhausted — see PROCESS.md
     Entry 37 for the additive contract.
     """
-    from .sub_agents import cv_tailor
+    from .sub_agents import cv_tailor_agentic as cv_tailor
     from .renderers import render_cv_docx, render_cv_pdf, render_latex_pdf
 
     bundle = await _load_session_bundle(session, storage)
@@ -725,16 +856,40 @@ async def handle_draft_cv(
         career_entries=retrieved,
     )
 
-    async def generator():
-        return await cv_tailor.generate(
-            jd=jd,
-            research_bundle=bundle,
-            user=user,
-            retrieved_entries=retrieved,
-            style_profile=style_profile,
-            star_material=star_polishes,
-            citation_ctx=citation_ctx,
-        )
+    # Both branches run the agentic FAISS-retrieval implementation
+    # (cv_tailor.py is a re-export of cv_tailor_agentic since PROCESS
+    # Entry 42 D5). The flag controls *wrapping*:
+    #   - True  → call_in_session("cv_tailor_advisor", ...): Managed
+    #             Agents wrapper (Sonnet executor + Opus advisor when
+    #             the Advisor-tool surface is wired; today it delegates
+    #             back to cv_tailor_agentic).
+    #   - False → in-process call_agent_with_tools loop in cv_tailor_agentic.
+    # Default off: managed agents are opt-in across this codebase.
+    # PROCESS Entry 43 Workstream D + Entry 44.
+    if settings.enable_managed_cv_tailor:
+        from .llm import call_in_session
+
+        async def generator():
+            return await call_in_session(
+                "cv_tailor_advisor",
+                jd=jd,
+                research_bundle=bundle,
+                user=user,
+                style_profile=style_profile,
+                star_polishes=star_polishes,
+                session_id=session.session_id,
+            )
+    else:
+        async def generator():
+            return await cv_tailor.generate(
+                jd=jd,
+                research_bundle=bundle,
+                user=user,
+                retrieved_entries=retrieved,
+                style_profile=style_profile,
+                star_material=star_polishes,
+                citation_ctx=citation_ctx,
+            )
 
     cv = await generator()
     cv = await _audit_and_ship(
@@ -787,12 +942,6 @@ async def handle_draft_cover_letter(
 
     company_name = bundle.company_research.company_name
 
-    citation_ctx = await build_context(
-        research_bundle=bundle,
-        user_id=user.user_id,
-        career_entries=retrieved,
-    )
-
     async def generator():
         return await cover_letter.generate(
             jd=jd,
@@ -801,7 +950,6 @@ async def handle_draft_cover_letter(
             retrieved_entries=retrieved,
             style_profile=style_profile,
             star_material=star_polishes,
-            citation_ctx=citation_ctx,
         )
 
     cl = await generator()
@@ -988,13 +1136,120 @@ async def handle_draft_reply(
         kind_weights=STAR_BOOST_KINDS,
     )
 
-    return await draft_reply.generate(
+    reply = await draft_reply.generate(
         incoming_message=cleaned_msg,
         user_intent_hint=user_intent,
         user=user,
         style_profile=style_profile,
         relevant_entries=relevant,
     )
+
+    # Cross-application learning: record this recruiter interaction so
+    # future draft_reply / salary_strategist calls can learn the user's
+    # patterns. PROCESS Entry 43, Workstream E.
+    try:
+        from .memory import record_recruiter_interaction
+        await record_recruiter_interaction(
+            user_id=user.user_id,
+            session_id=session_id,
+            interaction_type=_interaction_type_from_intent(
+                reply.user_intent_interpreted
+            ),
+            user_response_summary=reply.short_variant[:500],
+        )
+    except Exception as exc:
+        log.debug("memory.record_recruiter_interaction skipped: %s", exc)
+
+    return reply
+
+
+def _interaction_type_from_intent(interpreted: str) -> str:
+    """Map DraftReplyOutput.user_intent_interpreted -> memory enum."""
+    mapping = {
+        "accept_call": "phone_screen",
+        "decline_politely": "decline",
+        "ask_for_details": "initial_outreach",
+        "negotiate_salary": "offer_negotiation",
+        "defer": "initial_outreach",
+        "other": "initial_outreach",
+    }
+    return mapping.get(interpreted, "initial_outreach")
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — Offer analysis (PROCESS Entry 43, Workstream F)
+# ---------------------------------------------------------------------------
+
+
+async def handle_analyse_offer(
+    *,
+    user: UserProfile,
+    storage: Storage,
+    session: Optional[Session] = None,
+    file_id: Optional[str] = None,
+    pdf_bytes: Optional[bytes] = None,
+    text_pasted: Optional[str] = None,
+):
+    """Analyse a forwarded offer letter.
+
+    Inputs (one required): `file_id` (already uploaded to Files API),
+    `pdf_bytes` (will be uploaded), or `text_pasted` (plain text fallback).
+
+    `session` is optional — when present, the most-recent ResearchBundle
+    on it is included as gov_data + scraped-page documents for richer
+    market comparison.
+    """
+    from .sub_agents import offer_analyst
+
+    bundle: Optional[ResearchBundle] = None
+    if session is not None:
+        bundle = await _load_session_bundle(session, storage)
+
+    analysis = await offer_analyst.analyse(
+        user=user,
+        research_bundle=bundle,
+        file_id=file_id,
+        pdf_bytes=pdf_bytes,
+        text_pasted=text_pasted,
+        session_id=session.session_id if session else None,
+    )
+
+    # Cross-application memory: an offer landed.
+    try:
+        from .memory import record_application_outcome, record_negotiation_result
+        if session is not None:
+            await record_application_outcome(
+                user_id=user.user_id,
+                session_id=session.session_id,
+                company_name=analysis.company_name,
+                role_title=analysis.role_title or "",
+                outcome="offer_received",
+                notes=analysis.market_comparison_note or None,
+            )
+            if analysis.base_salary_gbp is not None:
+                # Best-effort numeric extraction; if it fails, skip record.
+                try:
+                    import re
+                    digits = "".join(re.findall(r"\d+", analysis.base_salary_gbp.value_text))
+                    if digits:
+                        offered = int(digits[:6])  # cap nonsense
+                        await record_negotiation_result(
+                            user_id=user.user_id,
+                            session_id=session.session_id,
+                            company_name=analysis.company_name,
+                            role_title=analysis.role_title or "",
+                            asked_gbp=user.salary_target or user.salary_floor,
+                            offered_gbp=offered,
+                            final_gbp=None,
+                            accepted=False,
+                            notes="initial offer; awaiting response",
+                        )
+                except Exception:
+                    pass
+    except Exception as exc:
+        log.debug("memory.record post-offer-analysis skipped: %s", exc)
+
+    return analysis
 
 
 # ---------------------------------------------------------------------------

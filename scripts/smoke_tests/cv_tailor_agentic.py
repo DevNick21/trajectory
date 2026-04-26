@@ -60,7 +60,11 @@ async def _body() -> tuple[list[str], list[str], float]:
     from trajectory.storage import insert_career_entry
     from trajectory.sub_agents import cv_tailor_agentic
 
-    settings.enable_agentic_cv_tailor = True
+    # D5 (2026-04-24): the agentic path is now the only CV tailor.
+    # The `cv_tailor` module is a thin re-export of `cv_tailor_agentic`.
+    # PROCESS Entry 44 renamed the flag to `enable_managed_cv_tailor`
+    # (default off) — it now toggles the Managed Agents wrapping, not
+    # the agentic-vs-legacy choice.
 
     # Seed a realistic 20-entry career history.
     seeded_ids: list[str] = []

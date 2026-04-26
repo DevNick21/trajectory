@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from ..prompts import load_prompt
 
+import asyncio
 import logging
 import re
 import unicodedata
@@ -111,12 +112,16 @@ INJECTION_PATTERNS: list[tuple[str, str]] = [
         r"(?im)^\s*(system|assistant|user)\s*:\s*",
     ),
     (
+        # Matches both opening (`<system>`) and closing (`</system>`)
+        # tags, case-insensitive — `[SYSTEM]`-style uppercase markers
+        # surfaced by an adversarial-onboarding persona stress test
+        # were silently slipping past the case-sensitive original.
         "role_marker_angle",
-        r"<\s*(system|assistant|human|user)\s*>",
+        r"(?i)<\s*/?\s*(system|assistant|human|user)\s*>",
     ),
     (
         "role_marker_square",
-        r"\[\s*(system|assistant|human|user)\s*\]",
+        r"(?i)\[\s*/?\s*(system|assistant|human|user)\s*\]",
     ),
     # Delimiter injection
     (
@@ -291,6 +296,49 @@ def tier1(content: str, max_length: int = 50_000) -> Tier1Result:
 TIER2_SYSTEM_PROMPT = load_prompt("content_shield_tier2")
 
 
+@dataclass
+class ShieldResult:
+    """Wrapper for the public `shield()` return shape.
+
+    Back-compat note: older call sites unpacked `(text, verdict)` from
+    shield(); we retain tuple-iteration (see __iter__) so those callers
+    continue to work without a flag day, but prefer attribute access
+    (.cleaned_text, .verdict, .truncated) in new code. A5 plumbs
+    `truncated` up into ResearchBundle.sources_truncated.
+    """
+
+    cleaned_text: str
+    verdict: Optional[ContentShieldVerdict]
+    truncated: bool = False
+
+    def __iter__(self):
+        yield self.cleaned_text
+        yield self.verdict
+
+
+def _is_retryable_error(exc: BaseException) -> bool:
+    """Classifier retries apply to transient network / upstream-5xx only.
+
+    Schema/validation errors are surfaced immediately — a malformed
+    Sonnet response is not a "try again" situation.
+    """
+    if isinstance(exc, asyncio.TimeoutError):
+        return True
+    try:
+        import anthropic  # type: ignore
+
+        if isinstance(exc, anthropic.APIConnectionError):
+            return True
+        if isinstance(exc, anthropic.APIStatusError):
+            status = getattr(exc, "status_code", None)
+            if isinstance(status, int) and status >= 500:
+                return True
+            return False
+    except Exception:  # pragma: no cover — anthropic import guarded
+        pass
+    return False
+
+
 async def tier2(
     cleaned_text: str,
     source_type: SourceType,
@@ -301,6 +349,13 @@ async def tier2(
     Callers should only invoke this when `tier1().flags` is non-empty
     AND `downstream_agent in HIGH_STAKES_AGENTS`. We still guard
     defensively against misuse so the shield stays a drop-in utility.
+
+    Retry + fail-closed behaviour (A4):
+      - On transient network errors or 5xx, retry exactly once.
+      - On persistent failure, REJECT for high-stakes agents (callers
+        translate REJECT to a user-facing integrity error). The old
+        fail-open-to-PASS_WITH_WARNING behaviour silently allowed
+        unshielded content through on a flaky classifier.
     """
     from ..llm import call_agent
 
@@ -314,35 +369,71 @@ async def tier2(
         "</untrusted_content>"
     )
 
-    try:
-        return await call_agent(
-            agent_name="content_shield_tier2",
-            system_prompt=TIER2_SYSTEM_PROMPT,
-            user_input=user_input,
-            output_schema=ContentShieldVerdict,
-            model=settings.sonnet_model_id,
-            effort="medium",
-            max_retries=1,
-            priority="NORMAL",
+    async def _call() -> ContentShieldVerdict:
+        return await asyncio.wait_for(
+            call_agent(
+                agent_name="content_shield_tier2",
+                system_prompt=TIER2_SYSTEM_PROMPT,
+                user_input=user_input,
+                output_schema=ContentShieldVerdict,
+                model=settings.sonnet_model_id,
+                effort="medium",
+                max_retries=1,
+                priority="NORMAL",
+            ),
+            timeout=settings.content_shield_tier2_timeout_s,
         )
-    except Exception as exc:
-        # Fail-open on classifier error: degrade to PASS_WITH_WARNING so
-        # upstream can still decide to proceed. Never fail-closed by
-        # default — a flaky classifier must not silently block every
-        # forward_job run.
-        logger.warning(
-            "content_shield tier2 failed for %s → %s (%s). Degrading "
-            "to PASS_WITH_WARNING.",
+
+    last_exc: Optional[BaseException] = None
+    for attempt in range(2):
+        try:
+            return await _call()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_error(exc) or attempt == 1:
+                break
+            logger.warning(
+                "content_shield tier2 transient error for %s → %s (attempt %d): %s",
+                source_type,
+                downstream_agent,
+                attempt + 1,
+                exc,
+            )
+
+    # Persistent failure. Fail-closed for high-stakes, fail-open for
+    # low-stakes (though low-stakes shouldn't reach here — the public
+    # shield() short-circuits them — keep the branch as defence in depth).
+    if downstream_agent in HIGH_STAKES_AGENTS:
+        logger.error(
+            "content_shield tier2 persistently failed for %s → %s (%s). "
+            "Failing closed (REJECT) for high-stakes agent.",
             source_type,
             downstream_agent,
-            exc,
+            last_exc,
         )
         return ContentShieldVerdict(
-            classification="SUSPICIOUS",
-            reasoning=f"Tier 2 classifier unavailable: {exc!s}",
+            classification="MALICIOUS",
+            reasoning=(
+                f"Tier 2 classifier unavailable after retry: {last_exc!s}. "
+                "Failing closed — refusing to pass unclassified content "
+                "to a high-stakes agent."
+            ),
             residual_patterns_detected=[],
-            recommended_action="PASS_WITH_WARNING",
+            recommended_action="REJECT",
         )
+    logger.warning(
+        "content_shield tier2 failed for %s → %s (%s). Low-stakes agent — "
+        "degrading to PASS_WITH_WARNING.",
+        source_type,
+        downstream_agent,
+        last_exc,
+    )
+    return ContentShieldVerdict(
+        classification="SUSPICIOUS",
+        reasoning=f"Tier 2 classifier unavailable: {last_exc!s}",
+        residual_patterns_detected=[],
+        recommended_action="PASS_WITH_WARNING",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -354,18 +445,25 @@ async def shield(
     content: str,
     source_type: SourceType,
     downstream_agent: str,
-) -> tuple[str, Optional[ContentShieldVerdict]]:
+) -> ShieldResult:
     """Full shield pipeline.
 
-    Returns `(cleaned_content, tier2_verdict_or_None)`.
+    Returns a `ShieldResult` with cleaned_text, optional Tier 2 verdict,
+    and a `truncated` flag propagated from Tier 1. The result is
+    iterable as `(cleaned_text, verdict)` for back-compat with the
+    old tuple return.
 
     - Tier 1 always runs.
     - Tier 2 runs only if Tier 1 flagged AND `downstream_agent` is
-      high-stakes. Otherwise returns None for the verdict.
+      high-stakes. Otherwise the verdict is None.
     """
     t1 = tier1(content)
     if not t1.flags:
-        return t1.cleaned_text, None
+        return ShieldResult(
+            cleaned_text=t1.cleaned_text,
+            verdict=None,
+            truncated=t1.truncated,
+        )
 
     if downstream_agent not in HIGH_STAKES_AGENTS:
         # Low-stakes: return cleaned text without the Sonnet round-trip.
@@ -376,11 +474,19 @@ async def shield(
             source_type,
             downstream_agent,
         )
-        return t1.cleaned_text, None
+        return ShieldResult(
+            cleaned_text=t1.cleaned_text,
+            verdict=None,
+            truncated=t1.truncated,
+        )
 
     verdict = await tier2(
         cleaned_text=t1.cleaned_text,
         source_type=source_type,
         downstream_agent=downstream_agent,
     )
-    return t1.cleaned_text, verdict
+    return ShieldResult(
+        cleaned_text=t1.cleaned_text,
+        verdict=verdict,
+        truncated=t1.truncated,
+    )
