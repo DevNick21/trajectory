@@ -1,4 +1,9 @@
-anthropic>=0.45.0
+anthropic>=0.97.0
+# Multi-provider CV tailor (PROCESS Entry 44). Optional at runtime — each
+# is gated by a per-provider API key in .env; missing keys raise
+# ProviderUnavailable and the orchestrator falls back to Anthropic.
+openai>=1.50.0     # OpenAI provider + Together-AI Llama (OpenAI-compatible)
+cohere>=5.10.0     # Cohere provider
 python-telegram-bot>=21.0
 httpx>=0.27.0
 playwright>=1.40.0

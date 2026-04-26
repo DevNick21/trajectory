@@ -866,7 +866,56 @@ async def handle_draft_cv(
     #   - False → in-process call_agent_with_tools loop in cv_tailor_agentic.
     # Default off: managed agents are opt-in across this codebase.
     # PROCESS Entry 43 Workstream D + Entry 44.
-    if settings.enable_managed_cv_tailor:
+    # Multi-provider routing (PROCESS Entry 44). When enabled and the
+    # session's job_url maps to a non-Anthropic provider in
+    # `ats_routing.ATS_TO_PROVIDER`, dispatch CV generation to that
+    # provider via `cv_tailor_multi_provider.generate_via_provider`.
+    # Anthropic-routed URLs (and all unmapped hosts) keep the existing
+    # path. Provider misconfig (missing API key) raises
+    # `ProviderUnavailable`, caught here and falls back to Anthropic so
+    # the demo never goes down on a misrouted request.
+    routed_provider = "anthropic"
+    if settings.enable_multi_provider_cv_tailor and session.job_url:
+        from .ats_routing import provider_for_url
+        routed_provider = provider_for_url(session.job_url)
+        if routed_provider != "anthropic":
+            log.info(
+                "cv_tailor multi-provider routing: url=%s -> provider=%s",
+                session.job_url, routed_provider,
+            )
+
+    if routed_provider != "anthropic":
+        from .sub_agents import cv_tailor_multi_provider as cv_mp
+        from .llm_providers import ProviderUnavailable
+
+        async def generator():
+            try:
+                return await cv_mp.generate_via_provider(
+                    provider=routed_provider,
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    style_profile=style_profile,
+                    star_material=star_polishes,
+                    citation_ctx=citation_ctx,
+                    session_id=session.session_id,
+                )
+            except ProviderUnavailable as exc:
+                log.warning(
+                    "cv_tailor multi-provider (%s) unavailable: %s — "
+                    "falling back to Anthropic agentic path.",
+                    routed_provider, exc,
+                )
+                return await cv_tailor.generate(
+                    jd=jd,
+                    research_bundle=bundle,
+                    user=user,
+                    retrieved_entries=retrieved,
+                    style_profile=style_profile,
+                    star_material=star_polishes,
+                    citation_ctx=citation_ctx,
+                )
+    elif settings.enable_managed_cv_tailor:
         from .llm import call_in_session
 
         async def generator():
