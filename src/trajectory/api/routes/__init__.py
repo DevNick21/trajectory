@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from .career import router as career_router
 from .files import router as files_router
 from .health import router as health_router
 from .onboarding import router as onboarding_router
@@ -30,5 +31,6 @@ api_router.include_router(sessions_router, prefix="/api")
 api_router.include_router(pack_router, prefix="/api")
 api_router.include_router(queue_router, prefix="/api")
 api_router.include_router(files_router, prefix="/api")
+api_router.include_router(career_router, prefix="/api")
 
 __all__ = ["api_router"]
