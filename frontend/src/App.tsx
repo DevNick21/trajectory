@@ -1,5 +1,6 @@
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
+import ChatDrawer from "@/components/ChatDrawer";
 import Dashboard from "@/pages/Dashboard";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
@@ -60,6 +61,7 @@ export default function App() {
           (success / info / warning / error) variants to the colors in
           the mockup. */}
       <Toaster theme="dark" richColors closeButton position="top-right" />
+      <ChatDrawer />
     </div>
   );
 }

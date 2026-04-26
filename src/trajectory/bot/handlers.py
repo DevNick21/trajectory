@@ -386,7 +386,36 @@ async def _require_session(
     last_session: Optional[Session],
     storage: Storage,
     label: str,
+    user_id: Optional[str] = None,
+    routed_message: Optional[str] = None,
 ) -> Optional[Session]:
+    """Locate the session for a draft request.
+
+    PROCESS Entry 45 — disambiguation by Job entity. If the user's
+    message mentions a company name (e.g. "draft a CV for the Acme
+    role"), prefer the most-recent session for the matching Job over
+    the global most-recent session. Falls back to last_session when
+    no company match.
+    """
+    routed_text = (routed_message or "").lower()
+    if user_id and routed_text and len(routed_text) > 6:
+        try:
+            from ..storage import find_jobs_for_user, get_session_for_job
+            # Find any job whose company name appears in the request.
+            jobs = await find_jobs_for_user(user_id, limit=20)
+            for job in jobs:
+                company_lower = (job["company_name"] or "").lower()
+                if company_lower and len(company_lower) >= 3 and company_lower in routed_text:
+                    matched = await get_session_for_job(user_id, job["job_id"])
+                    if matched is not None:
+                        log.info(
+                            "draft routed by company match: %r -> job=%s session=%s",
+                            company_lower, job["job_id"][:8], matched.session_id[:8],
+                        )
+                        return matched
+        except Exception as exc:
+            log.debug("draft job-lookup skipped: %s", exc)
+
     if not last_session:
         await update.message.reply_text(
             f"Forward a job URL first, then ask for {label}."
@@ -446,7 +475,10 @@ async def _send_document(
 
 
 async def _handle_draft_cv(update, context, user, storage, last_session):
-    session = await _require_session(update, last_session, storage, "a CV")
+    session = await _require_session(
+        update, last_session, storage, "a CV",
+        user_id=user.user_id, routed_message=update.message.text or "",
+    )
     if not session:
         return
     msg = await update.message.reply_text("Tailoring your CV…")
@@ -468,7 +500,10 @@ async def _handle_draft_cv(update, context, user, storage, last_session):
 
 
 async def _handle_draft_cover_letter(update, context, user, storage, last_session):
-    session = await _require_session(update, last_session, storage, "a cover letter")
+    session = await _require_session(
+        update, last_session, storage, "a cover letter",
+        user_id=user.user_id, routed_message=update.message.text or "",
+    )
     if not session:
         return
     msg = await update.message.reply_text("Writing your cover letter…")
@@ -482,7 +517,10 @@ async def _handle_draft_cover_letter(update, context, user, storage, last_sessio
 
 
 async def _handle_predict_questions(update, context, user, storage, last_session):
-    session = await _require_session(update, last_session, storage, "interview questions")
+    session = await _require_session(
+        update, last_session, storage, "interview questions",
+        user_id=user.user_id, routed_message=update.message.text or "",
+    )
     if not session:
         return
     msg = await update.message.reply_text("Predicting interview questions…")
@@ -493,7 +531,10 @@ async def _handle_predict_questions(update, context, user, storage, last_session
 
 
 async def _handle_salary_advice(update, context, user, storage, last_session):
-    session = await _require_session(update, last_session, storage, "salary advice")
+    session = await _require_session(
+        update, last_session, storage, "salary advice",
+        user_id=user.user_id, routed_message=update.message.text or "",
+    )
     if not session:
         return
     msg = await update.message.reply_text("Building your salary strategy…")
@@ -504,7 +545,10 @@ async def _handle_salary_advice(update, context, user, storage, last_session):
 
 
 async def _handle_full_prep(update, context, user, storage, last_session):
-    session = await _require_session(update, last_session, storage, "a full pack")
+    session = await _require_session(
+        update, last_session, storage, "a full pack",
+        user_id=user.user_id, routed_message=update.message.text or "",
+    )
     if not session:
         return
     msg = await update.message.reply_text(

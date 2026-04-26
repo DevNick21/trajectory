@@ -165,6 +165,29 @@ export const removeFromQueue = async (id: string): Promise<void> => {
 };
 
 // ---------------------------------------------------------------------------
+// Chat (PROCESS Entry 45)
+//   POST /api/chat — natural-language entrypoint mirroring the Telegram bot.
+//   Returns either a redirect target (for forward_job / draft_* etc.) or
+//   an inline text/card response.
+// ---------------------------------------------------------------------------
+
+export interface ChatResponse {
+  intent: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  reply_kind: "text" | "redirect" | "card";
+  text?: string | null;
+  redirect_to?: string | null;
+  payload?: Record<string, unknown> | null;
+  reasoning_brief?: string | null;
+}
+
+export const sendChat = (message: string, sessionId?: string) =>
+  request<ChatResponse>("/api/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+
+// ---------------------------------------------------------------------------
 // Offer analysis (PROCESS Entry 43, Workstream F)
 //   POST /api/sessions/{id}/offer  — multipart form. Pass either a PDF
 //   File OR a text string. `sessionId="none"` runs without a research
