@@ -19,41 +19,12 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
-# Tool definition for agent-side `recall_memory` tool registration.
-# Format follows Anthropic client-tool spec: agents call this; we
-# resolve via the recall() function below.
-MEMORY_TOOL_DEFINITION: dict = {
-    "name": "recall_memory",
-    "description": (
-        "Look up cross-application history for the current user. "
-        "Returns a JSON list of relevant memory entries, most recent "
-        "first. Use this before salary advice, draft replies, or "
-        "interview prep to ground recommendations in what worked / "
-        "didn't work for this user previously."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "kind": {
-                "type": "string",
-                "enum": [
-                    "application_outcome",
-                    "recruiter_interaction",
-                    "negotiation_result",
-                    "any",
-                ],
-                "description": "Memory kind filter; 'any' returns all kinds.",
-            },
-            "limit": {
-                "type": "integer",
-                "default": 5,
-                "minimum": 1,
-                "maximum": 20,
-            },
-        },
-        "required": ["kind"],
-    },
-}
+# MEMORY_TOOL_DEFINITION lived here as a client-tool registration for
+# agents that want tool-use-driven recall. salary_strategist /
+# draft_reply / likely_questions all pre-fetch via `recall()` and
+# inject the results into the prompt instead, so no agent ever needs
+# to dispatch the tool. Removed 2026-04-26 in the dead-code sweep —
+# recover via `git log` when a tool-use call site materialises.
 
 
 async def recall(

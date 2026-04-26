@@ -77,3 +77,8 @@ desktop.ini
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude Code runtime artefacts (settings.json + skills directory stay tracked)
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks/
+.claude/plans/
