@@ -25,6 +25,17 @@ export default function SessionList({ enabled = true }: Props) {
     queryKey: ["sessions"],
     queryFn: () => listSessions(),
     enabled,
+    // Auto-poll so the verdict badge appears after a forward_job
+    // finishes detached (the runner outlives the SSE consumer).
+    refetchInterval: 4000,
+    // Pause polling when the tab is hidden — background tabs
+    // shouldn't hammer the API.
+    refetchIntervalInBackground: false,
+    // Hard-cap retries: when the backend is down, default 3 retries
+    // × every 4s = a burst of 3 ECONNREFUSED entries every interval.
+    // One attempt + a clean failure is enough — the next refetch
+    // tick will retry.
+    retry: 1,
   });
 
   return (

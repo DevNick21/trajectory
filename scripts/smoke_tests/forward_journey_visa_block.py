@@ -162,7 +162,9 @@ async def _body() -> tuple[list[str], list[str], float]:
             "verdict_module._mock_verdict": verdict_module._mock_verdict,
         }
 
-        async def _fake_scraper(*, job_url, session_id):
+        async def _fake_scraper(*, job_url, session_id, on_jd_extracted=None):
+            if on_jd_extracted is not None:
+                await on_jd_extracted()
             return bundle.company_research, bundle.extracted_jd
 
         async def _fake_ch(*, company_name):

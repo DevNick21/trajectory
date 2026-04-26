@@ -67,6 +67,12 @@ _DYNAMIC_HOSTS = {
     "glassdoor.com",
     "glassdoor.co.uk",
     "www.glassdoor.com",
+    # ATS hosts that ship a JS shell + fetch the JD client-side. httpx
+    # returns the empty `<div id="root">` and the JD extractor finds
+    # nothing. Playwright waits for `networkidle` which gives us the
+    # rendered DOM.
+    "jobs.ashbyhq.com",
+    "ashbyhq.com",
 }
 
 _FETCH_TIMEOUT = 20.0
@@ -137,8 +143,42 @@ async def _fetch_with_playwright(url: str) -> Optional[str]:
         try:
             context = await browser.new_context(user_agent=_USER_AGENT)
             page = await context.new_page()
-            await page.goto(url, timeout=int(_FETCH_TIMEOUT * 1000))
-            await page.wait_for_load_state("networkidle", timeout=10_000)
+            # `domcontentloaded` fires when the HTML is parsed — much
+            # earlier than the default `load` event, which on
+            # JS-heavy SPAs (Ashby, some Greenhouse boards) waits for
+            # *all* subresources including long-tail analytics requests
+            # that may never settle within the 20s budget. Layered on
+            # top: networkidle and the SPA content-presence check
+            # below ensure we still see the rendered JD before
+            # returning. Without this swap, page.goto times out and
+            # the whole forward_job raises before any LLM call fires.
+            await page.goto(
+                url,
+                timeout=int(_FETCH_TIMEOUT * 1000),
+                wait_until="domcontentloaded",
+            )
+            try:
+                await page.wait_for_load_state("networkidle", timeout=10_000)
+            except Exception:
+                # networkidle is best-effort on SPAs that keep polling
+                # analytics — fall through to the body-text wait.
+                pass
+            # Many ATS SPAs (Ashby, Workable, Greenhouse) render the JD
+            # AFTER `networkidle` fires — they hydrate, then issue a
+            # client-side fetch for the JD. Without this wait the
+            # cached page is the empty shell ("You need to enable
+            # JavaScript to run this app."). Poll for substantive
+            # body text — `<body>` having more than ~500 chars of
+            # rendered text means the JD is in the DOM.
+            try:
+                await page.wait_for_function(
+                    "document.body && document.body.innerText.length > 500",
+                    timeout=8_000,
+                )
+            except Exception:
+                # Best-effort — if the page genuinely has < 500 chars
+                # we'll still return whatever HTML we have.
+                pass
             html = await page.content()
             return html
         finally:
@@ -246,8 +286,15 @@ async def run(
     job_url: str,
     *,
     session_id: Optional[str] = None,
+    on_jd_extracted: Optional[Any] = None,
 ) -> tuple[CompanyResearch, ExtractedJobDescription]:
     """Full pipeline: fetch JD, extract, scrape company pages, summarise.
+
+    `on_jd_extracted` (optional) is an async callable invoked once
+    `_extract_jd` returns, BEFORE company-page scraping starts. The
+    orchestrator uses this to fire the `phase_1_jd_extractor` progress
+    tick early so the UI doesn't sit at `○` for the full 30-50s of
+    company-side scraping + summarisation.
 
     Opt-in Managed Agents path (PROCESS.md Entry 35): when
     `settings.enable_managed_company_investigator` is on, try the
@@ -302,6 +349,15 @@ async def run(
     extracted_jd = await _extract_jd(
         job_url, jd_text, session_id=session_id, jsonld=jsonld,
     )
+
+    # Fire the JD-extractor tick early so the UI doesn't wait until
+    # the company-page summariser also finishes (which can be another
+    # 10-20s on top of this).
+    if on_jd_extracted is not None:
+        try:
+            await on_jd_extracted()
+        except Exception as exc:
+            logger.warning("on_jd_extracted callback raised: %s", exc)
 
     company_domain = _infer_company_domain(
         job_url, company_name=extracted_jd.role_title
