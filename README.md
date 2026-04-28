@@ -278,4 +278,4 @@ Full rules and rationale: [CLAUDE.md](CLAUDE.md)
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 (AGPL-3.0) — see [LICENSE](LICENSE).
