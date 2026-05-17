@@ -135,6 +135,30 @@ class Settings(BaseSettings):
     enable_managed_likely_questions: bool = False
     enable_managed_salary_strategist: bool = False
 
+    # --- sponsor-register matching tunables (sub_agents/sponsor_register)
+    # Ensemble score cut-off below which a candidate is not even considered
+    # a runner-up. Was previously a magic constant (92) on the WRatio-only
+    # pipeline. Stayed at 92 by default: WRatio is one of three scorers
+    # in the ensemble and the floor is taken on the minimum of WRatio and
+    # token_sort_ratio, so 92 here is meaningfully stricter than the old
+    # single-scorer 92.
+    sponsor_match_threshold: float = 92.0
+    # Score band where the rule-based ensemble is uncertain. Matches in
+    # this band are rescored with the offline-trained Splink model when
+    # `enable_splink_sponsor_match` is on. Picked from empirical
+    # WRatio-only behaviour: scores below ~80 are noise, above ~95 are
+    # near-exact; the middle is where false positives and false negatives
+    # actually live.
+    sponsor_ambiguous_band_low: float = 80.0
+    sponsor_ambiguous_band_high: float = 95.0
+    # Use the Splink model artifact at
+    # `data/processed/sponsor_splink_model.json` to rescore ambiguous-band
+    # candidates. Off by default — the rule-based pipeline is the
+    # contract; Splink is an opt-in upgrade requiring an offline training
+    # pass (scripts/train_sponsor_splink.py). Falls back to rule scores
+    # if the artifact is missing or splink is not installed.
+    enable_splink_sponsor_match: bool = False
+
     # --- paths
     data_dir: Path = Path("./data")
     sqlite_db_path: Path = Path("./data/trajectory.db")

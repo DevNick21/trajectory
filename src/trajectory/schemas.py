@@ -463,6 +463,22 @@ class CompaniesHouseSnapshot(BaseModel):
     source_status: SourceStatus = "OK"
 
 
+class SponsorAlternativeMatch(BaseModel):
+    """A runner-up sponsor-register row that scored above threshold but
+    was not picked as the primary match. Surfaced so the verdict agent
+    can reason about ambiguous matches (e.g. when a careers-page trade
+    name resolves to two plausible legal entities). Always ordered by
+    descending score under `SponsorStatus.alternative_matches`.
+    """
+
+    matched_name: str
+    rating: Optional[str] = None
+    status: Literal[
+        "LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED", "UNKNOWN"
+    ]
+    score: float
+
+
 class SponsorStatus(BaseModel):
     status: Literal[
         "LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED", "UNKNOWN"
@@ -472,6 +488,9 @@ class SponsorStatus(BaseModel):
     visa_routes: list[str] = Field(default_factory=list)
     last_register_update: Optional[date] = None
     source_status: SourceStatus = "OK"
+    # Runner-up matches when scores cluster (top-K, K-1). Empty when the
+    # primary match is unambiguous or there is no match at all.
+    alternative_matches: list[SponsorAlternativeMatch] = Field(default_factory=list)
 
 
 class SocCheckResult(BaseModel):
