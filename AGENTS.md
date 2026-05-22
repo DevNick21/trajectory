@@ -7,30 +7,46 @@
 
 The **Adapter** column is the `llm.py` dispatcher each agent uses (see CLAUDE.md "Adapter dispatch in `llm.py`"). Picking a different adapter for an existing agent is a substantial change — the post-2026-04-25 migration assigned each.
 
+Updated 2026-05-22 — `intent_router` gained a deterministic tier-0,
+`ghost_job_jd_scorer` is fully deterministic (no LLM), and three
+agent-pairs collapsed: `question_designer + likely_questions ->
+interview_questions`, `cv_parser + career_narrator -> cv_parser`,
+plus salary signals dropped from Phase 1 (kept on-demand only).
+
 | # | Agent | Model | Adapter | Called by | Phase |
 |---|-------|-------|---------|-----------|-------|
-| 1 | Intent Router | Opus 4.7 `xhigh` | `call_structured` | Bot handler, every incoming message | Routing |
-| 2 | Company Scraper Summariser | Sonnet 4.6 | `call_structured` | company_scraper.py after raw scrape (legacy fallback) | Phase 1 |
-| 3 | JD Extractor | Sonnet 4.6 | `call_with_tools` (Web Fetch on non-JS pages) | company_scraper.py on JD text | Phase 1 |
-| 4 | Red Flags Detector | Opus 4.7 `xhigh` | `call_with_citations` (+ Web Search tool) | Phase 1 fan-out | Phase 1 |
-| 5 | Ghost Job JD Scorer | Opus 4.7 `xhigh` | `call_structured` | ghost_job_detector.py signal 3 | Phase 1 |
-| 6 | Verdict | Opus 4.7 `xhigh` | `call_with_citations` (+ Code Execution for hard-blocker scoring) | Orchestrator after Phase 1 | Phase 2 |
-| 7 | Question Designer | Opus 4.7 `xhigh` | `call_structured` | User-triggered after GO | Phase 3 |
-| 8 | STAR Polisher | Opus 4.7 `xhigh` | `call_structured` | After each user answer | Phase 3 |
-| 9 | Writing Style Extractor | Opus 4.7 `xhigh` | `call_structured` | Onboarding, once | Onboarding |
-| 10 | Onboarding Orchestrator | Opus 4.7 `xhigh` | `call_structured` | End of onboarding flow | Onboarding |
-| 11 | Salary Strategist | Opus 4.7 `xhigh` | `call_with_citations` (+ Code Execution + Memory tool) | User-triggered | Phase 4 |
-| 12 | CV Tailor (agentic) | Opus 4.7 `xhigh` | `call_agent_with_tools` (multi-turn FAISS retrieval, `cv_tailor_agentic.py`) | User-triggered | Phase 4 |
-| 13 | Cover Letter Writer | Opus 4.7 `xhigh` | `call_with_citations` | User-triggered | Phase 4 |
-| 14 | Likely Questions Predictor | Opus 4.7 `xhigh` | `call_with_citations` (+ Memory tool) | User-triggered | Phase 4 |
-| 15 | Draft Reply | Opus 4.7 `xhigh` | `call_with_citations` (+ Memory tool) | User-triggered | PA |
-| 16 | Self-Audit | Opus 4.7 `xhigh` | `call_structured` | After every Phase 4 generation | Phase 4.5 |
-| 17 | Prompt Auditor | Opus 4.7 `xhigh` | `call_structured` (predicted) / `call_in_session` (empirical, `--empirical` flag) | Developer, via `scripts/audit_prompt.py` | Build-time only |
+| 1 | Intent Router | **Tier-0 rules + Haiku 4.5 fallback** | `call_structured` (when tier-0 returns None) | Bot handler, every incoming message | Routing |
+| 2 | Company Scraper Summariser | Sonnet 4.6 | `call_structured` | company_scraper.py | Phase 1 |
+| 3 | JD Extractor | **Haiku 4.5** | `call_with_tools` (Web Fetch fallback) | company_scraper.py on JD text | Phase 1 |
+| 4 | Red Flags Detector | Sonnet 4.6 | `call_with_citations` (+ Web Search) | Phase 1 fan-out | Phase 1 |
+| 5 | Ghost Job JD Scorer | **Deterministic (no LLM)** | regex 5-dim scoring | ghost_job_detector.py | Phase 1 |
+| 6 | Gazette insolvency check | **Deterministic (no LLM)** | HTTP + regex against thegazette.co.uk | Phase 1 fan-out | Phase 1 |
+| 7 | Verdict | **Opus 4.7 `xhigh`** | `call_with_citations` | Orchestrator after Phase 1 | Phase 2 |
+| 8 | Interview Questions (design + predict) | **Haiku 4.5** | `call_structured` / `call_with_citations` | `design` post-GO; `predict` user-triggered | Phase 3/4 |
+| 9 | STAR Polisher | Sonnet 4.6 | `call_structured` | After each user answer | Phase 3 |
+| 10 | Writing Style Extractor | Sonnet 4.6 | `call_structured` | Onboarding, once | Onboarding |
+| 11 | Onboarding Parser | Sonnet 4.6 | `call_structured` | End of onboarding flow | Onboarding |
+| 12 | Salary Strategist | **Opus 4.7 `xhigh`** | `call_with_citations` (+ Code Execution + Memory tool) | On-demand only (no longer Phase 1) | Phase 4 |
+| 13 | CV Tailor (agentic) | **Opus 4.7 `xhigh`** | `call_agent_with_tools` (multi-turn FAISS retrieval) | User-triggered | Phase 4 |
+| 14 | Cover Letter Writer | **Opus 4.7 `xhigh`** | `call_with_citations` | User-triggered | Phase 4 |
+| 15 | Draft Reply | Sonnet 4.6 | `call_with_citations` (+ Memory tool) | User-triggered | PA |
+| 16 | Self-Audit | **Haiku 4.5** | `call_structured` | After every Phase 4 generation | Phase 4.5 |
+| 17 | Prompt Auditor | Opus 4.7 `xhigh` | `call_structured` / `call_in_session` (`--empirical`) | Developer, via `scripts/audit_prompt.py` | Build-time only |
 | 18 | Content Shield (Tier 2) | Sonnet 4.6 | `call_structured` | `validators/content_shield.py` on flagged untrusted content | Pre-prompt |
-| 19 | Company Investigator | Sonnet 4.6 (in session) | `call_in_session` (`managed/company_investigator.py`) | Phase 1, when `enable_managed_company_investigator=True` | Phase 1 |
-| 20 | Reviews Investigator | Sonnet 4.6 (in session) | `call_in_session` (`managed/reviews_investigator.py`) | Phase 1 fan-out | Phase 1 |
-| 21 | Verdict Deep Research | Opus 4.7 `xhigh` (in session) | `call_in_session` (`managed/verdict_deep_research.py`) | Premium "Real-time hiring intent verification" (ASKPICKY.md §8) | Phase 2 |
-| 22 | Offer Analyst | Opus 4.7 `xhigh` | `call_with_citations` (+ Files API for PDF) | User-triggered (`analyse_offer` intent) | Phase 4 |
+| 19 | Company Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/company_investigator.py`) | Phase 1, when `enable_managed_company_investigator=True` | Phase 1 |
+| 20 | Reviews Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/reviews_investigator.py`) | Phase 1 fan-out, replaces no-op jobspy path | Phase 1 |
+| 21 | Verdict Deep Research (managed) | Opus 4.7 `xhigh` (in session) | `call_in_session` (`managed/verdict_deep_research.py`) | Premium "Real-time hiring intent verification" (ASKPICKY.md §8) | Phase 2 |
+| 22 | Offer Analyst | **Opus 4.7 `xhigh`** | `call_with_citations` (+ Files API) | User-triggered (`analyse_offer` intent) | Phase 4 |
+| 23 | CV Parser (structure + narrative in one call) | **Haiku 4.5** | `call_structured` (tier-0 regex pre-pass + Haiku enrich) | `/api/onboarding/cv_import` + `/cv_enrich` | Onboarding |
+| 24 | Entity Resolution Judge | **Haiku 4.5** | `call_structured` | `entity_resolution.judge` on ambiguous CRN matches | Phase 1A.5 |
+
+Cuts since the original inventory:
+
+- ~~Intent Router (Opus xhigh)~~ — deterministic tier-0 + Haiku fallback
+- ~~Question Designer~~ + ~~Likely Questions Predictor~~ — merged into Interview Questions
+- ~~Ghost Job JD Scorer (Opus xhigh)~~ — pure regex now
+- ~~Career Narrator~~ — folded into CV Parser's single Haiku call
+- ~~Salary Data agent in Phase 1~~ — kept as a module for the on-demand Salary Strategist, dropped from the verdict pipeline (most JDs don't post a band)
 
 ---
 

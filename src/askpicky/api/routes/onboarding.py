@@ -412,32 +412,7 @@ async def cv_enrich(
     return out.model_dump(mode="json")
 
 
-# Career narrator — feeds the "Career so far" stage with a Picky-voice
-# bio summary instead of raw CV bullets.
-@router.post("/onboarding/cv_narrate")
-async def cv_narrate(
-    payload: dict,
-) -> dict:
-    """Generate a 2-3 paragraph career narrative from a parsed CV.
-
-    Body: a `CVImport` dict (the shape /cv_import or /cv_enrich returned).
-    Returns: `{ "narrative": "<2-3 paragraph chronological bio>" }`.
-    """
-    from ...schemas import CVImport
-    from ...sub_agents.career_narrator import narrate
-    try:
-        cv = CVImport.model_validate(payload)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "invalid_cv_payload", "message": str(exc)[:200]},
-        )
-    try:
-        narrative = await narrate(cv=cv)
-    except Exception as exc:
-        log.exception("career_narrator failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"code": "narrator_failed", "message": str(exc)[:200]},
-        )
-    return {"narrative": narrative}
+# The career narrative is now produced inline by `cv_parser.parse` —
+# `/cv_enrich` returns the parsed CV WITH the `narrative` field
+# populated. The standalone `/cv_narrate` endpoint was retired
+# 2026-05-22 (one Haiku call, two outputs).

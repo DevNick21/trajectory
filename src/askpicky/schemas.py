@@ -1128,7 +1128,12 @@ class CVImportProject(BaseModel):
 
 
 class CVImportLLMOutput(BaseModel):
-    """Sonnet's output shape — no `raw_text`, the caller supplies that."""
+    """LLM output shape — no `raw_text`, the caller supplies that.
+
+    `narrative` is the Step-8-"Career so far" chronological bio that
+    used to come from a separate career_narrator agent. Merged into
+    this one call (2026-05-22) — one Haiku invocation, both outputs.
+    """
     name: Optional[str] = None
     base_location: Optional[str] = None
     contact_email: Optional[str] = None
@@ -1137,6 +1142,15 @@ class CVImportLLMOutput(BaseModel):
     education: list[CVImportEducation] = Field(default_factory=list)
     projects: list[CVImportProject] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
+    narrative: Optional[str] = Field(
+        default=None,
+        description=(
+            "A 2-3 paragraph chronological career bio in the user's "
+            "voice (third person), 100-200 words. Pre-fills the "
+            "wizard's 'Career so far' textarea. None when extraction "
+            "produced too little material to summarise."
+        ),
+    )
     extraction_confidence: int = Field(ge=1, le=10)
 
 

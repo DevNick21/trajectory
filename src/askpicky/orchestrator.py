@@ -941,7 +941,7 @@ async def handle_predict_questions(
     user: UserProfile,
     storage: Storage,
 ) -> LikelyQuestionsOutput:
-    from .sub_agents import likely_questions
+    from .sub_agents import interview_questions
 
     bundle = await _load_session_bundle(session, storage)
     if bundle is None:
@@ -988,7 +988,7 @@ async def handle_predict_questions(
                 log.warning(
                     "likely_questions_managed failed; falling back: %s", exc,
                 )
-                return await likely_questions.generate(
+                return await interview_questions.predict(
                     jd=jd,
                     research_bundle=bundle,
                     user=user,
@@ -997,7 +997,7 @@ async def handle_predict_questions(
                 )
     else:
         async def generator():
-            return await likely_questions.generate(
+            return await interview_questions.predict(
                 jd=jd,
                 research_bundle=bundle,
                 user=user,

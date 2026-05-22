@@ -94,14 +94,14 @@ _REGISTRY: list[_Entry] = [
     _Entry("content_shield",     "scripts.smoke_tests.content_shield",     cheap=False, category="agent-util"),
     _Entry("onboarding_parser",  "scripts.smoke_tests.onboarding_parser",  cheap=False, category="agent-util"),
     _Entry("intent_router",      "scripts.smoke_tests.intent_router",      cheap=False, category="agent-util"),
-    _Entry("question_designer",  "scripts.smoke_tests.question_designer",  cheap=False, category="agent-util"),
+    # question_designer + likely_questions merged into interview_questions (2026-05-22).
     _Entry("star_polisher",      "scripts.smoke_tests.star_polisher",      cheap=False, category="agent-util"),
     _Entry("self_audit",         "scripts.smoke_tests.self_audit",         cheap=False, category="agent-util"),
     _Entry("prompt_auditor",     "scripts.smoke_tests.prompt_auditor",     cheap=False, category="agent-util"),
 
     # ── phase4 generators ──────────────────────────────────────────────
     _Entry("cover_letter",       "scripts.smoke_tests.cover_letter",       cheap=False, category="phase4"),
-    _Entry("likely_questions",   "scripts.smoke_tests.likely_questions",   cheap=False, category="phase4"),
+    # likely_questions merged into interview_questions.predict (2026-05-22).
     _Entry("salary_strategist",  "scripts.smoke_tests.salary_strategist",  cheap=False, category="phase4"),
     _Entry("draft_reply",        "scripts.smoke_tests.draft_reply",        cheap=False, category="phase4"),
 

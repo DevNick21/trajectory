@@ -22,13 +22,10 @@ JD-scorer prompt is verbatim from AGENTS.md §5.
 
 from __future__ import annotations
 
-from ..prompts import load_prompt
-
+import re
 from datetime import date
 from typing import Optional
 
-from ..config import settings
-from ..llm import call_agent
 from ..schemas import (
     Citation,
     CompaniesHouseSnapshot,
@@ -41,32 +38,205 @@ from ..schemas import (
 
 
 # ---------------------------------------------------------------------------
-# LLM — JD specificity scorer
+# Deterministic JD specificity scorer (replaces the LLM call as of 2026-05-22)
 # ---------------------------------------------------------------------------
+#
+# The five dimensions used to need an LLM because the prompt asked for
+# subjective "is this specific?" judgement. In practice the signals
+# are countable:
+#
+#   named_hiring_manager   — boolean already supplied by jd_extractor
+#   specific_tech_stack    — count of named tech tokens / branded tools
+#   specific_duty_bullets  — count of bullets with action verb + object
+#   specific_team_context  — regex for team-size / reporting-line language
+#   specific_success_metrics — regex for numbers with units (%, $, hours, x)
+#
+# Each dimension scored 0.0-1.0; specificity_score is their average,
+# rescaled to 0-5 to keep the downstream _vague_jd_signal thresholds
+# unchanged. No LLM call — the scorer runs in ~5ms.
 
 
-JD_SCORER_SYSTEM_PROMPT = load_prompt("ghost_job_jd_scorer")
+# Action verbs that, when starting a bullet, signal a real duty
+# description rather than an aspirational tagline. Not exhaustive —
+# the goal is to catch "Built / Designed / Shipped / Reduced X by Y"
+# and miss "Be passionate" / "Have a positive attitude".
+_ACTION_VERBS = frozenset({
+    "built", "build", "designed", "design", "shipped", "ship",
+    "implemented", "implement", "led", "lead", "managed", "manage",
+    "owned", "own", "drove", "drive", "delivered", "deliver",
+    "reduced", "reduce", "increased", "increase", "improved", "improve",
+    "automated", "automate", "scaled", "scale", "migrated", "migrate",
+    "refactored", "refactor", "deployed", "deploy", "integrated",
+    "integrate", "developed", "develop", "architected", "architect",
+    "created", "create", "wrote", "write", "tested", "test",
+    "optimised", "optimised", "optimized", "optimize", "rolled",
+    "launched", "launch", "negotiated", "negotiate", "established",
+    "establish", "analysed", "analyzed", "analyze", "researched",
+    "research", "presented", "present", "facilitated", "facilitate",
+    "mentored", "mentor", "trained", "train", "coordinated",
+    "coordinate", "evaluated", "evaluate", "audited", "audit",
+})
 
 
-async def _score_jd(
-    jd: ExtractedJobDescription,
-    session_id: Optional[str],
-) -> GhostJobJDScore:
-    return await call_agent(
-        agent_name="phase_1_ghost_job_jd_scorer",
-        system_prompt=JD_SCORER_SYSTEM_PROMPT,
-        user_input=(
-            f"ROLE: {jd.role_title}\n"
-            f"SENIORITY: {jd.seniority_signal}\n"
-            f"HIRING MANAGER NAMED: {jd.hiring_manager_named}"
-            f"{f' ({jd.hiring_manager_name})' if jd.hiring_manager_name else ''}\n\n"
-            "JD TEXT:\n"
-            f"{jd.jd_text_full[:16_000]}"
-        ),
-        output_schema=GhostJobJDScore,
-        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
-        effort="xhigh",
-        session_id=session_id,
+# Branded tech tokens — capitalised proper nouns + acronyms that
+# strongly signal real stack disclosure. Not a closed list; the
+# regex below also accepts CamelCase / ALL_CAPS / X.js patterns.
+_TECH_HINTS = re.compile(
+    r"\b(?:"
+    r"Python|JavaScript|TypeScript|Go|Rust|Java|Kotlin|Swift|C\+\+|C#|Ruby|"
+    r"React|Vue|Angular|Svelte|Next\.js|Nuxt|Django|Flask|FastAPI|Rails|"
+    r"Spring|Express|NestJS|GraphQL|REST|gRPC|Kafka|RabbitMQ|Redis|Postgres|"
+    r"PostgreSQL|MySQL|MongoDB|DynamoDB|Snowflake|BigQuery|Databricks|"
+    r"Spark|Airflow|dbt|Tableau|PowerBI|Looker|Kubernetes|Docker|Terraform|"
+    r"Ansible|Pulumi|AWS|GCP|Azure|Heroku|Vercel|Netlify|Cloudflare|"
+    r"Datadog|Sentry|Prometheus|Grafana|Splunk|PyTorch|TensorFlow|"
+    r"scikit-learn|HuggingFace|LangChain|OpenAI|Anthropic|Claude|GPT-?\d|"
+    r"FAISS|Pinecone|Weaviate|Pandas|NumPy|Jupyter|Git|GitHub|GitLab|"
+    r"Linear|Jira|Notion|Figma|Slack"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+# "team of N", "X engineers", "report to the [role]", etc.
+_TEAM_CONTEXT_RE = re.compile(
+    r"(?i)\b(?:"
+    r"team\s+of\s+\d+|"
+    r"report(?:s|ing)?\s+(?:to|directly to)\s+(?:the\s+|our\s+)?[A-Z]\w+|"
+    r"\d+(?:\s*-\s*\d+)?\s+(?:engineers?|developers?|designers?|analysts?|"
+    r"product\s+managers?|data\s+scientists?)|"
+    r"part\s+of\s+(?:a|the)\s+\d+[\s-]+person\b|"
+    r"alongside\s+\d+|"
+    r"working\s+with\s+(?:our|the)\s+[A-Z]\w+\s+team"
+    r")\b"
+)
+
+
+# Numbers with units — "20%", "$1M", "3x", "40 hours/week", "p99 280ms"
+_SUCCESS_METRIC_RE = re.compile(
+    r"(?i)(?:"
+    r"\b\d+(?:\.\d+)?\s*%|"
+    r"[$£€]\s*\d+(?:\.\d+)?\s*(?:k|m|b|million|billion)?|"
+    r"\b\d+(?:\.\d+)?\s*(?:x|times|fold)\b|"
+    r"\b\d+\s*(?:hours?|days?|weeks?|months?|years?|sprints?)\s*(?:/|per)\s*\w+|"
+    r"\bp(?:50|90|95|99|999)\s+\d+|"
+    r"\b\d+(?:,\d{3})+(?:\.\d+)?\s+(?:users?|customers?|transactions?|requests?|events?|rows?|records?|queries|sessions?)\b|"
+    r"\b\d+(?:k|m|b)\s+(?:users?|customers?|transactions?|requests?|rows?|records?)\b"
+    r")"
+)
+
+
+def _score_tech_stack(jd: ExtractedJobDescription) -> tuple[float, list[str]]:
+    """0.0–1.0 based on named tech tokens density."""
+    text = jd.jd_text_full
+    matches = set(m.group(0).lower() for m in _TECH_HINTS.finditer(text))
+    # Also count well-typed tokens already extracted upstream.
+    skill_count = len(jd.required_skills or [])
+    total = len(matches) + skill_count
+    if total >= 8:
+        return 1.0, sorted(matches)[:8]
+    if total >= 4:
+        return 0.7, sorted(matches)
+    if total >= 1:
+        return 0.4, sorted(matches)
+    return 0.0, []
+
+
+def _score_duty_bullets(jd: ExtractedJobDescription) -> tuple[float, int]:
+    """0.0–1.0 by count of bullets that start with an action verb."""
+    text = jd.jd_text_full
+    # Bullet candidates: lines starting with •, -, *, digit + ".", etc.
+    bullet_lines = [
+        ln.strip().lstrip("•-*").strip().lstrip("0123456789.").strip()
+        for ln in text.splitlines()
+        if ln.strip().startswith(("•", "-", "*"))
+        or re.match(r"^\d+\.", ln.strip())
+    ]
+    action_bullets = 0
+    for ln in bullet_lines:
+        if not ln:
+            continue
+        first_word = re.split(r"[\s,;:]+", ln, maxsplit=1)[0].lower()
+        if first_word in _ACTION_VERBS:
+            action_bullets += 1
+    if action_bullets >= 6:
+        return 1.0, action_bullets
+    if action_bullets >= 3:
+        return 0.7, action_bullets
+    if action_bullets >= 1:
+        return 0.4, action_bullets
+    return 0.0, action_bullets
+
+
+def _score_team_context(jd: ExtractedJobDescription) -> tuple[float, list[str]]:
+    matches = [m.group(0) for m in _TEAM_CONTEXT_RE.finditer(jd.jd_text_full)]
+    if len(matches) >= 2:
+        return 1.0, matches[:3]
+    if len(matches) == 1:
+        return 0.6, matches
+    return 0.0, []
+
+
+def _score_success_metrics(jd: ExtractedJobDescription) -> tuple[float, list[str]]:
+    matches = [m.group(0) for m in _SUCCESS_METRIC_RE.finditer(jd.jd_text_full)]
+    if len(matches) >= 3:
+        return 1.0, matches[:5]
+    if len(matches) >= 1:
+        return 0.5, matches
+    return 0.0, []
+
+
+def _score_jd_deterministic(jd: ExtractedJobDescription) -> GhostJobJDScore:
+    """5-dim specificity score using countable signals. No LLM."""
+    named_score = 1.0 if jd.hiring_manager_named else 0.0
+    tech_score, tech_signals = _score_tech_stack(jd)
+    duty_score, duty_count = _score_duty_bullets(jd)
+    team_score, team_signals = _score_team_context(jd)
+    metric_score, metric_signals = _score_success_metrics(jd)
+
+    # Rescale to 0-5 to keep downstream thresholds compatible.
+    overall = (named_score + tech_score + duty_score + team_score + metric_score) * 1.0
+    specificity_score = overall  # already 0-5
+
+    specificity_signals: list[str] = []
+    if jd.hiring_manager_named and jd.hiring_manager_name:
+        specificity_signals.append(f"Hiring manager named: {jd.hiring_manager_name}")
+    if tech_signals:
+        specificity_signals.append(
+            f"Specific tech stack: {', '.join(tech_signals[:5])}"
+        )
+    if duty_count:
+        specificity_signals.append(
+            f"{duty_count} action-verb duty bullet(s)"
+        )
+    if team_signals:
+        specificity_signals.append(f"Team context: {team_signals[0]}")
+    if metric_signals:
+        specificity_signals.append(
+            f"Success metrics cited: {', '.join(metric_signals[:3])}"
+        )
+
+    vagueness_signals: list[str] = []
+    if not jd.hiring_manager_named:
+        vagueness_signals.append("no hiring manager named")
+    if not tech_signals:
+        vagueness_signals.append("no specific tech / tooling mentioned")
+    if duty_count == 0:
+        vagueness_signals.append("no action-verb duty bullets")
+    if not team_signals:
+        vagueness_signals.append("no team-size or reporting-line context")
+    if not metric_signals:
+        vagueness_signals.append("no concrete success metrics")
+
+    return GhostJobJDScore(
+        named_hiring_manager=named_score,
+        specific_tech_stack=tech_score,
+        specific_duty_bullets=duty_score,
+        specific_team_context=team_score,
+        specific_success_metrics=metric_score,
+        specificity_score=specificity_score,
+        specificity_signals=specificity_signals,
+        vagueness_signals=vagueness_signals,
     )
 
 
@@ -217,7 +387,10 @@ async def score(
     job_url: str = "",
     session_id: Optional[str] = None,
 ) -> GhostJobAssessment:
-    jd_score = await _score_jd(jd, session_id=session_id)
+    # 5-dim score is now deterministic — see _score_jd_deterministic.
+    # Runs in ~5ms with no LLM cost. Replaces the previous
+    # phase_1_ghost_job_jd_scorer Opus/Sonnet call (2026-05-22).
+    jd_score = _score_jd_deterministic(jd)
 
     signals: list[GhostSignal] = []
     for s in (

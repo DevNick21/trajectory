@@ -10,7 +10,7 @@ AGPL-3.0 · Python 3.11+ · Anthropic SDK + first-party Citations · No auto-app
 ## What it does
 
 **Forward a job → cited verdict.**
-9 parallel research checks run against the JD, the company, and live UK government data. Picky combines them into a GO / NO_GO decision and explains exactly why — every load-bearing claim cites a verbatim source.
+A mix of deterministic + LLM checks run in parallel against the JD, the company, and live UK government data (Companies House profile + officers + charges + PSC, The Gazette insolvency notices, Sponsor Register, SOC, ASHE). Picky combines them into a GO / NO_GO decision and explains exactly why — every load-bearing claim cites a verbatim source.
 
 **Visa-aware out of the box.**
 Sponsor Register (with fuzzy-match + Splink rescoring), SOC threshold and new-entrant rule, Appendix Skilled Occupations eligibility, Companies House signals. The visa wedge is built in, not bolted on.

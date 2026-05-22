@@ -538,7 +538,12 @@ async def _extract_jd(
         system_prompt=JD_EXTRACTOR_SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=ExtractedJobDescription,
-        model=settings.sonnet_model_id,
+        # JD extraction is mostly structured field-by-field reshape
+        # (role, location, salary band, skills). Haiku handles this
+        # cleanly at ~3x lower cost + latency vs Sonnet. The JSON-LD
+        # tier-0 extractor in `jsonld_extractor.py` covers the major
+        # ATSes upstream — when it fires, this call never runs at all.
+        model=settings.haiku_model_id,
         effort="medium",
         session_id=session_id,
     )

@@ -42,9 +42,9 @@ logger = logging.getLogger(__name__)
 _SYSTEM_PROMPT = """You are a CV parser. The user will paste the raw
 text of their CV (already extracted from PDF or DOCX). Your job is to
 return a structured representation that an onboarding wizard can
-pre-fill.
+pre-fill, PLUS a 2-3 paragraph chronological career narrative.
 
-Rules:
+Rules for the structured extraction:
 1. Be faithful — extract what's THERE, don't infer or embellish.
 2. Roles are listed in reverse-chronological order on the CV; preserve
    that order in the `roles` array.
@@ -67,6 +67,21 @@ Rules:
    well-structured the input was and how cleanly you parsed it. A
    neat reverse-chronological CV gets 9-10; a messy one-page summary
    gets 4-6; an obviously truncated/garbled extraction gets 1-3.
+
+Rules for `narrative`:
+10. 2-3 paragraphs, 100-200 words total.
+11. CHRONOLOGICAL — start with earliest education/role, end with the
+    most recent. The CV is in reverse-chron; you reverse it back.
+12. Third person is fine; first person is fine too if their
+    professional_summary uses it.
+13. Each role gets one sentence describing scope + a defining bullet.
+    Don't enumerate every bullet — pick the most concrete one.
+14. Honest. A 2-month contract is a 2-month contract; don't inflate.
+15. No clichés. Banned: "passionate", "results-driven", "proven track
+    record", "leverage" (as a verb). The self-audit downstream will
+    flag these so don't ship them.
+16. When the CV is too sparse to summarise (e.g. one role, no detail),
+    set `narrative` to null. Don't fabricate.
 
 The `raw_text` field is filled in by the caller, not you. Don't try
 to populate it.
@@ -201,7 +216,7 @@ def _extract_roles_skeleton(text: str) -> list[CVImportRole]:
         roles.append(CVImportRole(
             title=title,
             company=company,
-            dates=dates_raw or None,
+            dates=dates_raw or "",
             bullets=[],
         ))
         if len(roles) >= 15:
@@ -297,9 +312,10 @@ async def parse(
     out = CVImport(**extracted.model_dump(), raw_text=cv_text)
     logger.info(
         "cv_parser (tier1/Haiku): name=%r roles=%d education=%d projects=%d "
-        "skills=%d confidence=%d",
+        "skills=%d narrative_chars=%d confidence=%d",
         out.name, len(out.roles), len(out.education),
-        len(out.projects), len(out.skills), out.extraction_confidence,
+        len(out.projects), len(out.skills),
+        len(out.narrative or ""), out.extraction_confidence,
     )
     return out
 

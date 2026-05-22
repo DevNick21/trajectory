@@ -58,21 +58,31 @@ Bias toward cheap+fast for anything mechanical, structured, or pattern-matching.
 - `offer_analyst` (offer-letter analysis with Files API + Citations)
 - `prompt_auditor` (build-time only)
 
-**Sonnet 4.6** — structured tasks, classification, restructuring:
+**Sonnet 4.6** — structured tasks with multi-page interpretive work:
 
-- `intent_router` (12-way classification)
-- `style_extractor`, `self_audit` (structured pattern matching)
-- `red_flags_detector`, `ghost_job_jd_scorer` (structured citations)
-- `question_designer`, `star_polisher`, `likely_questions`, `draft_reply` (Phase 3/4 with clear contracts)
-- `jd_extractor`, `company_scraper_summariser`, `onboarding_parser`, `content_shield_tier2`
+- `style_extractor` (latent voice extraction from samples)
+- `red_flags_detector` (Web Search + structured citations)
+- `star_polisher`, `draft_reply` (voice-sensitive output)
+- `company_scraper_summariser`, `onboarding_parser`, `content_shield_tier2`
 
-**Haiku 4.5** — mechanical / format-only:
+**Haiku 4.5** — mechanical reshape / classification / single-doc structured extraction:
 
-- `cv_parser` (CV structure extraction)
-- `career_narrator` (Picky-voice bio summary)
-- Any future agent that just reshapes data.
+- `intent_router` (Tier-0 deterministic rules first — ~80% of messages never hit the LLM; Haiku for the rest)
+- `cv_parser` (CV structure extraction + narrative bio in ONE call — merged from old `career_narrator` 2026-05-22)
+- `interview_questions.design` / `.predict` (merged from old `question_designer` + `likely_questions` 2026-05-22)
+- `jd_extractor` (structured field-by-field reshape; JSON-LD tier-0 covers the major ATSes upstream)
+- `self_audit` (banned-phrase + citation validation; mostly mechanical)
+- `entity_resolution.judge` (ambiguous-CRN tie-break)
 
-The downgrade from Opus to Sonnet on the 9 historical Opus calls landed 2026-05-22 — Sonnet handled every smoke test for those agents without quality regression. Promote back to Opus only with empirical evidence (smoke + at least 3 production samples).
+**Deterministic (no LLM)** — moved off LLMs in the 2026-05-22 simplification:
+
+- `intent_router` tier-0 (URL + keyword rules; ~1ms, $0)
+- `ghost_job_jd_scorer` (5-dim regex scoring; ~5ms, $0)
+- `cv_parser` tier-0 (regex + heuristics returning name/email/location/role skeleton in ~50ms)
+- `entity_resolution.footer_extractor` (Companies Act §82 boilerplate regex)
+- `entity_resolution.local_ch_index` (parquet-backed name index)
+
+The 2026-05-22 simplification round dropped 4 LLM calls per typical session (one per intent_router invocation when the message has a URL or obvious keyword, plus the merged surfaces) and downgraded ~10 agents from Sonnet to Haiku without smoke regressions. Promote back to Sonnet only with empirical evidence (smoke + at least 3 production samples).
 
 ### Rule 8 — Cost discipline
 All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.
