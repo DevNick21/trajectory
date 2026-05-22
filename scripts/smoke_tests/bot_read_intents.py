@@ -55,9 +55,9 @@ async def _body() -> tuple[list[str], list[str], float]:
     messages: list[str] = []
     failures: list[str] = []
 
-    from trajectory.bot import handlers as bot_handlers
-    from trajectory.schemas import CareerEntry, Verdict, ReasoningPoint, Citation, MotivationFitReport
-    from trajectory.storage import Storage
+    from askpicky.bot import handlers as bot_handlers
+    from askpicky.schemas import CareerEntry, Verdict, ReasoningPoint, Citation, MotivationFitReport
+    from askpicky.storage import Storage
 
     user = build_test_user("uk_resident")
     storage = Storage()

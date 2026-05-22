@@ -26,8 +26,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from fastapi.testclient import TestClient
-    from trajectory.config import settings
-    from trajectory.api.app import create_app
+    from askpicky.config import settings
+    from askpicky.api.app import create_app
 
     settings.demo_user_id = "smoke_onboarding_user"
 

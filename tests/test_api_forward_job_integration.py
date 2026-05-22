@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     CompanyResearch,
     ExtractedJobDescription,
     GhostJobAssessment,
@@ -146,8 +146,8 @@ def _synthetic_verdict() -> Verdict:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -155,7 +155,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -188,7 +188,7 @@ def mock_phase1(monkeypatch):
     still emit an agent_complete via `await mark(...)` in the
     short-circuit branch.
     """
-    from trajectory.sub_agents import (
+    from askpicky.sub_agents import (
         company_scraper,
         companies_house,
         ghost_job_detector,
@@ -257,8 +257,8 @@ def test_end_to_end_forward_job_streams_all_phase1_events_plus_verdict(
     """The demo money-shot: POST /api/sessions/forward_job with the
     real orchestrator, only external agents mocked. Every PHASE_1_AGENTS
     entry must emit agent_complete, verdict must follow, `done` last."""
-    from trajectory.orchestrator import PHASE_1_AGENTS
-    from trajectory.storage import upsert_user_profile
+    from askpicky.orchestrator import PHASE_1_AGENTS
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_demo_user()))
 
@@ -305,7 +305,7 @@ def test_end_to_end_persists_session_with_bundle_and_verdict(
     """After the stream closes, the session exists in storage with a
     research bundle + verdict so GET /api/sessions/{id} returns
     something useful."""
-    from trajectory.storage import (
+    from askpicky.storage import (
         get_recent_sessions,
         upsert_user_profile,
     )
@@ -348,7 +348,7 @@ def test_end_to_end_session_appears_in_list_after_stream(client, mock_phase1):
     new session is immediately visible via GET /api/sessions. This is
     the plumbing the dashboard's SessionList relies on after a stream
     closes."""
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_demo_user()))
 

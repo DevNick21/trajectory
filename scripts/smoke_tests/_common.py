@@ -1,7 +1,7 @@
 """Shared smoke-test plumbing.
 
 Responsibilities:
-  - Put `src/` on sys.path so `trajectory.*` imports work regardless of
+  - Put `src/` on sys.path so `askpicky.*` imports work regardless of
     where the script is invoked from.
   - Redirect `settings.sqlite_db_path` and `settings.faiss_index_path`
     to a fresh temp dir per run so real-API smoke tests never touch the
@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 # ---------------------------------------------------------------------------
-# sys.path — do this before importing anything from trajectory
+# sys.path — do this before importing anything from askpicky
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -46,8 +46,8 @@ if str(_SRC) not in sys.path:
 # Allow Settings to boot without DEMO_USER_ID / TELEGRAM_BOT_TOKEN in the
 # environment. Individual smoke tests that need those values set them
 # explicitly on `settings` after `prepare_environment()`. Must be set
-# BEFORE the first `from trajectory.config import settings` anywhere.
-os.environ.setdefault("TRAJECTORY_TEST_MODE", "1")
+# BEFORE the first `from askpicky.config import settings` anywhere.
+os.environ.setdefault("ASKPICKY_TEST_MODE", "1")
 
 # Windows console defaults to cp1252 — Unicode arrows / em-dashes /
 # emojis in `messages` (and the bot's emoji prompts) crash a standalone
@@ -121,14 +121,14 @@ def prepare_environment() -> Path:
     Returns the tempdir path so callers can inspect / clean up.
     """
     global _ENV_SET_UP
-    tmp = Path(tempfile.mkdtemp(prefix="trajectory-smoke-"))
+    tmp = Path(tempfile.mkdtemp(prefix="askpicky-smoke-"))
     if _ENV_SET_UP:
         return tmp
 
     # Import `settings` lazily — pydantic-settings reads .env at import
     # time, and we want .env-driven keys (ANTHROPIC_API_KEY,
     # TELEGRAM_BOT_TOKEN, COMPANIES_HOUSE_API_KEY) to flow through.
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     settings.sqlite_db_path = tmp / "smoke.db"
     settings.faiss_index_path = tmp / "smoke.faiss"
@@ -142,7 +142,7 @@ def require_anthropic_key() -> Optional[str]:
     """Return an error message if the Anthropic key isn't wired anywhere,
     else None.
     """
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     if not settings.anthropic_api_key:
         return (
@@ -157,7 +157,7 @@ def require_env(name: str) -> Optional[str]:
     """Generic env guard — reads from os.environ OR settings by
     attribute name. Returns an error message or None.
     """
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     attr = name.lower()
     if getattr(settings, attr, None):
@@ -177,7 +177,7 @@ def now_utc_naive() -> datetime:
 
 
 def load_fixture_bundle():
-    from trajectory.schemas import ResearchBundle
+    from askpicky.schemas import ResearchBundle
 
     if not FIXTURE_BUNDLE.exists():
         raise FileNotFoundError(f"Fixture not found: {FIXTURE_BUNDLE}")
@@ -187,7 +187,7 @@ def load_fixture_bundle():
 
 
 def build_test_user(user_type: str = "visa_holder"):
-    from trajectory.schemas import UserProfile, VisaStatus
+    from askpicky.schemas import UserProfile, VisaStatus
 
     now = now_utc_naive()
     visa_status = None
@@ -213,7 +213,7 @@ def build_test_user(user_type: str = "visa_holder"):
 
 
 def build_test_session(user_id: str, intent: str = "forward_job"):
-    from trajectory.schemas import Session
+    from askpicky.schemas import Session
 
     return Session(
         session_id=str(uuid.uuid4()),
@@ -232,7 +232,7 @@ def build_test_session(user_id: str, intent: str = "forward_job"):
 def build_synthetic_writing_style(user_id: str = "smoke_user", sample_count: int = 3):
     """Hand-built WritingStyleProfile for tests that need a style input but
     don't care about the LLM-extracted content."""
-    from trajectory.schemas import WritingStyleProfile
+    from askpicky.schemas import WritingStyleProfile
 
     now = now_utc_naive()
     return WritingStyleProfile(
@@ -256,7 +256,7 @@ def build_synthetic_cv_output(name: str = "Smoke Test"):
     """Minimal, renderer-safe CVOutput. Citations point into the fixture
     research bundle so the citation validator passes against that ctx.
     """
-    from trajectory.schemas import CVBullet, CVOutput, CVRole, Citation
+    from askpicky.schemas import CVBullet, CVOutput, CVRole, Citation
 
     fixture_url = "https://acmetech.io/careers"
     fixture_snippet = "Our engineering team ships autonomously."
@@ -299,7 +299,7 @@ def build_synthetic_cv_output(name: str = "Smoke Test"):
 
 
 def build_synthetic_cover_letter_output():
-    from trajectory.schemas import Citation, CoverLetterOutput
+    from askpicky.schemas import Citation, CoverLetterOutput
 
     citations = [
         Citation(

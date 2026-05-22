@@ -19,7 +19,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from trajectory.sub_agents import sponsor_register as sr
+from askpicky.sub_agents import sponsor_register as sr
 
 
 @pytest.fixture

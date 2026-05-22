@@ -34,7 +34,7 @@ logger = logging.getLogger("smoke.jsonld_extractor")
 
 
 async def _body() -> tuple[list[str], list[str], float]:
-    from trajectory.sub_agents.jsonld_extractor import extract_jsonld_jobposting
+    from askpicky.sub_agents.jsonld_extractor import extract_jsonld_jobposting
 
     messages: list[str] = []
     failures: list[str] = []

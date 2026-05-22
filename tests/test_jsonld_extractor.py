@@ -1,4 +1,4 @@
-"""Tests for src/trajectory/sub_agents/jsonld_extractor.py.
+"""Tests for src/askpicky/sub_agents/jsonld_extractor.py.
 
 Hardcoded representative JSON-LD fixtures per known-good ATS site.
 Tests are deterministic and offline — never hit the network.
@@ -12,8 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
-from trajectory.schemas import JsonLdExtraction
-from trajectory.sub_agents.jsonld_extractor import extract_jsonld_jobposting
+from askpicky.schemas import JsonLdExtraction
+from askpicky.sub_agents.jsonld_extractor import extract_jsonld_jobposting
 
 
 def _wrap(jsonld_obj: dict | list) -> str:
@@ -187,7 +187,7 @@ def test_indeed_usd_salary_fields_null(caplog):
         },
     }
     import logging
-    caplog.set_level(logging.DEBUG, logger="trajectory.sub_agents.jsonld_extractor")
+    caplog.set_level(logging.DEBUG, logger="askpicky.sub_agents.jsonld_extractor")
     result = extract_jsonld_jobposting(_wrap(payload))
     assert result is not None
     assert result.title == "Engineer (London)"
@@ -234,7 +234,7 @@ def test_two_jobposting_blocks_returns_first_with_warning(caplog):
         "</head><body></body></html>"
     )
     import logging
-    caplog.set_level(logging.WARNING, logger="trajectory.sub_agents.jsonld_extractor")
+    caplog.set_level(logging.WARNING, logger="askpicky.sub_agents.jsonld_extractor")
     result = extract_jsonld_jobposting(html)
     assert result is not None
     assert result.title == "First Posting"
@@ -320,8 +320,8 @@ def test_empty_html_returns_none():
 async def test_extract_jd_prepends_ground_truth_block():
     """When jsonld is passed, the Sonnet user_input starts with a
     GROUND-TRUTH FIELDS block. Mock out the Anthropic call."""
-    from trajectory.sub_agents import company_scraper
-    from trajectory.schemas import ExtractedJobDescription
+    from askpicky.sub_agents import company_scraper
+    from askpicky.schemas import ExtractedJobDescription
 
     captured: dict[str, str] = {}
 
@@ -367,8 +367,8 @@ async def test_extract_jd_prepends_ground_truth_block():
 @pytest.mark.asyncio
 async def test_extract_jd_no_jsonld_omits_ground_truth_block():
     """jsonld=None → no GROUND-TRUTH block, existing behaviour preserved."""
-    from trajectory.sub_agents import company_scraper
-    from trajectory.schemas import ExtractedJobDescription
+    from askpicky.sub_agents import company_scraper
+    from askpicky.schemas import ExtractedJobDescription
 
     captured: dict[str, str] = {}
 

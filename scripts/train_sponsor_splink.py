@@ -41,7 +41,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from trajectory.sub_agents.sponsor_register import (
+from askpicky.sub_agents.sponsor_register import (
     _ABBREVIATIONS,
     _LEGAL_SUFFIX_RE,
     _TRADING_AS_RE,

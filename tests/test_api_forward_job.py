@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     GhostJobAssessment,
     GhostJobJDScore,
     MotivationFitReport,
@@ -108,8 +108,8 @@ def _make_bundle(session_id: str) -> ResearchBundle:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -117,7 +117,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -159,7 +159,7 @@ def test_forward_job_404_when_no_profile(client):
 
 
 def test_forward_job_422_when_body_missing(client):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     resp = client.post("/api/sessions/forward_job", json={})
@@ -167,7 +167,7 @@ def test_forward_job_422_when_body_missing(client):
 
 
 def test_forward_job_422_for_non_url(client):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     resp = client.post("/api/sessions/forward_job", json={"job_url": "not a url"})
@@ -200,7 +200,7 @@ def mock_handle_forward_job(monkeypatch):
         return _make_bundle(session.session_id), _make_verdict()
 
     # Patch where it's looked up — sessions.py does a lazy import.
-    import trajectory.orchestrator as orch_module
+    import askpicky.orchestrator as orch_module
     monkeypatch.setattr(orch_module, "handle_forward_job", fake)
     return calls
 
@@ -208,7 +208,7 @@ def mock_handle_forward_job(monkeypatch):
 def test_forward_job_streams_progress_then_verdict_then_done(
     client, mock_handle_forward_job,
 ):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
 
@@ -245,7 +245,7 @@ def test_forward_job_persists_session_before_orchestrator_runs(
 ):
     """The session must be in the DB by the time the orchestrator
     starts (so it can save phase1_output / verdict against it)."""
-    from trajectory.storage import upsert_user_profile, get_recent_sessions
+    from askpicky.storage import upsert_user_profile, get_recent_sessions
 
     _seed(upsert_user_profile(_user()))
 
@@ -270,14 +270,14 @@ def test_forward_job_persists_session_before_orchestrator_runs(
 def test_forward_job_emits_error_event_when_orchestrator_raises(
     client, monkeypatch,
 ):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
 
     async def fake(**kwargs):
         raise RuntimeError("simulated scrape failure")
 
-    import trajectory.orchestrator as orch_module
+    import askpicky.orchestrator as orch_module
     monkeypatch.setattr(orch_module, "handle_forward_job", fake)
 
     with client.stream(

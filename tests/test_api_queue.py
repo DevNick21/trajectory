@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     CompanyResearch,
     ExtractedJobDescription,
     GhostJobAssessment,
@@ -53,8 +53,8 @@ def _user(user_id: str = "demo-user-1") -> UserProfile:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -62,7 +62,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -74,7 +74,7 @@ def _seed(coro):
 
 
 def _seed_profile():
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
     _seed(upsert_user_profile(_user()))
 
 
@@ -159,7 +159,7 @@ def test_list_empty_queue(client):
 
 def test_list_returns_counters_and_recency_order(client):
     _seed_profile()
-    from trajectory.storage import insert_queued_job, mark_queued_job_done
+    from askpicky.storage import insert_queued_job, mark_queued_job_done
 
     # Inserts are recency-ordered DESC on added_at — seed in order we
     # want to see returned (latest first).
@@ -181,7 +181,7 @@ def test_list_returns_counters_and_recency_order(client):
 
 def test_list_filters_by_user(client):
     _seed_profile()
-    from trajectory.storage import insert_queued_job, upsert_user_profile
+    from askpicky.storage import insert_queued_job, upsert_user_profile
 
     _seed(upsert_user_profile(_user("someone-else")))
     _seed(insert_queued_job("demo-user-1", "https://example.com/mine"))
@@ -220,7 +220,7 @@ def test_delete_404_for_unknown(client):
 def test_delete_404_for_someone_elses(client):
     """Same 404 shape as not-found — no enumeration."""
     _seed_profile()
-    from trajectory.storage import insert_queued_job, upsert_user_profile
+    from askpicky.storage import insert_queued_job, upsert_user_profile
 
     _seed(upsert_user_profile(_user("someone-else")))
     job = _seed(insert_queued_job("someone-else", "https://example.com/theirs"))
@@ -314,7 +314,7 @@ def test_process_batch_streams_per_job_events(client, monkeypatch):
     async def fake_forward(**kwargs):
         return _bundle(), _verdict()
 
-    import trajectory.orchestrator as orch
+    import askpicky.orchestrator as orch
     monkeypatch.setattr(orch, "handle_forward_job", fake_forward)
 
     with client.stream("POST", "/api/queue/process") as resp:
@@ -360,7 +360,7 @@ def test_process_batch_handles_partial_failure(client, monkeypatch):
             raise RuntimeError("simulated scrape failure")
         return _bundle(), _verdict()
 
-    import trajectory.orchestrator as orch
+    import askpicky.orchestrator as orch
     monkeypatch.setattr(orch, "handle_forward_job", fake_forward)
 
     with client.stream("POST", "/api/queue/process") as resp:

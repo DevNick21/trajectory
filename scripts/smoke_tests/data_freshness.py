@@ -25,7 +25,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.data_freshness import (
+    from askpicky.data_freshness import (
         is_stale,
         read_fetched_at,
         write_fetched_at,

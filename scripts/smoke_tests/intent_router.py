@@ -29,7 +29,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.sub_agents.intent_router import route
+    from askpicky.sub_agents.intent_router import route
 
     cases = [
         (

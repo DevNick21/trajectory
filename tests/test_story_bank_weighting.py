@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from trajectory.schemas import CareerEntry
+from askpicky.schemas import CareerEntry
 
 
 def _now() -> datetime:
@@ -26,8 +26,8 @@ def _now() -> datetime:
 def isolated_storage(tmp_path: Path, monkeypatch):
     """Fresh SQLite + FAISS per test; reset the init flag + FAISS
     singletons so the index starts empty."""
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -57,7 +57,7 @@ def _entry(entry_id: str, kind: str, text: str) -> CareerEntry:
 
 
 def test_retrieval_without_weights_preserves_faiss_order(isolated_storage):
-    from trajectory.storage import insert_career_entry, retrieve_relevant_entries
+    from askpicky.storage import insert_career_entry, retrieve_relevant_entries
 
     _seed(insert_career_entry(_entry(
         "e1", "cv_bullet",
@@ -87,7 +87,7 @@ def test_retrieval_without_weights_preserves_faiss_order(isolated_storage):
 def test_star_boost_flips_borderline_ranking(isolated_storage):
     """When a star_polish entry is ~equally semantically similar to
     the query, the boost should push it ahead of the cv_bullet."""
-    from trajectory.storage import insert_career_entry, retrieve_relevant_entries
+    from askpicky.storage import insert_career_entry, retrieve_relevant_entries
 
     _seed(insert_career_entry(_entry(
         "bullet", "cv_bullet",
@@ -124,7 +124,7 @@ def test_star_boost_flips_borderline_ranking(isolated_storage):
 def test_boost_respects_kind_not_in_weights(isolated_storage):
     """Kinds not listed in `kind_weights` get weight 1.0 — they're
     not suppressed, just unweighted."""
-    from trajectory.storage import insert_career_entry, retrieve_relevant_entries
+    from askpicky.storage import insert_career_entry, retrieve_relevant_entries
 
     _seed(insert_career_entry(_entry(
         "proj", "project_note",
@@ -144,7 +144,7 @@ def test_boost_respects_kind_not_in_weights(isolated_storage):
 def test_default_constant_is_exported(isolated_storage):
     """Module-level STAR_BOOST_KINDS is the single source of truth for
     generator callers."""
-    from trajectory.storage import STAR_BOOST_KINDS
+    from askpicky.storage import STAR_BOOST_KINDS
 
     assert STAR_BOOST_KINDS["star_polish"] == 1.5
     assert STAR_BOOST_KINDS["qa_answer"] == 1.2
@@ -158,7 +158,7 @@ def test_default_constant_is_exported(isolated_storage):
 
 
 def test_search_career_entries_semantic_accepts_kind_weights(isolated_storage):
-    from trajectory.storage import (
+    from askpicky.storage import (
         insert_career_entry,
         search_career_entries_semantic,
     )
@@ -189,7 +189,7 @@ def test_search_career_entries_semantic_accepts_kind_weights(isolated_storage):
 
 
 def test_retrieval_on_empty_index_returns_empty(isolated_storage):
-    from trajectory.storage import retrieve_relevant_entries
+    from askpicky.storage import retrieve_relevant_entries
 
     hits = _seed(retrieve_relevant_entries(
         user_id="u1", query_text="anything",

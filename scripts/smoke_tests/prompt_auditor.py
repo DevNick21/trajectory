@@ -49,7 +49,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("MOCK: skipped Opus; would return PromptAuditReport")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import prompt_auditor
+    from askpicky.sub_agents import prompt_auditor
 
     try:
         report = await prompt_auditor.audit(

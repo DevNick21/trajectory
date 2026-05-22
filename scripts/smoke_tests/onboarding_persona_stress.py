@@ -41,16 +41,16 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from fastapi.testclient import TestClient
-    from trajectory.api.app import create_app
-    from trajectory.api.routes import onboarding as onboarding_route
-    from trajectory.config import settings
-    from trajectory.schemas import (
+    from askpicky.api.app import create_app
+    from askpicky.api.routes import onboarding as onboarding_route
+    from askpicky.config import settings
+    from askpicky.schemas import (
         DealBreakersParseResult,
         MotivationsParseResult,
         WritingStyleProfile,
     )
-    from trajectory.sub_agents import onboarding_parser, style_extractor
-    from trajectory.storage import Storage
+    from askpicky.sub_agents import onboarding_parser, style_extractor
+    from askpicky.storage import Storage
 
     messages: list[str] = []
     failures: list[str] = []
@@ -96,7 +96,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     # to run the shield ourselves so adversarial input gets redacted
     # before it reaches the parsed lists. Without this the test
     # mocks away the very thing we want to verify.
-    from trajectory.validators.content_shield import shield as shield_content
+    from askpicky.validators.content_shield import shield as shield_content
 
     async def _fake_parse_stage(stage: str, user_text: str):
         cleaned, _verdict = await shield_content(

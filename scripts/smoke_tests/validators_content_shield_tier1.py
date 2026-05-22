@@ -24,7 +24,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.validators.content_shield import tier1
+    from askpicky.validators.content_shield import tier1
 
     messages: list[str] = []
     failures: list[str] = []

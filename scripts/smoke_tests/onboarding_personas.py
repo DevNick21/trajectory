@@ -17,7 +17,7 @@ Adversarial personas exercise CLAUDE.md Rule 10 — `onboarding_parser` is
 in `LOW_STAKES_AGENTS` so only Tier 1 of the Content Shield runs, but
 that should still strip role-flips and `<|im_start|>` markers. Vague
 personas exercise the "no parsed lists -> fall back to raw text" path
-in [api/routes/onboarding.py](src/trajectory/api/routes/onboarding.py).
+in [api/routes/onboarding.py](src/askpicky/api/routes/onboarding.py).
 """
 
 from __future__ import annotations

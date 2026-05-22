@@ -48,9 +48,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("MOCK: skipped Opus; would return STARPolish")
         return messages, failures, 0.0
 
-    from trajectory.schemas import DesignedQuestion
-    from trajectory.sub_agents import star_polisher
-    from trajectory.validators.banned_phrases import contains_banned
+    from askpicky.schemas import DesignedQuestion
+    from askpicky.sub_agents import star_polisher
+    from askpicky.validators.banned_phrases import contains_banned
 
     question = DesignedQuestion(
         question_text="Tell me about a time you handled a production incident.",

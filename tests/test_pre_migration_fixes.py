@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from trajectory.schemas import CareerEntry
+from askpicky.schemas import CareerEntry
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +76,8 @@ async def test_ghost_detector_failure_yields_fallback_not_raise(monkeypatch):
     asyncio.gather(..., return_exceptions=False) caller does not see
     an exception when the detector fails."
     """
-    from trajectory.schemas import GhostJobAssessment
-    from trajectory.sub_agents import ghost_job_detector
+    from askpicky.schemas import GhostJobAssessment
+    from askpicky.sub_agents import ghost_job_detector
 
     async def _boom(**kwargs):
         raise RuntimeError("simulated detector outage")
@@ -91,7 +91,7 @@ async def test_ghost_detector_failure_yields_fallback_not_raise(monkeypatch):
         try:
             return await ghost_job_detector.score()
         except Exception:
-            from trajectory.schemas import GhostJobJDScore
+            from askpicky.schemas import GhostJobJDScore
             return GhostJobAssessment(
                 probability="LIKELY_REAL",
                 signals=[],

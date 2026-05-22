@@ -29,7 +29,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DB_PATH = Path("./data/trajectory.db")
+DB_PATH = Path("./data/askpicky.db")
 
 # 5 plausible UK roles, mixed verdicts. Ordered newest-first; created_at
 # offsets are days back from "now" so the list reads as recent activity.

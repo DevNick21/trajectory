@@ -52,9 +52,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append(f"MOCK: skipped Opus; would reply as user={user.name}")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import draft_reply
-    from trajectory.validators.content_shield import tier1
-    from trajectory.validators.banned_phrases import contains_banned
+    from askpicky.sub_agents import draft_reply
+    from askpicky.validators.content_shield import tier1
+    from askpicky.validators.banned_phrases import contains_banned
 
     shielded = tier1(_RECRUITER_MSG).cleaned_text
 

@@ -28,8 +28,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from pydantic import BaseModel
-    from trajectory.schemas import CareerEntry, Citation
-    from trajectory.validators.citations import (
+    from askpicky.schemas import CareerEntry, Citation
+    from askpicky.validators.citations import (
         build_context,
         extract_all_citations,
         validate_citation,

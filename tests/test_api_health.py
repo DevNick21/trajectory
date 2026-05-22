@@ -16,13 +16,13 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
     """Build a fresh app per test against a per-test SQLite tempdir."""
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     # Redirect storage paths so tests never touch the real DB / FAISS.
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -44,13 +44,13 @@ def test_health_returns_200_with_expected_shape(client):
         assert required in body, f"missing field {required!r} in {body}"
 
     assert body["status"] == "ok"
-    assert body["service"] == "trajectory.api"
+    assert body["service"] == "askpicky.api"
     assert body["storage_initialised"] is True
 
 
 def test_health_reports_demo_user_id_configured_state(client, monkeypatch):
     """The flag flips with settings.demo_user_id."""
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     monkeypatch.setattr(settings, "demo_user_id", "")
     body = client.get("/health").json()
@@ -69,7 +69,7 @@ def test_unknown_route_returns_404(client):
 def test_cors_header_present_for_configured_origin(client):
     """CORS allows the configured origin and rejects others (no
     wildcards per MIGRATION_PLAN.md §6 risk #9)."""
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     resp = client.options(
         "/health",

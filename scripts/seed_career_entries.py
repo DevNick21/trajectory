@@ -31,8 +31,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "src"))
 
-from trajectory.schemas import CareerEntry  # noqa: E402
-from trajectory.storage import (  # noqa: E402
+from askpicky.schemas import CareerEntry  # noqa: E402
+from askpicky.storage import (  # noqa: E402
     get_all_career_entries_for_user,
     insert_career_entry,
 )

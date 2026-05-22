@@ -19,7 +19,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.validators.pii_scrubber import scrub, scrub_all
+    from askpicky.validators.pii_scrubber import scrub, scrub_all
 
     messages: list[str] = []
     failures: list[str] = []

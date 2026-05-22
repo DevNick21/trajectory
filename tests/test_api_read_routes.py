@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import Session, UserProfile
+from askpicky.schemas import Session, UserProfile
 
 
 def _now() -> datetime:
@@ -64,8 +64,8 @@ def client(tmp_path: Path, monkeypatch):
     """Per-test app + tempdir SQLite + tempdir generated_dir + demo
     user id wired. Resets the storage module's idempotency flag so
     the new DB file gets its schema created."""
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -74,7 +74,7 @@ def client(tmp_path: Path, monkeypatch):
     # Force _ensure_db() to recreate the schema on this fresh DB path.
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -95,7 +95,7 @@ def test_profile_404_when_no_user_record(client):
 
 
 def test_profile_returns_demo_user_when_present(client):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
 
@@ -108,7 +108,7 @@ def test_profile_returns_demo_user_when_present(client):
 
 
 def test_profile_500_when_demo_user_id_unset(client, monkeypatch):
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     monkeypatch.setattr(settings, "demo_user_id", "")
     resp = client.get("/api/profile")
@@ -133,7 +133,7 @@ def _seed(coro):
 
 
 def test_sessions_list_empty_when_no_rows(client):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     resp = client.get("/api/sessions")
@@ -142,7 +142,7 @@ def test_sessions_list_empty_when_no_rows(client):
 
 
 def test_sessions_list_returns_summaries_in_recency_order(client):
-    from trajectory.storage import insert_session, upsert_user_profile
+    from askpicky.storage import insert_session, upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     # Insert two sessions; the second one is more recent.
@@ -160,7 +160,7 @@ def test_sessions_list_returns_summaries_in_recency_order(client):
 
 
 def test_sessions_list_excludes_other_users(client):
-    from trajectory.storage import insert_session, upsert_user_profile
+    from askpicky.storage import insert_session, upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     _seed(insert_session(_session(session_id="mine", user_id="demo-user-1")))
@@ -175,7 +175,7 @@ def test_sessions_list_excludes_other_users(client):
 def test_sessions_list_summary_pulls_role_and_company_from_phase1(client):
     """The summary's role_title + company_name come from
     session.phase1_output.{extracted_jd, company_research}."""
-    from trajectory.storage import insert_session, update_session, upsert_user_profile
+    from askpicky.storage import insert_session, update_session, upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     s = _session(session_id="enriched", user_id="demo-user-1")
@@ -193,7 +193,7 @@ def test_sessions_list_summary_pulls_role_and_company_from_phase1(client):
 
 
 def test_sessions_list_rejects_invalid_limit(client):
-    from trajectory.storage import upsert_user_profile
+    from askpicky.storage import upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     assert client.get("/api/sessions?limit=0").status_code == 400
@@ -213,7 +213,7 @@ def test_session_detail_404_for_unknown_id(client):
 
 def test_session_detail_404_for_other_users_session(client):
     """Same 404 as not-found — prevents enumeration."""
-    from trajectory.storage import insert_session, upsert_user_profile
+    from askpicky.storage import insert_session, upsert_user_profile
 
     _seed(upsert_user_profile(_user()))
     _seed(insert_session(_session(session_id="theirs", user_id="someone-else")))
@@ -223,7 +223,7 @@ def test_session_detail_404_for_other_users_session(client):
 
 
 def test_session_detail_returns_full_payload(client, tmp_path: Path):
-    from trajectory.storage import (
+    from askpicky.storage import (
         insert_session,
         log_llm_cost,
         update_session,
@@ -244,7 +244,7 @@ def test_session_detail_returns_full_payload(client, tmp_path: Path):
     ))
 
     # Drop a generated file so generated_files isn't empty.
-    from trajectory.config import settings
+    from askpicky.config import settings
     sess_dir = settings.generated_dir / "full"
     sess_dir.mkdir(parents=True, exist_ok=True)
     (sess_dir / "cv.docx").write_bytes(b"fake docx")
@@ -273,8 +273,8 @@ def test_session_detail_returns_full_payload(client, tmp_path: Path):
 
 
 def _seed_file_session(client, *, content: bytes = b"%PDF-1.4 ok"):
-    from trajectory.storage import insert_session, upsert_user_profile
-    from trajectory.config import settings
+    from askpicky.storage import insert_session, upsert_user_profile
+    from askpicky.config import settings
 
     _seed(upsert_user_profile(_user()))
     _seed(insert_session(_session(session_id="filesess", user_id="demo-user-1")))
@@ -292,8 +292,8 @@ def test_file_happy_path(client):
 
 
 def test_file_404_for_someone_elses_session(client):
-    from trajectory.storage import insert_session, upsert_user_profile
-    from trajectory.config import settings
+    from askpicky.storage import insert_session, upsert_user_profile
+    from askpicky.config import settings
 
     _seed(upsert_user_profile(_user()))
     _seed(insert_session(_session(session_id="theirs", user_id="someone-else")))
@@ -334,8 +334,8 @@ def test_file_blocks_dot_filename(client):
 
 
 def test_file_returns_docx_mime(client):
-    from trajectory.storage import insert_session, upsert_user_profile
-    from trajectory.config import settings
+    from askpicky.storage import insert_session, upsert_user_profile
+    from askpicky.config import settings
 
     _seed(upsert_user_profile(_user()))
     _seed(insert_session(_session(session_id="docxsess", user_id="demo-user-1")))

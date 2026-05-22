@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { motion } from "motion/react";
 import { Loader2, Sparkles } from "lucide-react";
 
@@ -6,38 +5,6 @@ import type { CVOutput, Citation } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-
-// TEMP — recording-prep debug. Logs every bullet's key + the
-// career_entry IDs it cites so you can identify click targets for
-// session-pack.mp4. Remove this hook before recording.
-function useDebugCitations(cv: CVOutput | null) {
-  useEffect(() => {
-    if (!cv) return;
-    const rows = cv.experience.flatMap((role, roleIdx) =>
-      role.bullets.map((bullet, bulletIdx) => {
-        const careerEntries = bullet.citations
-          .filter((c) => c.kind === "career_entry")
-          .map((c) => c.entry_id ?? "");
-        return {
-          bulletKey: `${roleIdx}-${bulletIdx}`,
-          role: role.title + " · " + role.company,
-          text: bullet.text.slice(0, 80),
-          careerEntries,
-          allCitationKinds: bullet.citations.map((c) => c.kind),
-        };
-      }),
-    );
-    const clickable = rows.filter((r) => r.careerEntries.length > 0);
-    // eslint-disable-next-line no-console
-    console.table(rows);
-    // eslint-disable-next-line no-console
-    console.log(
-      `%cCLICKABLE TARGETS for session-pack.mp4 (${clickable.length} bullets):`,
-      "color: #8b5cf6; font-weight: bold",
-      clickable,
-    );
-  }, [cv]);
-}
 
 interface Props {
   /** Generated CV — null until the user clicks Generate. */
@@ -74,8 +41,6 @@ export default function CVPreview({
   onBulletSelect,
   onGenerate,
 }: Props) {
-  useDebugCitations(output);
-
   return (
     <Card className="min-h-[28rem]">
       <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">

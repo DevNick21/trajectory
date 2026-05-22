@@ -41,8 +41,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         if missing:
             return [], [missing], 0.0
 
-    from trajectory.validators.banned_phrases import contains_banned
-    from trajectory.validators.citations import build_context, validate_output
+    from askpicky.validators.banned_phrases import contains_banned
+    from askpicky.validators.citations import build_context, validate_output
 
     bundle = load_fixture_bundle()
     user = build_test_user("uk_resident")
@@ -59,7 +59,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         )
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import cover_letter as cl_agent
+    from askpicky.sub_agents import cover_letter as cl_agent
 
     ctx = await build_context(
         research_bundle=bundle,

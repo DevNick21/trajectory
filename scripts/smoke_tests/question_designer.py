@@ -27,7 +27,7 @@ ESTIMATED_COST_USD = 0.15
 
 
 def _synthetic_verdict():
-    from trajectory.schemas import (
+    from askpicky.schemas import (
         Citation,
         MotivationFitReport,
         ReasoningPoint,
@@ -90,7 +90,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("MOCK: skipped Opus; would return a 3-question QuestionSet")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import question_designer
+    from askpicky.sub_agents import question_designer
 
     verdict = _synthetic_verdict()
 

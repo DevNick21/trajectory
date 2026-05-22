@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     CoverLetterOutput,
     CVBullet,
     CVOutput,
@@ -151,8 +151,8 @@ def _sal() -> SalaryRecommendation:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -160,7 +160,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -178,8 +178,8 @@ def _drop_session(session: Session, *, with_pack_files: bool = False):
     200 — the auth gate is checked first; the session ownership
     check is what we want to exercise next.
     """
-    from trajectory.config import settings
-    from trajectory.storage import insert_session, upsert_user_profile
+    from askpicky.config import settings
+    from askpicky.storage import insert_session, upsert_user_profile
 
     _seed(upsert_user_profile(_user("demo-user-1")))
     if session.user_id != "demo-user-1":
@@ -199,7 +199,7 @@ def _patch_handlers(monkeypatch, **overrides: Any) -> None:
     custom mock (e.g. one that raises). Defaults are happy-path
     returns matching the real signatures.
     """
-    import trajectory.orchestrator as orch
+    import askpicky.orchestrator as orch
 
     async def fake_cv(session, user, storage, *args, **kwargs):
         return _cv(), Path("/tmp/cv.docx"), Path("/tmp/cv.pdf"), None

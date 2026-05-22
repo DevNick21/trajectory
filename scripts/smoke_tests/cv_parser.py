@@ -83,7 +83,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     # File-format dispatcher (always runs — no LLM cost).
-    from trajectory.sub_agents.cv_parser import extract_text
+    from askpicky.sub_agents.cv_parser import extract_text
 
     plain = "Hello\nWorld\n"
     out = extract_text(data=plain.encode("utf-8"), filename="resume.txt")
@@ -101,7 +101,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return messages, [missing], 0.0
 
-    from trajectory.sub_agents.cv_parser import parse as parse_cv
+    from askpicky.sub_agents.cv_parser import parse as parse_cv
 
     try:
         imp = await parse_cv(cv_text=_FIXTURE_CV)

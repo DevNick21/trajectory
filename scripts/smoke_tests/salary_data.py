@@ -23,7 +23,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.sub_agents import salary_data
+    from askpicky.sub_agents import salary_data
 
     messages: list[str] = []
     failures: list[str] = []

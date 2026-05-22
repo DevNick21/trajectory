@@ -1,4 +1,4 @@
-"""Tests for src/trajectory/managed/company_investigator.py.
+"""Tests for src/askpicky/managed/company_investigator.py.
 
 Fully mocked — no Anthropic SDK calls, no network, no file system
 (cache redirected to a tempdir). Exercises the integration by scripting
@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from trajectory.managed import _resources
-from trajectory.managed.company_investigator import (
+from askpicky.managed import _resources
+from askpicky.managed.company_investigator import (
     ManagedInvestigatorFailed,
     investigate,
 )
@@ -182,7 +182,7 @@ def mock_anthropic(monkeypatch):
 @pytest.fixture(autouse=True)
 def _no_shield_tier2(monkeypatch):
     """Bypass Tier 2 Sonnet calls — smoke-test-shaped tier1 only."""
-    from trajectory.validators import content_shield
+    from askpicky.validators import content_shield
 
     async def _fake_shield(*, content, source_type, downstream_agent):
         # Return cleaned text as-is (tier1 passthrough), no verdict.
@@ -194,7 +194,7 @@ def _no_shield_tier2(monkeypatch):
 @pytest.fixture(autouse=True)
 def _no_cost_log(monkeypatch):
     """Sidestep the SQLite cost log — tests run with no DB."""
-    from trajectory.managed import company_investigator
+    from askpicky.managed import company_investigator
 
     logged = []
 
@@ -396,8 +396,8 @@ async def test_no_final_json_raises(mock_anthropic):
 @pytest.mark.asyncio
 async def test_shield_reject_raises_and_deletes(mock_anthropic, monkeypatch):
     """REJECT verdict on a scraped page → investigator raises + deletes."""
-    from trajectory.managed import company_investigator
-    from trajectory.schemas import ContentShieldVerdict
+    from askpicky.managed import company_investigator
+    from askpicky.schemas import ContentShieldVerdict
 
     reject_verdict = ContentShieldVerdict(
         classification="MALICIOUS",
@@ -475,7 +475,7 @@ async def test_markdown_fenced_json_is_tolerated(mock_anthropic, _no_cost_log):
 # ---------------------------------------------------------------------------
 
 
-from trajectory.managed._events import _parse_final_json  # noqa: E402
+from askpicky.managed._events import _parse_final_json  # noqa: E402
 
 
 class TestParseFinalJson:
@@ -603,11 +603,11 @@ class TestParseFinalJson:
 
 from datetime import datetime, timezone  # noqa: E402
 
-from trajectory.managed.company_investigator import (  # noqa: E402
+from askpicky.managed.company_investigator import (  # noqa: E402
     InvestigatorOutput,
     _to_company_research,
 )
-from trajectory.schemas import ScrapedPage  # noqa: E402
+from askpicky.schemas import ScrapedPage  # noqa: E402
 
 
 def _make_output(snippet: str) -> InvestigatorOutput:
@@ -746,7 +746,7 @@ class TestCitationSnippetValidation:
             "GitHub's miss"
         )
         # Verify the prefix-matching arithmetic: ≥95% should pass.
-        from trajectory.managed.company_investigator import (
+        from askpicky.managed.company_investigator import (
             _longest_matching_prefix, _normalize_ws,
         )
         ns = _normalize_ws(snippet)
@@ -960,7 +960,7 @@ class TestCitationSnippetValidation:
 # ---------------------------------------------------------------------------
 
 
-from trajectory.managed._events import _extract_scraped_page  # noqa: E402
+from askpicky.managed._events import _extract_scraped_page  # noqa: E402
 
 
 class _Obj:
@@ -1196,7 +1196,7 @@ class TestExtractScrapedPageContentShapes:
 # ---------------------------------------------------------------------------
 
 
-from trajectory.llm import _unwrap_parameter_value  # noqa: E402
+from askpicky.llm import _unwrap_parameter_value  # noqa: E402
 
 
 class TestUnwrapParameterValue:

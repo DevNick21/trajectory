@@ -4,41 +4,49 @@
 
 @layer base {
   :root {
-    /* Dark canvas + violet brand. Cards are near-white surfaces lifted
-       onto the dark shell — matches the Deep Work / Empty State mocks. */
+    /* AskPicky palette. VSCode blue brand (#007ACC) on a near-black
+       blue-tinted canvas with crisp white cards. Density over
+       decoration; citations are first-class, not buried in tooltips. */
 
     /* Canvas (page background, top nav, between cards) */
-    --background: 240 8% 10%;
-    --foreground: 0 0% 98%;
+    --background: 220 13% 9%;
+    --foreground: 0 0% 96%;
 
     /* Card surface (most content lives here) */
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 8%;
+    --card-foreground: 220 14% 10%;
 
-    /* Violet primary — buttons, focus rings, highlight outlines */
-    --primary: 258 90% 66%;
+    /* VSCode blue primary (#007ACC) — buttons, focus rings, citation links */
+    --primary: 210 100% 40%;
     --primary-foreground: 0 0% 100%;
 
     /* Soft surfaces for use *inside* cards (banners, callouts) */
-    --secondary: 258 30% 96%;
-    --secondary-foreground: 258 50% 25%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 40%;
-    --accent: 258 100% 96%;
-    --accent-foreground: 258 90% 30%;
+    --secondary: 210 30% 96%;
+    --secondary-foreground: 210 80% 28%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 40%;
+    --accent: 210 100% 96%;
+    --accent-foreground: 210 100% 30%;
 
     /* Status */
-    --destructive: 0 75% 55%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 98%;
-    --success: 142 70% 40%;
+    --success: 142 65% 38%;
     --success-foreground: 0 0% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 12%;
 
     /* Borders default to card-internal (light gray). Header / canvas
-       borders override to a subtle dark variant inline. */
-    --border: 240 5% 90%;
-    --input: 240 5% 90%;
-    --ring: 258 90% 66%;
-    --radius: 0.75rem;
+       borders override to a subtle light-on-dark variant via .border-canvas. */
+    --border: 220 14% 90%;
+    --input: 220 14% 90%;
+    --ring: 210 100% 40%;
+    --radius: 0.5rem;
+
+    /* VSCode editor surfaces (panels rendered directly on the canvas) */
+    --panel: 220 6% 13%;
+    --panel-foreground: 0 0% 90%;
+    --panel-muted: 220 4% 19%;
   }
 }
 
@@ -50,6 +58,7 @@
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
       Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
   /* Form controls default to the browser's UI font. Force inherit so
      inputs/textareas/selects/buttons match the rest of the app. */
@@ -59,6 +68,16 @@
   button {
     font-family: inherit;
   }
+  /* Citations and code-like spans use the monospace stack. Picky's
+     verdicts cite, so the citation marker should feel like a reference,
+     not a link. */
+  code,
+  kbd,
+  samp,
+  .font-mono {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+      Consolas, "Liberation Mono", monospace;
+  }
 }
 
 @layer utilities {
@@ -67,5 +86,32 @@
      on dark; this gives a subtle separation. */
   .border-canvas {
     border-color: hsl(0 0% 100% / 0.08);
+  }
+  /* VSCode-style focus accent. Use on links / citation chips where
+     the default ring is too heavy. */
+  .accent-rule {
+    box-shadow: inset 2px 0 0 0 hsl(var(--primary));
+  }
+  /* Panel surfaces (used by chat drawer, side rails, deep-work columns) */
+  .bg-panel {
+    background-color: hsl(var(--panel));
+    color: hsl(var(--panel-foreground));
+  }
+  .bg-panel-muted {
+    background-color: hsl(var(--panel-muted));
+  }
+  /* Citation chip — tight, monospace, VSCode-blue underline. The
+     Picky voice treats citations as first-class evidence; the chip
+     reflects that without shouting. */
+  .citation-chip {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm font-mono text-xs;
+    color: hsl(var(--primary));
+    background-color: hsl(var(--accent));
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  .citation-chip:hover {
+    background-color: hsl(210 100% 92%);
   }
 }

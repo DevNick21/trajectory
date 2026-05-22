@@ -49,9 +49,9 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.llm import call_in_session
-    from trajectory.storage import total_cost_usd
-    from trajectory.validators.banned_phrases import contains_banned
+    from askpicky.llm import call_in_session
+    from askpicky.storage import total_cost_usd
+    from askpicky.validators.banned_phrases import contains_banned
 
     bundle = load_fixture_bundle()
     user = build_test_user("uk_resident")

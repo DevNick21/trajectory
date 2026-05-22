@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from trajectory.sub_agents.ghost_job_detector import _combine
-from trajectory.schemas import Citation, GhostSignal
+from askpicky.sub_agents.ghost_job_detector import _combine
+from askpicky.schemas import Citation, GhostSignal
 
 
 def _sig(severity: str, sig_type: str = "STALE_POSTING") -> GhostSignal:

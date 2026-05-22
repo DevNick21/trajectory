@@ -44,7 +44,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.sub_agents import company_scraper
+    from askpicky.sub_agents import company_scraper
 
     messages: list[str] = []
     failures: list[str] = []

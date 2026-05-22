@@ -71,10 +71,10 @@ async def _body() -> tuple[list[str], list[str], float]:
     messages: list[str] = []
     failures: list[str] = []
 
-    from trajectory.bot import handlers as bot_handlers
-    from trajectory.renderers.cv_docx import render_cv_docx
-    from trajectory.renderers.cv_pdf import render_cv_pdf
-    from trajectory.storage import Storage
+    from askpicky.bot import handlers as bot_handlers
+    from askpicky.renderers.cv_docx import render_cv_docx
+    from askpicky.renderers.cv_pdf import render_cv_pdf
+    from askpicky.storage import Storage
 
     out_dir = tmp / "generated"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -109,10 +109,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     original_handle = bot_handlers.handle_draft_cv
 
     async def _fake_handle_draft_cv(sess, usr, stor):
-        # Match the orchestrator's 4-tuple shape: (cv, docx, pdf, latex).
-        # latex_pdf_path=None means the bot loop only sends docx + pdf
-        # (the production no-pdflatex case).
-        return cv, docx_path, pdf_path, None
+        # Match the orchestrator's 3-tuple shape: (cv, docx, pdf).
+        return cv, docx_path, pdf_path
 
     bot_handlers.handle_draft_cv = _fake_handle_draft_cv
 

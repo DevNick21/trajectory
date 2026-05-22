@@ -53,7 +53,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("MOCK: skipped Opus; would return SelfAuditReport with ≥1 flag")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import self_audit
+    from askpicky.sub_agents import self_audit
 
     try:
         report = await self_audit.run(

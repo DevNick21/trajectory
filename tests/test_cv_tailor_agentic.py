@@ -17,8 +17,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from trajectory.llm import AgentCallFailed
-from trajectory.schemas import (
+from askpicky.llm import AgentCallFailed
+from askpicky.schemas import (
     CareerEntry,
     Citation,
     CompanyResearch,
@@ -34,7 +34,7 @@ from trajectory.schemas import (
     UserProfile,
     WritingStyleProfile,
 )
-from trajectory.sub_agents import cv_tailor_agentic
+from askpicky.sub_agents import cv_tailor_agentic
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ def _make_response(*blocks, input_tokens: int = 100, output_tokens: int = 50):
 
 @pytest.mark.asyncio
 async def test_happy_path_emits_cv(monkeypatch):
-    from trajectory import llm
+    from askpicky import llm
 
     # Script: 3 search calls, 1 profile call, then the final emit.
     responses = [
@@ -284,7 +284,7 @@ async def test_happy_path_emits_cv(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_hallucinated_citation_raises(monkeypatch):
-    from trajectory import llm
+    from askpicky import llm
 
     # Duplicate the response sequence — `cv_tailor_agentic.generate`
     # retries once on post-validation failure (PROCESS Entry 47 bug 12).
@@ -377,7 +377,7 @@ async def test_hallucinated_citation_raises(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_early_emission_under_min_searches_raises(monkeypatch):
-    from trajectory import llm
+    from askpicky import llm
 
     # Same pattern as the hallucination test: retry on post-validation
     # failure means the test sequence runs twice. Both attempts emit
@@ -441,7 +441,7 @@ async def test_early_emission_under_min_searches_raises(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_max_iterations_raises(monkeypatch):
-    from trajectory import llm
+    from askpicky import llm
 
     # Infinite supply of search tool_uses — never emits final.
     def make_search():

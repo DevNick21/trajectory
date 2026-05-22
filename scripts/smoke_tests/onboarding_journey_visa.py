@@ -38,15 +38,15 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     from fastapi.testclient import TestClient
-    from trajectory.api.app import create_app
-    from trajectory.api.routes import onboarding as onboarding_route
-    from trajectory.config import settings
-    from trajectory.schemas import (
+    from askpicky.api.app import create_app
+    from askpicky.api.routes import onboarding as onboarding_route
+    from askpicky.config import settings
+    from askpicky.schemas import (
         DealBreakersParseResult,
         MotivationsParseResult,
         WritingStyleProfile,
     )
-    from trajectory.sub_agents import onboarding_parser, style_extractor
+    from askpicky.sub_agents import onboarding_parser, style_extractor
 
     settings.demo_user_id = "smoke_onboarding_visa"
 

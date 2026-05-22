@@ -22,7 +22,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.observability.logging_context import (
+    from askpicky.observability.logging_context import (
         CorrelationFilter,
         bind_request_id,
         bind_session_id,

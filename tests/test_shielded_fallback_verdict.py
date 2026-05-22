@@ -15,8 +15,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from trajectory.orchestrator import _build_shielded_fallback_verdict
-from trajectory.schemas import (
+from askpicky.orchestrator import _build_shielded_fallback_verdict
+from askpicky.schemas import (
     ContentShieldVerdict,
     ResearchBundle,
 )

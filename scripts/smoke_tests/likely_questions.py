@@ -47,9 +47,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("MOCK: skipped Opus call (would return LikelyQuestionsOutput)")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import likely_questions
-    from trajectory.validators.banned_phrases import contains_banned
-    from trajectory.validators.citations import build_context, validate_output
+    from askpicky.sub_agents import likely_questions
+    from askpicky.validators.banned_phrases import contains_banned
+    from askpicky.validators.citations import build_context, validate_output
 
     ctx = await build_context(
         research_bundle=bundle,

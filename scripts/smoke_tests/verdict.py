@@ -43,8 +43,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         if missing:
             return [], [missing], 0.0
 
-    from trajectory.storage import Storage
-    from trajectory.sub_agents import verdict as verdict_agent
+    from askpicky.storage import Storage
+    from askpicky.sub_agents import verdict as verdict_agent
 
     bundle = load_fixture_bundle()
     user = build_test_user("visa_holder")

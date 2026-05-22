@@ -44,8 +44,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.config import settings
-    from trajectory.schemas import (
+    from askpicky.config import settings
+    from askpicky.schemas import (
         CareerEntry,
         CompanyResearch,
         ExtractedJobDescription,
@@ -57,8 +57,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         UserProfile,
         WritingStyleProfile,
     )
-    from trajectory.storage import insert_career_entry
-    from trajectory.sub_agents import cv_tailor_agentic
+    from askpicky.storage import insert_career_entry
+    from askpicky.sub_agents import cv_tailor_agentic
 
     # D5 (2026-04-24): the agentic path is now the only CV tailor.
     # The `cv_tailor` module is a thin re-export of `cv_tailor_agentic`.

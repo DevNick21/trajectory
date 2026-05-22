@@ -3,11 +3,15 @@
 // endpoints live in lib/sse.ts.
 
 import type {
+  ApplicationListResponse,
+  ApplicationStatus,
   CareerEntriesResponse,
   CareerEntryKind,
+  NotificationListResponse,
   OfferAnalysisResponse,
   OnboardingAnswers,
   OnboardingFinaliseResponse,
+  OutcomeKind,
   PackGeneratorName,
   PackResult,
   QueueItem,
@@ -304,3 +308,48 @@ export const importCV = async (file: File): Promise<CVImportResponse> => {
 
 export const fileUrl = (sessionId: string, filename: string) =>
   `/api/files/${encodeURIComponent(sessionId)}/${encodeURIComponent(filename)}`;
+
+
+// ---------------------------------------------------------------------------
+// Notifications + application tracker (cross-surface)
+// ---------------------------------------------------------------------------
+
+export const listNotifications = (
+  opts: { unreadOnly?: boolean; limit?: number } = {},
+): Promise<NotificationListResponse> => {
+  const params = new URLSearchParams();
+  if (opts.unreadOnly) params.set("unread_only", "true");
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return request<NotificationListResponse>(
+    `/api/notifications${qs ? `?${qs}` : ""}`,
+  );
+};
+
+export const markNotificationRead = (id: number): Promise<void> =>
+  request<void>(`/api/notifications/${id}/read`, { method: "POST" });
+
+export const dismissNotification = (id: number): Promise<void> =>
+  request<void>(`/api/notifications/${id}/dismiss`, { method: "POST" });
+
+export const listApplications = (
+  opts: { status?: ApplicationStatus[]; limit?: number } = {},
+): Promise<ApplicationListResponse> => {
+  const params = new URLSearchParams();
+  if (opts.status?.length) params.set("status", opts.status.join(","));
+  if (opts.limit !== undefined) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return request<ApplicationListResponse>(
+    `/api/applications${qs ? `?${qs}` : ""}`,
+  );
+};
+
+export const recordOutcome = (
+  sessionId: string,
+  outcome: OutcomeKind,
+  notes?: string,
+): Promise<{ ok: boolean; session_id: string; outcome: OutcomeKind }> =>
+  request(`/api/sessions/${encodeURIComponent(sessionId)}/outcome`, {
+    method: "POST",
+    body: JSON.stringify({ outcome, notes }),
+  });

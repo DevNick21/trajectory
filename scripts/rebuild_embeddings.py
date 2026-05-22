@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 
 async def rebuild() -> None:
-    from trajectory.storage import Storage
+    from askpicky.storage import Storage
 
     storage = Storage()
     await storage.initialise()

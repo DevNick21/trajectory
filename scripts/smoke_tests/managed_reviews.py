@@ -56,11 +56,11 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.managed.reviews_investigator import (
+    from askpicky.managed.reviews_investigator import (
         ReviewsInvestigatorFailed,
         run as run_reviews,
     )
-    from trajectory.storage import total_cost_usd
+    from askpicky.storage import total_cost_usd
 
     cost_before = await total_cost_usd()
 

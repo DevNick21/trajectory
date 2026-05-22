@@ -43,15 +43,15 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     from fastapi.testclient import TestClient
-    from trajectory.api.app import create_app
-    from trajectory.config import settings
-    from trajectory.schemas import (
+    from askpicky.api.app import create_app
+    from askpicky.config import settings
+    from askpicky.schemas import (
         DealBreakersParseResult,
         MotivationsParseResult,
         WritingStyleProfile,
     )
-    from trajectory.sub_agents import onboarding_parser, style_extractor
-    from trajectory.api.routes import onboarding as onboarding_route
+    from askpicky.sub_agents import onboarding_parser, style_extractor
+    from askpicky.api.routes import onboarding as onboarding_route
 
     settings.demo_user_id = "smoke_onboarding_uk"
 
@@ -244,7 +244,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
         # ── 4. FAISS retrieval works against the new entries ──────────
         # Use the storage layer directly (the API doesn't expose retrieval).
-        from trajectory.storage import Storage
+        from askpicky.storage import Storage
 
         storage = Storage()
         await storage.initialise()

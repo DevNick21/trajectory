@@ -6,6 +6,7 @@ import { ApiError, getProfile, listSessions } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
 import type { ForwardJobEvent, SessionListResponse } from "@/lib/types";
 import ForwardJobForm from "@/components/ForwardJobForm";
+import NotificationBanner from "@/components/NotificationBanner";
 import Phase1Stream, { type AgentTiming } from "@/components/Phase1Stream";
 import VerdictCard from "@/components/VerdictCard";
 import SessionList from "@/components/SessionList";
@@ -76,8 +77,6 @@ function reducer(state: StreamState, action: Action): StreamState {
             errorMessage: e.data?.message ?? "Research failed.",
           };
         case "done":
-          // Successful streams emit verdict before done; if `done`
-          // arrives without a verdict, treat as error.
           return state.status === "running"
             ? {
                 ...state,
@@ -104,10 +103,6 @@ export default function Dashboard() {
   });
   const queryClient = useQueryClient();
   const [stream, dispatch] = useReducer(reducer, initial);
-  // Latest verdict's session_id, threaded into VerdictCard for the
-  // "Detail" link. The forward_job SSE doesn't include the session
-  // id explicitly; after the stream we refetch /api/sessions and
-  // pluck the new top row's id.
   const lastSessionIdRef = useRef<string | null>(null);
 
   const profileError = profile.error as ApiError | undefined;
@@ -117,8 +112,8 @@ export default function Dashboard() {
 
   const handleSubmit = async (jobUrl: string) => {
     dispatch({ kind: "submit", jobUrl, startedAt: Date.now() });
-    toast.info("Analysing job", {
-      description: "Eight research agents working in parallel.",
+    toast.info("Picky's looking", {
+      description: "Nine checks in parallel. Citations on every claim.",
     });
     try {
       await streamForwardJob(jobUrl, {
@@ -127,12 +122,12 @@ export default function Dashboard() {
           if (event.type === "verdict") {
             const decision = (event.data?.decision as string | undefined) ?? "?";
             if (decision === "GO") {
-              toast.success("Verdict: GO", {
-                description: "Worth applying.",
+              toast.success("Picky says: apply", {
+                description: "Worth your time. Open it to see why.",
               });
             } else if (decision === "NO_GO") {
-              toast.warning("Verdict: NO_GO", {
-                description: "Hard blockers found — see reasoning.",
+              toast.warning("Picky says: skip it", {
+                description: "Hard blockers found. Open it to see which.",
               });
             }
           }
@@ -153,8 +148,6 @@ export default function Dashboard() {
       });
       toast.error("Research failed", { description: message });
     } finally {
-      // New session lives in the DB now — refetch so SessionList
-      // picks it up + capture its id for the verdict card link.
       const refreshed = await queryClient.fetchQuery<SessionListResponse>({
         queryKey: ["sessions"],
         queryFn: () => listSessions(),
@@ -165,22 +158,27 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Outcome nudges (cross-surface — same data Telegram + email show) */}
+      {canForward && <NotificationBanner />}
+
       {/* Profile gate */}
       {profile.isPending ? (
         <Skeleton className="h-20 w-full" />
       ) : profileMissing ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Set up your profile</CardTitle>
+        <Card className="border-l-4 border-l-primary">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Picky needs your context first</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm">
+          <CardContent className="text-sm text-card-foreground/80">
             <p>
-              Trajectory needs your career history and preferences before
-              it can score jobs.{" "}
-              <a href="/onboarding" className="underline">
-                Start onboarding
+              Without your career history, deal-breakers, and writing samples,
+              every verdict will be generic.{" "}
+              <a
+                href="/onboarding"
+                className="text-primary font-medium underline-offset-2 hover:underline"
+              >
+                Start onboarding →
               </a>
-              .
             </p>
           </CardContent>
         </Card>
@@ -197,8 +195,15 @@ export default function Dashboard() {
 
       {/* Forward job form */}
       <Card>
-        <CardHeader>
-          <CardTitle>Paste a job URL</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <span className="font-mono text-primary text-sm">›</span>
+            Paste a job URL
+          </CardTitle>
+          <p className="text-xs text-card-foreground/60 mt-1">
+            Picky scrapes the company page, runs nine checks against UK gov data,
+            and takes a position. ~30 seconds.
+          </p>
         </CardHeader>
         <CardContent>
           <ForwardJobForm
@@ -225,8 +230,6 @@ export default function Dashboard() {
       {stream.status === "complete" && stream.verdict && (
         <VerdictCard
           verdict={stream.verdict}
-          // The verdict event from the backend doesn't carry the
-          // research bundle — SessionDetail.tsx loads it on demand.
           bundle={null}
           sessionId={lastSessionIdRef.current ?? undefined}
         />

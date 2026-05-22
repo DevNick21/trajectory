@@ -45,7 +45,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.validators.content_shield import shield, tier1
+    from askpicky.validators.content_shield import shield, tier1
 
     log = get_logger(NAME)
     messages: list[str] = []

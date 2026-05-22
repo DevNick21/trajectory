@@ -52,11 +52,11 @@ async def _body() -> tuple[list[str], list[str], float]:
         return [], [missing], 0.0
 
     # Force the flag on for this run regardless of .env state.
-    from trajectory.config import settings
+    from askpicky.config import settings
 
     settings.enable_managed_company_investigator = True
 
-    from trajectory.managed.company_investigator import (
+    from askpicky.managed.company_investigator import (
         ManagedInvestigatorFailed,
         investigate,
     )

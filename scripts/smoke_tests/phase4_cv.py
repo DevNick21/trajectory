@@ -35,13 +35,13 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.config import settings
+    from askpicky.config import settings
     # Keep rendered files inside the smoke tempdir.
     settings.generated_dir = tmp / "generated"
     settings.generated_dir.mkdir(parents=True, exist_ok=True)
 
-    from trajectory.orchestrator import handle_draft_cv
-    from trajectory.storage import Storage
+    from askpicky.orchestrator import handle_draft_cv
+    from askpicky.storage import Storage
 
     bundle = load_fixture_bundle()
     user = build_test_user("uk_resident")
@@ -63,7 +63,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     # drops to zero. Mirrors the cv_tailor_agentic smoke pattern.
     import uuid
     from datetime import datetime, timezone
-    from trajectory.schemas import CareerEntry
+    from askpicky.schemas import CareerEntry
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     seeds = [
         ("project_note", "Migrated payments backend Postgres → CockroachDB; zero downtime over a 6-week cutover."),

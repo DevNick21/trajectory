@@ -22,7 +22,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.renderers import render_cover_letter_pdf
+    from askpicky.renderers import render_cover_letter_pdf
 
     messages: list[str] = []
     failures: list[str] = []

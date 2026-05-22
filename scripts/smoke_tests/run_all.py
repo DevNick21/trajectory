@@ -24,7 +24,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-# Ensure sys.path has src/ BEFORE any trajectory imports land from the
+# Ensure sys.path has src/ BEFORE any askpicky imports land from the
 # individual smoke modules.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
@@ -79,10 +79,9 @@ _REGISTRY: list[_Entry] = [
     _Entry("api_pack",           "scripts.smoke_tests.api_pack",           cheap=True,  category="api"),
     _Entry("api_chat",           "scripts.smoke_tests.api_chat",           cheap=True,  category="api"),
     _Entry("cv_parser",          "scripts.smoke_tests.cv_parser",          cheap=False, category="agent-util"),
-    _Entry("multi_provider_routing", "scripts.smoke_tests.multi_provider_routing", cheap=True, category="infra"),
-    _Entry("multi_provider_cv_tailor_live", "scripts.smoke_tests.multi_provider_cv_tailor_live", cheap=False, category="phase4"),
 
     # ── phase1 — gov data + extractor agents ───────────────────────────
+    _Entry("entity_resolver",    "scripts.smoke_tests.entity_resolver",    cheap=True,  category="phase1"),
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True,  category="phase1"),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True,  category="phase1"),
     _Entry("salary_data",        "scripts.smoke_tests.salary_data",        cheap=True,  category="phase1"),
@@ -125,12 +124,9 @@ _REGISTRY: list[_Entry] = [
     _Entry("managed_investigator",  "scripts.smoke_tests.managed_investigator",  cheap=False, category="e2e"),
     _Entry("managed_reviews",       "scripts.smoke_tests.managed_reviews",       cheap=False, category="e2e"),
     _Entry("managed_cover_letter",  "scripts.smoke_tests.managed_cover_letter",  cheap=False, category="e2e"),
-    _Entry("verdict_deep_research", "scripts.smoke_tests.verdict_deep_research", cheap=False, category="e2e"),
     _Entry("e2e_live_stress",       "scripts.smoke_tests.e2e_live_stress",       cheap=False, category="e2e"),
     # Agentic CV tailor: gated behind SMOKE_AGENTIC_CV=1 (~$0.35).
     _Entry("cv_tailor_agentic",  "scripts.smoke_tests.cv_tailor_agentic",  cheap=False, category="e2e"),
-    # LaTeX CV: gated behind SMOKE_LATEX=1; needs pdflatex on PATH.
-    _Entry("cv_latex",           "scripts.smoke_tests.cv_latex",           cheap=False, category="e2e"),
 ]
 
 
@@ -193,7 +189,7 @@ def _read_actual_cost_from_log() -> "float | None":
     """
     try:
         import asyncio as _asyncio
-        from trajectory.storage import total_cost_usd
+        from askpicky.storage import total_cost_usd
         return _asyncio.run(total_cost_usd())
     except Exception:
         return None

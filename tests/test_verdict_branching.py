@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     Citation,
     CompaniesHouseSnapshot,
     GhostJobAssessment,
@@ -32,7 +32,7 @@ from trajectory.schemas import (
     Verdict,
     VisaStatus,
 )
-from trajectory.sub_agents.verdict import _enforce_no_go_with_blockers
+from askpicky.sub_agents.verdict import _enforce_no_go_with_blockers
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_research_bundle.json"
 

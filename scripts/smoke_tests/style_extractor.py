@@ -60,7 +60,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         )
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import style_extractor
+    from askpicky.sub_agents import style_extractor
 
     try:
         profile = await style_extractor.extract(

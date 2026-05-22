@@ -38,7 +38,7 @@ REQUIRES_LIVE_LLM = False
 def _make_routed(intent: str, *, confidence: str = "HIGH",
                  reasoning_brief: str = "test", **extra):
     """Synthesise the IntentRouterOutput shape the orchestrator expects."""
-    from trajectory.schemas import IntentRouterOutput
+    from askpicky.schemas import IntentRouterOutput
     base = {
         "intent": intent,
         "confidence": confidence,
@@ -56,8 +56,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from fastapi.testclient import TestClient
-    from trajectory.config import settings
-    from trajectory.api.app import create_app
+    from askpicky.config import settings
+    from askpicky.api.app import create_app
 
     settings.demo_user_id = "smoke_chat_user"
     settings.enforce_rate_limit = False
@@ -72,7 +72,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     # Patch intent_router unless we want to spend on real classification.
     original_route = None
     if not live:
-        from trajectory.sub_agents import intent_router
+        from askpicky.sub_agents import intent_router
 
         # The route function is dispatched inside chat.py via lazy import,
         # so we patch the symbol on the module.
@@ -194,7 +194,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     finally:
         if original_route is not None:
-            from trajectory.sub_agents import intent_router
+            from askpicky.sub_agents import intent_router
             intent_router.route = original_route
 
     return messages, failures, 0.0

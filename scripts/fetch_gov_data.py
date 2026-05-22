@@ -25,7 +25,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from trajectory.data_freshness import write_fetched_at  # noqa: E402
+from askpicky.data_freshness import write_fetched_at  # noqa: E402
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -90,7 +90,7 @@ GOING_RATES_URL = (
 )
 
 TIMEOUT = 60
-_USER_AGENT = "Mozilla/5.0 (compatible; trajectory-fetch-gov-data/0.1)"
+_USER_AGENT = "Mozilla/5.0 (compatible; askpicky-fetch-gov-data/0.1)"
 
 
 def _get(url: str) -> bytes:

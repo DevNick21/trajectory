@@ -45,7 +45,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         )
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import red_flags as rf
+    from askpicky.sub_agents import red_flags as rf
 
     try:
         report = await rf.detect(

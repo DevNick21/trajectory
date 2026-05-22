@@ -17,14 +17,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from trajectory.validators.content_shield import (
+from askpicky.validators.content_shield import (
     HIGH_STAKES_AGENTS,
     INJECTION_PATTERNS,
     LOW_STAKES_AGENTS,
     shield,
     tier1,
 )
-from trajectory.schemas import ContentShieldVerdict
+from askpicky.schemas import ContentShieldVerdict
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_tier1_binary_ish_bytes_via_surrogates() -> None:
 @pytest.mark.asyncio
 async def test_shield_passes_clean_content_without_tier2() -> None:
     with patch(
-        "trajectory.validators.content_shield.tier2",
+        "askpicky.validators.content_shield.tier2",
         new=AsyncMock(),
     ) as mock_tier2:
         cleaned, verdict = await shield(
@@ -207,7 +207,7 @@ async def test_shield_calls_tier2_when_flagged_and_high_stakes() -> None:
         recommended_action="PASS_THROUGH",
     )
     with patch(
-        "trajectory.validators.content_shield.tier2",
+        "askpicky.validators.content_shield.tier2",
         new=AsyncMock(return_value=fake_verdict),
     ) as mock_tier2:
         cleaned, verdict = await shield(
@@ -223,7 +223,7 @@ async def test_shield_calls_tier2_when_flagged_and_high_stakes() -> None:
 @pytest.mark.asyncio
 async def test_shield_skips_tier2_for_low_stakes_even_when_flagged() -> None:
     with patch(
-        "trajectory.validators.content_shield.tier2",
+        "askpicky.validators.content_shield.tier2",
         new=AsyncMock(),
     ) as mock_tier2:
         cleaned, verdict = await shield(

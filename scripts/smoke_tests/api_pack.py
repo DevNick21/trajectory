@@ -34,8 +34,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from fastapi.testclient import TestClient
-    from trajectory.config import settings
-    from trajectory.api.app import create_app
+    from askpicky.config import settings
+    from askpicky.api.app import create_app
 
     settings.demo_user_id = "smoke_pack_user"
     settings.enforce_rate_limit = False
@@ -54,7 +54,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     # into later tests (notably phase4_cv which calls the real handler).
     original_handle_draft_cv = None
     if not live:
-        from trajectory import orchestrator
+        from askpicky import orchestrator
 
         async def _fake_handle_draft_cv(session, user, storage):
             cv = build_synthetic_cv_output(name=user.name)
@@ -109,7 +109,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         # phase4_cv) see the unmonkey-patched handler. Without this, the
         # fake leaks into module state for the rest of the run_all.
         if original_handle_draft_cv is not None:
-            from trajectory import orchestrator
+            from askpicky import orchestrator
             orchestrator.handle_draft_cv = original_handle_draft_cv
 
     return messages, failures, 0.0

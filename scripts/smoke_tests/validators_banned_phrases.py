@@ -19,7 +19,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.validators.banned_phrases import BANNED_PHRASES, contains_banned
+    from askpicky.validators.banned_phrases import BANNED_PHRASES, contains_banned
 
     messages: list[str] = []
     failures: list[str] = []

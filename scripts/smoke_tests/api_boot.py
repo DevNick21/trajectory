@@ -37,7 +37,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     try:
         from fastapi.testclient import TestClient
 
-        from trajectory.api.app import create_app
+        from askpicky.api.app import create_app
     except Exception as exc:
         failures.append(f"import failed: {exc!r}")
         return messages, failures, 0.0

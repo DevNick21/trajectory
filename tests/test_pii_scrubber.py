@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from trajectory.validators.pii_scrubber import scrub, scrub_all
+from askpicky.validators.pii_scrubber import scrub, scrub_all
 
 
 # ---------------------------------------------------------------------------

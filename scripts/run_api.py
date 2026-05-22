@@ -1,7 +1,7 @@
 """Launch the FastAPI dev server with the Windows asyncio fix in place.
 
 uvicorn's CLI calls `asyncio.run()` before importing the application
-module, so any policy change inside `trajectory.api.app` happens after
+module, so any policy change inside `askpicky.api.app` happens after
 the event loop has already been created. On Windows that means
 Playwright's `subprocess_exec` calls raise `NotImplementedError`
 because the default loop is `SelectorEventLoop`.
@@ -61,7 +61,7 @@ def main() -> None:
 
     port = int(os.environ.get("API_PORT", "8000"))
     uvicorn.run(
-        "trajectory.api.app:app",
+        "askpicky.api.app:app",
         host="127.0.0.1",
         port=port,
         reload=True,

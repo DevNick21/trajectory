@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     DealBreakersParseResult,
     MotivationsParseResult,
     WritingStyleProfile,
@@ -53,8 +53,8 @@ def _style_profile(user_id: str = "demo-user-1") -> WritingStyleProfile:
 
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch):
-    from trajectory.config import settings
-    from trajectory import storage as storage_module
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
 
     monkeypatch.setattr(settings, "sqlite_db_path", tmp_path / "test.db")
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
@@ -62,7 +62,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
     monkeypatch.setattr(storage_module, "_initialised", False)
 
-    from trajectory.api.app import create_app
+    from askpicky.api.app import create_app
 
     app = create_app()
     with TestClient(app) as c:
@@ -93,7 +93,7 @@ def _valid_finalise_body(**overrides) -> dict:
 
 
 def _patch_style_extractor(monkeypatch, *, raises: bool = False):
-    from trajectory.sub_agents import style_extractor
+    from askpicky.sub_agents import style_extractor
 
     async def fake(user_id, samples, session_id=None):
         if raises:
@@ -112,7 +112,7 @@ def _patch_parser(monkeypatch, *, motivations=None, deal_breakers=None):
     a real LLM call in a test; leaving the arg None yields None
     (simulates parser failure → fallback to raw text).
     """
-    from trajectory.sub_agents import onboarding_parser
+    from askpicky.sub_agents import onboarding_parser
 
     async def fake(stage, text):
         if stage == "motivations":
@@ -130,7 +130,7 @@ def _patch_parser(monkeypatch, *, motivations=None, deal_breakers=None):
 
 
 def test_parse_returns_parser_output(client, monkeypatch):
-    from trajectory.sub_agents import onboarding_parser
+    from askpicky.sub_agents import onboarding_parser
 
     captured = {}
 
@@ -199,7 +199,7 @@ def test_finalise_writes_profile_and_entries(client, monkeypatch):
     assert body["writing_style_profile_id"] == "style-pid"
 
     # Profile persisted.
-    from trajectory.storage import get_user_profile, get_all_career_entries_for_user
+    from askpicky.storage import get_user_profile, get_all_career_entries_for_user
 
     user = _seed(get_user_profile("demo-user-1"))
     assert user is not None
@@ -237,7 +237,7 @@ def test_finalise_fallback_when_parser_returns_none(client, monkeypatch):
     )
     assert resp.status_code == 201
 
-    from trajectory.storage import get_user_profile
+    from askpicky.storage import get_user_profile
 
     user = _seed(get_user_profile("demo-user-1"))
     assert user is not None
@@ -252,7 +252,7 @@ def test_finalise_without_samples_skips_style_extractor(client, monkeypatch):
         called["n"] += 1
         return _style_profile(user_id)
 
-    from trajectory.sub_agents import style_extractor
+    from askpicky.sub_agents import style_extractor
 
     monkeypatch.setattr(style_extractor, "extract", fake)
     _patch_parser(monkeypatch)
@@ -294,7 +294,7 @@ def test_finalise_visa_holder_derives_visa_status(client, monkeypatch):
     )
     assert resp.status_code == 201
 
-    from trajectory.storage import get_user_profile
+    from askpicky.storage import get_user_profile
 
     user = _seed(get_user_profile("demo-user-1"))
     assert user is not None
@@ -320,7 +320,7 @@ def test_finalise_visa_holder_with_past_expiry_uses_fallback(client, monkeypatch
     )
     assert resp.status_code == 201
 
-    from trajectory.storage import get_user_profile
+    from askpicky.storage import get_user_profile
 
     user = _seed(get_user_profile("demo-user-1"))
     assert user is not None

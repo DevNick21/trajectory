@@ -73,7 +73,7 @@ def _bundle_with(base, overrides: dict):
 def _scenarios(base_bundle):
     """Return 20 (label, expected_decision, expected_blocker_type, user_type,
     bundle, deal_breakers) tuples. `expected_blocker_type` is None on GO."""
-    from trajectory.schemas import (
+    from askpicky.schemas import (
         Citation,
         GhostJobAssessment,
         GhostJobJDScore,
@@ -288,8 +288,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.storage import Storage
-    from trajectory.sub_agents import verdict as verdict_agent
+    from askpicky.storage import Storage
+    from askpicky.sub_agents import verdict as verdict_agent
 
     base_bundle = load_fixture_bundle()
     scenarios = _scenarios(base_bundle)

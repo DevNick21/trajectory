@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from trajectory.progress import (
+from askpicky.progress import (
     NoOpEmitter,
     ProgressEmitter,
     SSEEmitter,

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from trajectory.schemas import (
+from askpicky.schemas import (
     CareerEntry,
     Citation,
     ResearchBundle,
@@ -19,7 +19,7 @@ from trajectory.schemas import (
     MotivationFitReport,
     HardBlocker,
 )
-from trajectory.validators.citations import (
+from askpicky.validators.citations import (
     ValidationContext,
     validate_citation,
     validate_output,

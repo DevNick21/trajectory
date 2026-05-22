@@ -1,16 +1,3 @@
-# Internal design docs (root-only — nested copies inside .claude/ ship)
-/ARCHITECTURE.md
-/AGENTS.md
-/CLAUDE.md
-/CLAUDE_DESIGN_PLAYBOOK.md
-/PROCESS.md
-/PROJECT_STRUCTURE.md
-/SCHEMAS.md
-/SUBMISSION.md
-/SKILL.md
-files/
-
-
 # Environment
 .env
 .env.local
@@ -35,6 +22,10 @@ MANIFEST
 # Data — runtime, auto-generated, never commit
 data/raw/
 data/processed/
+data/askpicky.db
+data/askpicky.db-journal
+data/askpicky.db-shm
+data/askpicky.db-wal
 data/trajectory.db
 data/trajectory.db-journal
 data/trajectory.db-shm
@@ -43,6 +34,7 @@ data/embeddings.faiss
 data/embeddings.faiss.ids.json
 data/generated/
 data/managed_agents.json
+data/ch_bulk/
 
 # Logs
 *.log
@@ -64,15 +56,6 @@ build/
 playwright-report/
 test-results/
 
-# Remotion demo (3-min video composition). Source committed; node_modules,
-# public assets (mp3 / mp4 / png / otf), and render outputs ignored — they
-# can run to hundreds of MB and are recording-day-specific.
-demo/node_modules/
-demo/public/
-demo/out/
-demo/dist/
-demo/.cache/
-
 # OS
 .DS_Store
 Thumbs.db
@@ -83,9 +66,6 @@ desktop.ini
 .vscode/
 *.swp
 *.swo
-
-# Streamlit
-.streamlit/secrets.toml
 
 # Claude Code runtime artefacts (settings.json + skills directory stay tracked)
 .claude/scheduled_tasks.lock

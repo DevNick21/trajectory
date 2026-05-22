@@ -29,7 +29,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.storage import Storage
+    from askpicky.storage import Storage
 
     messages: list[str] = []
     failures: list[str] = []
@@ -70,7 +70,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append("scraped page cache OK")
 
     # LLM cost log
-    from trajectory.storage import log_llm_cost, total_cost_usd
+    from askpicky.storage import log_llm_cost, total_cost_usd
 
     before = await total_cost_usd()
     await log_llm_cost(

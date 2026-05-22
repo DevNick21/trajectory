@@ -82,14 +82,13 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     try:
-        from trajectory import orchestrator
-        from trajectory.storage import Storage
-        from trajectory.sub_agents import (
+        from askpicky import orchestrator, llm as askpicky_llm
+        from askpicky.storage import Storage
+        from askpicky.sub_agents import (
             companies_house as ch_agent,
             company_scraper,
             ghost_job_detector,
             red_flags as rf_agent,
-            reviews as rev_agent,
             salary_data as sal_agent,
             soc_check as soc_agent,
             sponsor_register as sr_agent,
@@ -109,7 +108,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         originals = {
             "company_scraper.run": company_scraper.run,
             "ch_agent.lookup": ch_agent.lookup,
-            "rev_agent.fetch": rev_agent.fetch,
+            "askpicky_llm.call_in_session": askpicky_llm.call_in_session,
             "sal_agent.fetch": sal_agent.fetch,
             "sr_agent.lookup": sr_agent.lookup,
             "soc_agent.verify": soc_agent.verify,
@@ -129,13 +128,21 @@ async def _body() -> tuple[list[str], list[str], float]:
         async def _fake_ch(*, company_name):
             return bundle.companies_house
 
-        async def _fake_reviews(*, company_name):
-            return []  # fixture has no reviews; orchestrator handles []
+        # Reviews now flow through managed/reviews_investigator via
+        # llm.call_in_session. Stub that to return an empty excerpts
+        # bag — orchestrator handles [] downstream.
+        class _StubReviewsOut:
+            excerpts: list = []
+
+        async def _fake_call_in_session(name, **kwargs):
+            if name == "reviews_investigator":
+                return _StubReviewsOut()
+            raise NotImplementedError(f"unexpected managed session {name!r}")
 
         async def _fake_salary(*, role, location, soc_code, posted_band):
             return bundle.salary_signals
 
-        async def _fake_sponsor(*, company_name):
+        async def _fake_sponsor(*, company_name, identity=None):
             return bundle.sponsor_status
 
         async def _fake_soc(*, jd, user):
@@ -149,7 +156,8 @@ async def _body() -> tuple[list[str], list[str], float]:
 
         company_scraper.run = _fake_scraper
         ch_agent.lookup = _fake_ch
-        rev_agent.fetch = _fake_reviews
+        askpicky_llm.call_in_session = _fake_call_in_session
+        orchestrator.call_in_session = _fake_call_in_session  # if imported
         sal_agent.fetch = _fake_salary
         sr_agent.lookup = _fake_sponsor
         soc_agent.verify = _fake_soc
@@ -249,7 +257,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             messages.append("storage round-trip OK: verdict + bundle reloaded")
 
             # ── Assert: Job entity (PROCESS Entry 45) ───────────────────
-            from trajectory.storage import find_jobs_for_user
+            from askpicky.storage import find_jobs_for_user
             jobs = await find_jobs_for_user(user.user_id)
             if not jobs:
                 failures.append(
@@ -272,7 +280,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         finally:
             company_scraper.run = originals["company_scraper.run"]
             ch_agent.lookup = originals["ch_agent.lookup"]
-            rev_agent.fetch = originals["rev_agent.fetch"]
+            askpicky_llm.call_in_session = originals["askpicky_llm.call_in_session"]
             sal_agent.fetch = originals["sal_agent.fetch"]
             sr_agent.lookup = originals["sr_agent.lookup"]
             soc_agent.verify = originals["soc_agent.verify"]

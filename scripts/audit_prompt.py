@@ -3,7 +3,7 @@
 AGENTS.md §17 + PROJECT_STRUCTURE.md `scripts/audit_prompt.py`.
 
 Reads the target agent's `SYSTEM_PROMPT` constant from
-`src/trajectory/sub_agents/<agent>.py`, infers its output schema from
+`src/askpicky/sub_agents/<agent>.py`, infers its output schema from
 the agent module, pairs it with a declared `INPUT_SOURCES` list
 (trusted / untrusted labels), and calls the Prompt Auditor. Writes
 each report to `./audits/<agent>_<timestamp>.json`.
@@ -25,19 +25,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Make `trajectory` importable regardless of where this script is run from.
+# Make `askpicky` importable regardless of where this script is run from.
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from pydantic import BaseModel  # noqa: E402
 
-from trajectory.sub_agents import prompt_auditor  # noqa: E402
+from askpicky.sub_agents import prompt_auditor  # noqa: E402
 
 logger = logging.getLogger("audit_prompt")
 
 # The 16 runtime agents that should be audited. Each row declares:
-#   module_name         — file under src/trajectory/sub_agents/
+#   module_name         — file under src/askpicky/sub_agents/
 #   system_prompt_attr  — attribute name holding the system prompt string
 #   input_sources       — labelled trusted/untrusted inputs the agent sees
 #
@@ -45,7 +45,7 @@ logger = logging.getLogger("audit_prompt")
 # explicitly where the module uses a different constant name.
 _AGENT_REGISTRY: dict[str, dict] = {
     "company_scraper_summariser": {
-        "module": "trajectory.sub_agents.company_scraper",
+        "module": "askpicky.sub_agents.company_scraper",
         "system_prompt_attr": "COMPANY_SUMMARISER_SYSTEM_PROMPT",
         "output_schema_symbol": "CompanyResearch",
         "input_sources": [
@@ -55,7 +55,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "jd_extractor": {
-        "module": "trajectory.sub_agents.company_scraper",
+        "module": "askpicky.sub_agents.company_scraper",
         "system_prompt_attr": "JD_EXTRACTOR_SYSTEM_PROMPT",
         "output_schema_symbol": "ExtractedJobDescription",
         "input_sources": [
@@ -65,7 +65,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "ghost_job_detector": {
-        "module": "trajectory.sub_agents.ghost_job_detector",
+        "module": "askpicky.sub_agents.ghost_job_detector",
         "system_prompt_attr": "JD_SCORER_SYSTEM_PROMPT",
         "output_schema_symbol": "GhostJobJDScore",
         "input_sources": [
@@ -76,7 +76,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "red_flags_detector": {
-        "module": "trajectory.sub_agents.red_flags",
+        "module": "askpicky.sub_agents.red_flags",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "RedFlagsReport",
         "input_sources": [
@@ -86,7 +86,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "verdict": {
-        "module": "trajectory.sub_agents.verdict",
+        "module": "askpicky.sub_agents.verdict",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "Verdict",
         "input_sources": [
@@ -96,7 +96,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "question_designer": {
-        "module": "trajectory.sub_agents.question_designer",
+        "module": "askpicky.sub_agents.question_designer",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "QuestionSet",
         "input_sources": [
@@ -106,7 +106,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "star_polisher": {
-        "module": "trajectory.sub_agents.star_polisher",
+        "module": "askpicky.sub_agents.star_polisher",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "STARPolish",
         "input_sources": [
@@ -115,7 +115,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "style_extractor": {
-        "module": "trajectory.sub_agents.style_extractor",
+        "module": "askpicky.sub_agents.style_extractor",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "WritingStyleProfile",
         "input_sources": [
@@ -123,7 +123,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "self_audit": {
-        "module": "trajectory.sub_agents.self_audit",
+        "module": "askpicky.sub_agents.self_audit",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "SelfAuditReport",
         "input_sources": [
@@ -133,7 +133,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "salary_strategist": {
-        "module": "trajectory.sub_agents.salary_strategist",
+        "module": "askpicky.sub_agents.salary_strategist",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "SalaryRecommendation",
         "input_sources": [
@@ -146,7 +146,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "intent_router": {
-        "module": "trajectory.sub_agents.intent_router",
+        "module": "askpicky.sub_agents.intent_router",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "IntentRouterOutput",
         "input_sources": [
@@ -160,7 +160,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         # retrieval; career entries enter via tool-call results
         # (trusted — user's own history) rather than up-front prompt
         # context. The legacy single-call path was retired.
-        "module": "trajectory.sub_agents.cv_tailor_agentic",
+        "module": "askpicky.sub_agents.cv_tailor_agentic",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "CVOutput",
         "input_sources": [
@@ -173,7 +173,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "cover_letter": {
-        "module": "trajectory.sub_agents.cover_letter",
+        "module": "askpicky.sub_agents.cover_letter",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "CoverLetterOutput",
         "input_sources": [
@@ -185,7 +185,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "likely_questions": {
-        "module": "trajectory.sub_agents.likely_questions",
+        "module": "askpicky.sub_agents.likely_questions",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "LikelyQuestionsOutput",
         "input_sources": [
@@ -196,7 +196,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "draft_reply": {
-        "module": "trajectory.sub_agents.draft_reply",
+        "module": "askpicky.sub_agents.draft_reply",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "DraftReplyOutput",
         "input_sources": [
@@ -208,7 +208,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "prompt_auditor": {
-        "module": "trajectory.sub_agents.prompt_auditor",
+        "module": "askpicky.sub_agents.prompt_auditor",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "PromptAuditReport",
         "input_sources": [
@@ -223,7 +223,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
         # `_CAREER_SYS` is one representative prompt string; the auditor
         # reads it as a proxy for the 7 stage variants (they share the
         # header and rules, differing only in the STAGE paragraph).
-        "module": "trajectory.sub_agents.onboarding_parser",
+        "module": "askpicky.sub_agents.onboarding_parser",
         "system_prompt_attr": "_CAREER_SYS",
         "output_schema_symbol": "CareerParseResult",
         "input_sources": [
@@ -237,7 +237,7 @@ _AGENT_REGISTRY: dict[str, dict] = {
 def _describe_schema(schema_symbol: str) -> str:
     """Render a Pydantic model's name + fields for the auditor's context."""
     try:
-        schemas_mod = importlib.import_module("trajectory.schemas")
+        schemas_mod = importlib.import_module("askpicky.schemas")
     except Exception:
         return schema_symbol
     model = getattr(schemas_mod, schema_symbol, None)
@@ -269,7 +269,7 @@ async def _audit_one(agent_name: str, *, empirical: bool = False) -> Optional[Pa
 
     if empirical:
         logger.info("Auditing %s (empirical mode — Code Execution sandbox)...", agent_name)
-        from trajectory.llm import call_in_session
+        from askpicky.llm import call_in_session
         report = await call_in_session(
             "prompt_auditor_empirical",
             audited_agent_name=agent_name,

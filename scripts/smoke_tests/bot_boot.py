@@ -36,7 +36,7 @@ from ._common import (
 
 
 class _ErrorCapture(logging.Handler):
-    """Capture ERROR-level log records under `trajectory.*` so the test
+    """Capture ERROR-level log records under `askpicky.*` so the test
     can assert no handler swallowed an exception silently."""
 
     def __init__(self) -> None:
@@ -44,7 +44,7 @@ class _ErrorCapture(logging.Handler):
         self.records: list[logging.LogRecord] = []
 
     def emit(self, record: logging.LogRecord) -> None:
-        if record.name.startswith("trajectory.") and record.levelno >= logging.ERROR:
+        if record.name.startswith("askpicky.") and record.levelno >= logging.ERROR:
             self.records.append(record)
 
 NAME = "bot_boot"
@@ -99,20 +99,20 @@ async def _body() -> tuple[list[str], list[str], float]:
     if key_missing:
         return [], [key_missing], 0.0
 
-    from trajectory.bot.app import _post_init
-    from trajectory.bot.handlers import on_start, on_message
-    from trajectory.config import settings
+    from askpicky.bot.app import _post_init
+    from askpicky.bot.handlers import on_start, on_message
+    from askpicky.config import settings
     from telegram.ext import ApplicationBuilder
 
     messages: list[str] = []
     failures: list[str] = []
 
-    # Install an ERROR-level capture across the trajectory loggers. Any
+    # Install an ERROR-level capture across the askpicky loggers. Any
     # handler that catches an exception and logs it via
     # `_handle_handler_exception` will land here, even if the bot still
     # produces a reply afterwards (the prior false-PASS shape).
     error_capture = _ErrorCapture()
-    root = logging.getLogger("trajectory")
+    root = logging.getLogger("askpicky")
     root.addHandler(error_capture)
 
     # ── 1. Build the Application without starting polling ─────────────
@@ -211,7 +211,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if error_capture.records:
         for rec in error_capture.records:
             failures.append(
-                f"trajectory logger emitted ERROR during bot_boot: "
+                f"askpicky logger emitted ERROR during bot_boot: "
                 f"{rec.name}: {rec.getMessage()}"
             )
 

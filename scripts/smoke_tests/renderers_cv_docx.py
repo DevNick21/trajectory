@@ -26,7 +26,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.renderers import render_cv_docx
+    from askpicky.renderers import render_cv_docx
 
     messages: list[str] = []
     failures: list[str] = []

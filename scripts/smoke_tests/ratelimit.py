@@ -20,7 +20,7 @@ REQUIRES_LIVE_LLM = False
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.ratelimit import RateLimiter, intent_to_category
+    from askpicky.ratelimit import RateLimiter, intent_to_category
 
     messages: list[str] = []
     failures: list[str] = []

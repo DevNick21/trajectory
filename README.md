@@ -1,281 +1,153 @@
-# Trajectory
+# AskPicky
 
-A dual-surface personal assistant for UK job seekers — **React web app** for deep work and **Telegram bot** for on-the-go. Forward a job URL, get an honest verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
+> **Verify roles before you apply.**
+> UK-first, visa-aware, agent-powered job search assistant. Forward a job URL, get a cited verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
 
-Built by someone who spent months job-searching in the UK on a Graduate visa. Every feature exists because a real information asymmetry existed.
+AGPL-3.0 · Python 3.11+ · Anthropic SDK + first-party Citations · No auto-apply, ever.
 
 ---
 
 ## What it does
 
-**Forward a job → instant verdict.**
-Trajectory runs 9 parallel research checks, combines them into a GO / NO_GO decision, and explains exactly why — with citations you can click.
+**Forward a job → cited verdict.**
+9 parallel research checks run against the JD, the company, and live UK government data. Picky combines them into a GO / NO_GO decision and explains exactly why — every load-bearing claim cites a verbatim source.
 
-**Designs three targeted questions to guide generation.**
-Rather than producing a generic pack, it generates questions designed around the specific role's gaps: what's missing in your background relative to this JD, what the company's culture signals suggest you need to address, what the salary situation demands.
+**Visa-aware out of the box.**
+Sponsor Register (with fuzzy-match + Splink rescoring), SOC threshold and new-entrant rule, Appendix Skilled Occupations eligibility, Companies House signals. The visa wedge is built in, not bolted on.
 
 **Writes in your voice, not AI voice.**
-During onboarding you provide 3–5 writing samples. Every generated output — CV bullets, cover letter paragraphs, salary scripts — passes through your extracted style profile and a self-audit that rejects AI clichés.
+3–5 writing samples at onboarding plus your uploaded CV feed a `WritingStyleProfile` that's injected into every generator. A self-audit rejects AI clichés and runs a company-swap test — any sentence that would read identically with a different company name gets flagged.
 
-**Adapts salary advice to your actual situation.**
-Opening number, floor, and negotiation scripts adjust to your urgency level, recent rejection count, visa timeline, and employment status. A visa holder with 4 months to expiry negotiates differently than someone employed and patient.
+**Adapts salary advice to your situation.**
+Opening number, floor, ceiling, and four negotiation scripts adjust to your urgency, recent rejections, visa timeline, employment status, and the role's posted band.
 
-**Never auto-applies.** Philosophically off-limits. The user is always in the loop.
+**Tracks what happens after you apply.**
+One-tap outcome reporting in Telegram feeds the data network. The more users report, the better the verdicts get at telling you whether a role is worth your time.
 
-** Managed Agents integration.** For stateful web investigation, Trajectory includes a sandboxed company investigator that runs inside a Claude Managed Agents session — Claude chooses which company pages to fetch based on what each page reveals, instead of running a fixed discovery list. Set `enable_managed_company_investigator=true` in your environment to opt in. See `src/trajectory/managed/company_investigator.py`.
+**Never auto-applies.** Philosophically off-limits. The user is always in the loop. The spam paradox is real.
 
 ---
 
 ## Two surfaces, one orchestrator
 
 | Surface | Best for | What you get |
-| --- | --- | --- |
-| **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Onboarding wizard, dashboard with live Phase 1 streaming over Server-Sent Events, per-session detail pages with evidence + pack generators + downloadable files. |
-| **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Onboarding lives on the web — new users get redirected. |
+|---|---|---|
+| **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Wizard onboarding, dashboard with live Phase 1 SSE streaming, per-session detail pages with citations + pack generators + downloadable files. |
+| **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
 
-Both surfaces share a single FastAPI orchestrator, a 9-agent Phase 1 pipeline (with five Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and a SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/trajectory/progress/`) lets the same orchestrator stream progress over Telegram message edits or SSE without duplicating business logic — a new surface (Slack, CLI, etc.) only needs a new emitter implementation (~50 lines).
-
-The full dual-surface design rationale lives in [MIGRATION_PLAN.md](MIGRATION_PLAN.md), including ADRs for web-primary scope, the `ProgressEmitter` abstraction, and ephemeral client-side onboarding state.
+Both share one FastAPI orchestrator, one 9-agent Phase 1 pipeline (with 7 Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and one SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/askpicky/progress/`) streams progress over Telegram edits or SSE without duplicating business logic.
 
 ---
 
-## Checks run on every job
+## Phase 1 checks (run on every forward)
 
 | Check | What it catches |
-| ----- | --------------- |
+|---|---|
 | Ghost-job detector | Stale posting + not on careers page + vague JD + company distress |
-| Sponsor Register | Whether the employer holds a Skilled Worker licence (visa holders) |
+| Sponsor Register | Whether the employer holds a Skilled Worker licence (visa holders) — fuzzy + CRN-aware |
 | SOC threshold | Whether the offered salary clears the going rate for the role's SOC code |
 | Companies House | Dissolution, administration, overdue filings, wind-up resolutions |
-| Salary benchmarking | Offered vs. personal floor vs. market 10th percentile |
-| Deal-breaker scan | Flags any user-stated deal-breaker triggered by the JD |
-| Motivation fit | Scores each stated motivation against the JD and company research |
-| Red flags | Layoffs, lawsuits, Glassdoor CEO approval, review patterns |
+| Salary benchmarking | Offered vs. personal floor vs. market 10th percentile (ASHE) |
+| Red flags | Layoffs, lawsuits, Glassdoor patterns, regulatory actions, leaver signals |
+| Reviews investigator | Public-page review aggregation (Managed Agents sandbox) |
+| JSON-LD pre-LLM extractor | Avoids an Opus call when the page exposes Schema.org JobPosting |
+| Company scrape + summariser | Site-wide signal feed for the verdict |
 
-Hard blockers force a NO_GO regardless of everything else. Every claim cites a verbatim snippet, a specific gov.uk field, or a specific entry from your career history.
-
----
-
-## What you get on request
-
-| Command | Output |
-| ------- | ------ |
-| `draft_cv` | Tailored CV as `.docx` + `.pdf`, bullets grounded in your career entries |
-| `draft_cover_letter` | Cover letter as `.docx` + `.pdf`, written in your voice |
-| `salary_advice` | Opening number, floor, ceiling, and four negotiation scripts |
-| `predict_questions` | 8–12 likely interview questions with strategy notes per question |
-| `draft_reply` | Short and long variants of a recruiter reply |
-| `full_prep` | All four generators in parallel |
+Then the verdict agent reasons over all of it. The Citations API guarantees every quoted snippet is verbatim from the source.
 
 ---
 
-## Architecture
+## On-demand pack generation
 
-```text
-┌──────────────────┐         ┌──────────────────┐
-│  Telegram client │         │   Web (Vite +    │
-│     (mobile)     │         │    React, SSE)   │
-└────────┬─────────┘         └────────┬─────────┘
-         │ long-poll                  │ HTTP + SSE
-         ▼                            ▼
-┌──────────────────┐         ┌──────────────────┐
-│   bot/app.py     │         │   api/app.py     │
-│   handlers       │         │   routes         │
-└────────┬─────────┘         └────────┬─────────┘
-         │    TelegramEmitter │ SSEEmitter
-         └──────────┬─────────┘
-                    ▼
-        ┌───────────────────────────┐
-        │ orchestrator.py           │
-        │ ProgressEmitter protocol  │
-        │ sub_agents/ + managed/    │
-        │ validators/ + renderers/  │
-        └───────────┬───────────────┘
-                    ▼
-        ┌───────────────────────────┐
-        │ SQLite + FAISS + files    │
-        └───────────────────────────┘
-```
+Forwarding doesn't generate a pack — Picky won't burn your credits on a role you haven't decided to pursue. Once you've read the verdict, ask for what you need:
 
-**Phase 1 — 8 parallel sub-agents** (JD extraction, company scraper, Companies House, Sponsor Register, SOC check, ghost-job scorer, salary data, red flags) → **Verdict** (Opus 4.7, xhigh) with citation validation.
-
-**Phase 4 — on-demand pack** (CV tailor, cover letter, likely questions, salary strategist) fans out via `asyncio.gather`.
-
-Progress streams uniformly across both surfaces — Telegram edits a single message, the web app renders a checklist that ticks as each agent completes. Same orchestrator, two transports. All LLM outputs are Pydantic-validated JSON.
+- `draft_cv` → tailored CV as DOCX + PDF
+- `draft_cover_letter` → tailored cover letter as DOCX + PDF (Citations-backed)
+- `predict_questions` → 8–12 likely interview questions with strategy notes
+- `salary_advice` → opening number, floor, ceiling + 4 negotiation scripts
+- `draft_reply` → recruiter reply, short and long variants
+- `full_prep` → all four in parallel via `asyncio.gather`
 
 ---
 
-## Stack
+## Free vs premium
 
-**Backend (Python 3.11, async throughout):**
+See [ASKPICKY.md](./ASKPICKY.md) §7–§8 for the full split. In short:
 
-- **Anthropic SDK** — Opus 4.7 (quality-critical reasoning) + Sonnet 4.6 (extraction)
-- **FastAPI + uvicorn + sse-starlette** — web surface
-- **python-telegram-bot v21** — Telegram surface (async long-polling)
-- **Playwright + trafilatura + BeautifulSoup** — web scraping
-- **python-jobspy** — public-page job listing aggregation (Indeed, LinkedIn)
-- **pandas + pyarrow** — Sponsor Register, going rates, SOC codes, ASHE Tables 2/3/15 (parquet)
-- **SQLite + aiosqlite** — sessions, career entries, cost log
-- **sentence-transformers + FAISS** — semantic retrieval over career history
-- **python-docx + reportlab** — CV and cover letter file generation
-- **Streamlit** — legacy session history dashboard
-- **Pydantic v2** — every LLM input and output
+**Free** covers the core: full onboarding, verdicts (rate-limited), all visa-specific features, all pack generation, personal memory, application tracker, one-tap outcome reporting.
 
-**Frontend (`frontend/`):**
+**Premium** adds:
+- Real-time hiring intent verification (live web research)
+- Pre-application employer benchmarks (built from the data network)
+- Salary defensibility against Home Office rules
+- Application autopsy after rejection
 
-- **Vite + React 18 + TypeScript + Tailwind CSS** — build + UI
-- **shadcn/ui** primitives (copied into `src/components/ui/`, not installed)
-- **TanStack Query** — server state
-- **React Hook Form + Zod** — form validation
-- **React Router** — client routing
-
-No RapidAPI. No closed-source API marketplace wrappers. All salary data from ONS (ASHE) and open public sources.
+Contribute outcomes → earn credits → never need to pay.
 
 ---
 
-## Setup
-
-### Prerequisites
-
-- Python 3.11+ and Node 20+
-- A Telegram bot token ([BotFather](https://t.me/botfather))
-- Anthropic API key
-- Companies House API key (free — [register here](https://developer.company-information.service.gov.uk/))
-
-### Install
+## Run it locally
 
 ```bash
-git clone https://github.com/yourusername/trajectory.git
-cd trajectory
-
 # Backend
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
-playwright install chromium
+python -m venv .venv && . .venv/bin/activate    # or .venv\Scripts\activate on Windows
+pip install -e .
+pip install -r requirements.txt
 
-# Frontend
-cd frontend && npm install && cd ..
-```
-
-### Configure
-
-```bash
-cp .env.example .env
-# Fill in your keys
-```
-
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-TELEGRAM_BOT_TOKEN=...
-COMPANIES_HOUSE_API_KEY=...
-
-# Dual-surface identity — set to your Telegram numeric user id
-# so both surfaces resolve to the same user_profiles row.
-DEMO_USER_ID=123456789
-
-# Web surface (defaults shown)
-API_PORT=8000
-WEB_ORIGIN=http://localhost:5173
-WEB_URL=http://localhost:5173
-```
-
-### Fetch UK government data
-
-```bash
+# Fetch UK gov data (Sponsor Register, ASHE, SOC codes, Appendix Skilled Occupations)
 python scripts/fetch_gov_data.py
-```
 
-Downloads the Sponsor Register, Skilled Worker going rates, Appendix Skilled Occupations, SOC 2020 codes, and ASHE Tables 2/3/15 (ONS annual earnings percentiles). Takes ~2 minutes on first run. Rerun to refresh data.
+# Copy .env.example to .env, fill ANTHROPIC_API_KEY + TELEGRAM_BOT_TOKEN + DEMO_USER_ID
+cp .env.example .env
 
-### Run
+# Web frontend
+cd frontend && npm install && npm run dev
 
-Three processes — all talk to the same SQLite file + FAISS index:
+# Backend (in another shell)
+uvicorn askpicky.api.app:app --reload --port 8000
 
-```bash
-# Terminal 1 — Telegram bot
-python -m trajectory.bot.app
-
-# Terminal 2 — FastAPI (web backend)
-./scripts/run_api.sh
-
-# Terminal 3 — Vite (web frontend)
-./scripts/run_web.sh
-```
-
-Then visit `http://localhost:5173` in the browser, or `/start` your bot on Telegram. New users are redirected from Telegram to the web onboarding wizard — once the profile exists, both surfaces share it.
-
-The wizard's first stage accepts a CV upload (PDF / DOCX / TXT). A Sonnet pass extracts roles, education, skills, and the candidate's writing voice in a single shot, pre-fills the rest of the wizard, and uses the raw CV text as the primary writing sample for the style profile. Users review and edit instead of re-typing what's already on their CV.
-
-**Legacy Streamlit dashboard** (session history — superseded by the web app, kept for quick inspection):
-
-```bash
-streamlit run src/trajectory/dashboard/app.py
+# Telegram bot (in another shell)
+python -m askpicky.bot.app
 ```
 
 ---
 
-## Development
+## Smoke tests
 
 ```bash
-# Backend
-pytest                    # 243 tests (~42s), including SSE end-to-end + MA event-stream parser
-ruff check src/ tests/    # lint
+# 33 tests, ~5 min, $0 — no LLM calls, must stay green
+python -m scripts.smoke_tests.run_all --cheap
 
-# Frontend
-cd frontend
-npm run lint              # tsc -b --noEmit
-npm run build             # vite build
+# Full live suite (~$5, ~10 min)
+python -m scripts.smoke_tests.run_all
 ```
 
-Key suites:
-
-- `tests/test_citations.py` — citation resolution (verbatim match, gov field path, career entry existence)
-- `tests/test_ghost_job_combination.py` — signal combination logic
-- `tests/test_verdict_branching.py` — user-type hard blocker rules (visa holder vs. UK resident)
-- `tests/test_progress_emitter.py` — ProgressEmitter protocol + NoOp / SSE / Telegram implementations
-- `tests/test_api_forward_job_integration.py` — end-to-end SSE with the real orchestrator and mocked sub-agents
-
-End-to-end smoke tests (run individually or as a suite):
-
-```bash
-python -m scripts.smoke_tests.run_all --cheap   # ~30s, $0 — no LLM calls
-python -m scripts.smoke_tests.run_all           # full paid suite, ~14m, ~$5
-# Add gated Managed Agents tests:
-SMOKE_MANAGED_AGENTS=1 SMOKE_MANAGED_REVIEWS=1 SMOKE_VERDICT_DEEP=1 \
-  SMOKE_AGENTIC_CV=1 SMOKE_LATEX=1 \
-  python -m scripts.smoke_tests.run_all       # ~25m, ~$10-12
-```
-
-The rollup reports both a **budget** (sum of declared `ESTIMATED_COST_USD` per test) and the **actual** cost from the SQLite cost log (real Anthropic-token-derived USD via `storage.estimate_cost_usd`). A widening `delta` is the cue to refresh the budget estimates.
-
-The `--cheap` tier (31 tests as of Entry 46) covers infra, validators, renderers, the API surface, gov-data lookups, and **eight product-journey tests** that exercise: `forward_job → verdict` for both `uk_resident` and `visa_holder + NOT_LISTED → NO_GO` (Rule 2 guard), bot-side `draft_cv` with `.docx + .pdf` delivery (Rule 9), bot read-only intents (`profile_query`, `recent`), the bot's `analyse_offer` text path, the full web onboarding journey for both user types (parsed motivations + FAISS retrievable), and the onboarding clarification / off-topic state machine.
-
-The paid Managed Agents tests gated behind `SMOKE_MANAGED_AGENTS` / `SMOKE_MANAGED_REVIEWS` / `SMOKE_VERDICT_DEEP` cover the live `client.beta.sessions.*` surface end-to-end against real targets (GitHub careers / Monzo Bank / fixture verdict). The MA path is verified with prose-around-JSON tolerance and citation-snippet validation against the unshielded `web_fetch` text the agent actually saw — see PROCESS Entry 46 for the bugs that surfaced and the regression tests that lock the fixes in.
-
-### Key architectural rules
-
-1. **No invented data.** Every claim resolves to a scraped URL + snippet, a gov.uk field, or a career entry ID.
-2. **User-type branching is mandatory.** Visa holders get the sponsor/SOC blocker set; UK residents do not.
-3. **Writing style injection is mandatory.** Every Phase 4 generator receives the user's `WritingStyleProfile`.
-4. **Parallel fan-out is mandatory.** Phase 1 and `full_prep` run in parallel. Serial execution is a bug.
-5. **Structured output everywhere.** All LLM calls return Pydantic-validated JSON.
-6. **On-demand, not on-the-fly.** `forward_job` runs Phase 1 + verdict and stops. Pack components are user-triggered.
-7. **Opus 4.7 for quality-critical reasoning.** Sonnet 4.6 only for extraction and summarisation.
-
-Full rules and rationale: [CLAUDE.md](CLAUDE.md)
+The cheap suite is the regression net every change has to hold. Each LLM-backed test honours `SMOKE_<NAME>_MOCK=1` for free-iteration.
 
 ---
 
-## What it doesn't do
+## What's not in here
 
-- Auto-apply (philosophically off-limits, permanently)
-- LinkedIn scraping (Sign-In With LinkedIn only)
-- Store raw chat transcripts (only structured career entries persist)
-- Multi-tenant auth (single-user for the demo)
+- Auto-apply (philosophical no, permanently)
+- Trust badges for applicants (spam paradox)
+- AI-content detection (adversarial, unwinnable)
+- Identity verification (different problem)
+- Employer-facing ATS (different sales motion)
+- LangChain / LangGraph / RapidAPI / Firecrawl (raw Anthropic SDK only)
+- Postgres or Redis (SQLite is enough through the first 100 users)
+
+---
+
+## Docs
+
+- [ASKPICKY.md](./ASKPICKY.md) — canonical product definition (free/premium split, roadmap, four-question test)
+- [CLAUDE.md](./CLAUDE.md) — operating manual for AI-assisted dev
+- [AGENTS.md](./AGENTS.md) — agent prompt inventory + adapter assignments
+- [PROCESS.md](./PROCESS.md) — decision log
+- [docs/history/](./docs/history/) — superseded planning notes
 
 ---
 
 ## Licence
 
-GNU Affero General Public License v3.0 (AGPL-3.0) — see [LICENSE](LICENSE).
+AGPL-3.0. Code is open; the aggregated employer-behaviour data network is closed. Contributors sign a CLA — see [CONTRIBUTING.md](./CONTRIBUTING.md) once it exists.

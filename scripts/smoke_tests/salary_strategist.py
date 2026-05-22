@@ -36,7 +36,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         if missing:
             return [], [missing], 0.0
 
-    from trajectory.schemas import JobSearchContext
+    from askpicky.schemas import JobSearchContext
 
     bundle = load_fixture_bundle()
     user = build_test_user("uk_resident")
@@ -58,8 +58,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append(f"MOCK: skipped Opus; context urgency={ctx.urgency_level}")
         return messages, failures, 0.0
 
-    from trajectory.sub_agents import salary_strategist
-    from trajectory.validators.citations import build_context, validate_output
+    from askpicky.sub_agents import salary_strategist
+    from askpicky.validators.citations import build_context, validate_output
 
     cit_ctx = await build_context(
         research_bundle=bundle,

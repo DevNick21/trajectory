@@ -32,7 +32,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if missing:
         return [], [missing], 0.0
 
-    from trajectory.sub_agents.onboarding_parser import (
+    from askpicky.sub_agents.onboarding_parser import (
         parse_money,
         parse_deal_breakers,
         parse_visa,

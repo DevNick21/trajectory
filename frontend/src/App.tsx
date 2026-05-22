@@ -2,6 +2,7 @@ import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
 import OnboardingGate from "@/components/OnboardingGate";
+import Applications from "@/pages/Applications";
 import Dashboard from "@/pages/Dashboard";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
@@ -23,18 +24,26 @@ export default function App() {
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-canvas">
         <div className="container flex h-14 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 group">
             <span
               aria-hidden
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-bold"
+              className="flex h-7 w-7 items-center justify-center rounded-sm bg-primary text-primary-foreground text-sm font-bold font-mono leading-none"
             >
-              T
+              ?
             </span>
-            <span className="font-semibold tracking-tight">Trajectory</span>
+            <span className="font-semibold tracking-tight text-foreground">
+              AskPicky
+            </span>
+            <span className="hidden sm:inline text-xs text-foreground/40 tracking-tight">
+              verify before you apply
+            </span>
           </Link>
           <nav className="flex items-center gap-5">
             <NavLink to="/" end className={navLink}>
               Dashboard
+            </NavLink>
+            <NavLink to="/applications" className={navLink}>
+              Applications
             </NavLink>
             <NavLink to="/queue" className={navLink}>
               Queue
@@ -52,6 +61,7 @@ export default function App() {
         <OnboardingGate>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/applications" element={<Applications />} />
             <Route path="/queue" element={<Queue />} />
             <Route path="/offer" element={<Offer />} />
             <Route path="/sessions/:id" element={<SessionDetail />} />

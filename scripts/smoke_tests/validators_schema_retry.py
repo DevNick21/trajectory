@@ -20,7 +20,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
     from pydantic import BaseModel
-    from trajectory.validators.schema_retry import (
+    from askpicky.validators.schema_retry import (
         SchemaRetryExhausted,
         with_retry_on_invalid,
     )

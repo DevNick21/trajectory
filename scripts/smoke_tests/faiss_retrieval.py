@@ -24,7 +24,7 @@ REQUIRES_LIVE_LLM = False
 
 
 def _make_entry(kind: str, text: str, user_id: str):
-    from trajectory.schemas import CareerEntry
+    from askpicky.schemas import CareerEntry
 
     return CareerEntry(
         entry_id=str(uuid.uuid4()),
@@ -38,7 +38,7 @@ def _make_entry(kind: str, text: str, user_id: str):
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    from trajectory.storage import Storage
+    from askpicky.storage import Storage
 
     messages: list[str] = []
     failures: list[str] = []

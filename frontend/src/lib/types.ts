@@ -349,6 +349,76 @@ export type QueueBatchEvent =
   | { type: "done"; processed_count?: number; note?: string };
 
 // ---------------------------------------------------------------------------
+// Notifications + applications tracker (cross-surface)
+// ---------------------------------------------------------------------------
+
+export type ApplicationStatus =
+  | "forwarded"
+  | "applied"
+  | "no_response"
+  | "rejected_screen"
+  | "rejected_interview"
+  | "rejected_offer"
+  | "offer_received"
+  | "offer_accepted"
+  | "offer_declined";
+
+export type NotificationKind =
+  | "outcome_nudge"
+  | "follow_up_reminder"
+  | "sponsor_alert"
+  | "system";
+
+export type NotificationChannelName = "telegram" | "web" | "email";
+
+export type NotificationStatus =
+  | "pending"
+  | "sent"
+  | "read"
+  | "dismissed"
+  | "failed"
+  | "cancelled";
+
+export interface Notification {
+  id: number;
+  user_id: string;
+  kind: NotificationKind;
+  channel: NotificationChannelName;
+  payload: Record<string, unknown>;
+  scheduled_for: string;
+  sent_at: string | null;
+  read_at: string | null;
+  status: NotificationStatus;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  notifications: Notification[];
+  unread_count: number;
+}
+
+export interface ApplicationRecord {
+  id: number;
+  user_id: string;
+  session_id: string;
+  company_name: string;
+  role_title: string;
+  job_url: string | null;
+  verdict_decision: string | null;
+  status: ApplicationStatus;
+  applied_at: string | null;
+  last_status_at: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface ApplicationListResponse {
+  applications: ApplicationRecord[];
+}
+
+export type OutcomeKind = Exclude<ApplicationStatus, "forwarded">;
+
+// ---------------------------------------------------------------------------
 // Error envelope (HTTPException(detail={...}) shape)
 // ---------------------------------------------------------------------------
 
