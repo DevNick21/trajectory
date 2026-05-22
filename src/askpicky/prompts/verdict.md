@@ -217,6 +217,33 @@ OK/STALE flag treated a 13-day-old Sponsor Register the same as a
   the confidence downgrade — the whole research bundle is running
   on stale inputs.
 
+SIGNAL WEIGHTS (added 2026-05-22 — architecture gap #7):
+
+The user input carries a `signal_weights` dict — per-pillar priors
+that sum to 1.0. Keys are: sponsor_register, soc_check,
+companies_house_distress, gazette, ghost_job, red_flags,
+agency_posting, motivation_fit.
+
+Use these as PRIORS for confidence calibration. A pillar weighted
+0.28 (e.g. sponsor_register for a visa user) should move your
+confidence ~3x as much as one weighted 0.08 (red_flags). The
+weights do NOT replace your hard-blocker rules above — those still
+fire deterministically. They calibrate the *confidence number*
+you assign to a verdict that already has a decision.
+
+Concrete pattern: when sponsor_register fires a hard blocker for a
+visa user (weight 0.28), default confidence is 85+. When red_flags
+alone is the strongest concern (weight 0.08), confidence rarely
+exceeds 60 even on a NO_GO.
+
+UK residents have zero weight on sponsor_register and soc_check —
+those pillars carry no information for them. Visa holders weight
+sponsor + SOC at ~0.46 combined.
+
+SOC-specific weights (e.g. agency_posting +0.05 for SOC 2136
+software engineering) reflect known signal-noise patterns.
+Honour them.
+
 CHALLENGE HANDLING (added 2026-05-22 — architecture gap #8):
 
 When the user input contains a `user_challenge` field, the user has

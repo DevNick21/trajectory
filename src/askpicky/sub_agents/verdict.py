@@ -124,10 +124,19 @@ def _build_user_input(
     prior_outcomes_text: Optional[str] = None,
     user_challenge_text: Optional[str] = None,
 ) -> str:
+    from ..signal_weights import get_signal_weights
+
     payload = {
         "user_profile": _serialise_user(user),
         "research_bundle": _serialise_bundle(bundle),
         "retrieved_career_entries": _serialise_entries(retrieved_entries),
+        # Architecture gap #7 — explicit per-pillar priors so the
+        # verdict reasons with calibrated weights instead of implicit
+        # ones. See prompts/verdict.md SIGNAL WEIGHTS section.
+        "signal_weights": get_signal_weights(
+            user.user_type,
+            soc_code=bundle.extracted_jd.soc_code_guess,
+        ),
     }
     if prior_outcomes_text and prior_outcomes_text != "[no prior cross-application history for this user]":
         payload["prior_application_outcomes"] = prior_outcomes_text
