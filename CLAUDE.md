@@ -70,21 +70,23 @@ Bias toward cheap+fast for anything mechanical, structured, or pattern-matching.
 **Haiku 4.5** — mechanical reshape / classification / single-doc structured extraction:
 
 - `intent_router` (Tier-0 deterministic rules first — ~80% of messages never hit the LLM; Haiku for the rest)
-- `cv_parser` (CV structure extraction + narrative bio in ONE call — merged from old `career_narrator` 2026-05-22)
+- `cv_parser` (CV structure extraction + narrative bio in ONE call)
 - `interview_questions.design` / `.predict` (merged from old `question_designer` + `likely_questions` 2026-05-22)
 - `jd_extractor` (structured field-by-field reshape; JSON-LD tier-0 covers the major ATSes upstream)
+- `ghost_job_jd_scorer` (5-dim specificity score; reverted from Opus xhigh)
 - `self_audit` (banned-phrase + citation validation; mostly mechanical)
 - `entity_resolution.judge` (ambiguous-CRN tie-break)
 
-**Deterministic (no LLM)** — moved off LLMs in the 2026-05-22 simplification:
+**Deterministic (no LLM)**:
 
 - `intent_router` tier-0 (URL + keyword rules; ~1ms, $0)
-- `ghost_job_jd_scorer` (5-dim regex scoring; ~5ms, $0)
-- `cv_parser` tier-0 (regex + heuristics returning name/email/location/role skeleton in ~50ms)
+- `agency_detection` (recruitment-agency post detector; gap #5)
+- `gazette_check` (insolvency notice classifier with safety-valve fallback to generic code)
 - `entity_resolution.footer_extractor` (Companies Act §82 boilerplate regex)
 - `entity_resolution.local_ch_index` (parquet-backed name index)
+- `signal_weights` (per-pillar verdict priors)
 
-The 2026-05-22 simplification round dropped 4 LLM calls per typical session (one per intent_router invocation when the message has a URL or obvious keyword, plus the merged surfaces) and downgraded ~10 agents from Sonnet to Haiku without smoke regressions. Promote back to Sonnet only with empirical evidence (smoke + at least 3 production samples).
+The 2026-05-22 simplification round downgraded ~10 agents from Sonnet to Haiku without smoke regressions, and tried regex replacements for `cv_parser` + `ghost_job_jd_scorer`. The regex tiers were reverted 2026-05-23 — both missed too many real-world inputs. Promote back to Sonnet/Opus only with empirical evidence (smoke + at least 3 production samples).
 
 ### Rule 8 — Cost discipline
 All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.

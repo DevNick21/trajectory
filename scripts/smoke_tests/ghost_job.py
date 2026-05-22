@@ -1,13 +1,13 @@
 """Smoke test — ghost_job_detector.score on fixture (LLM-backed).
 
-Exercises the ghost-job JD scorer (Opus 4.7 xhigh) + signal
-combination. Fixture is the vanilla research bundle: should return
-LIKELY_REAL with HIGH confidence.
+Exercises the ghost-job JD scorer (Haiku) + signal combination.
+Fixture is the vanilla research bundle: should return LIKELY_REAL
+with HIGH confidence.
 
-Set SMOKE_GHOST_JOB_MOCK=1 to skip the Opus call and fabricate a
+Set SMOKE_GHOST_JOB_MOCK=1 to skip the Haiku call and fabricate a
 fixture GhostJobAssessment (asserts wiring only).
 
-Cost: ~$0.15 live, $0 mock.
+Cost: ~$0.01 live, $0 mock.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from ._common import (
 
 NAME = "ghost_job"
 REQUIRES_LIVE_LLM = True
-ESTIMATED_COST_USD = 0.15
+ESTIMATED_COST_USD = 0.01
 
 
 async def _body() -> tuple[list[str], list[str], float]:

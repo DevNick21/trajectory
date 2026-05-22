@@ -21,7 +21,7 @@ plus salary signals dropped from Phase 1 (kept on-demand only).
 | 2 | Company Scraper Summariser | Sonnet 4.6 | `call_structured` | company_scraper.py | Phase 1 |
 | 3 | JD Extractor | **Haiku 4.5** | `call_with_tools` (Web Fetch fallback) | company_scraper.py on JD text | Phase 1 |
 | 4 | Red Flags Detector | Sonnet 4.6 | `call_with_citations` (+ Web Search) | Phase 1 fan-out | Phase 1 |
-| 5 | Ghost Job JD Scorer | **Deterministic (no LLM)** | regex 5-dim scoring | ghost_job_detector.py | Phase 1 |
+| 5 | Ghost Job JD Scorer | **Haiku 4.5** | `call_structured` | ghost_job_detector.py | Phase 1 |
 | 6 | Gazette insolvency check | **Deterministic (no LLM)** | HTTP + regex against thegazette.co.uk | Phase 1 fan-out | Phase 1 |
 | 7 | Verdict | **Opus 4.7 `xhigh`** | `call_with_citations` | Orchestrator after Phase 1 | Phase 2 |
 | 8 | Interview Questions (design + predict) | **Haiku 4.5** | `call_structured` / `call_with_citations` | `design` post-GO; `predict` user-triggered | Phase 3/4 |
@@ -46,7 +46,7 @@ Cuts since the original inventory:
 
 - ~~Intent Router (Opus xhigh)~~ — deterministic tier-0 + Haiku fallback
 - ~~Question Designer~~ + ~~Likely Questions Predictor~~ — merged into Interview Questions
-- ~~Ghost Job JD Scorer (Opus xhigh)~~ — pure regex now
+- Ghost Job JD Scorer — downgraded from Opus xhigh → Haiku (2026-05-23). Briefly tried regex (2026-05-22) but missed designer/creative JDs, leadership JDs without bullet lists, and non-English-first sources.
 - ~~Career Narrator~~ — folded into CV Parser's single Haiku call
 - ~~Salary Data agent in Phase 1~~ — kept as a module for the on-demand Salary Strategist, dropped from the verdict pipeline (most JDs don't post a band)
 
@@ -260,7 +260,7 @@ RULES:
 
 **Purpose:** One of 4 signals combined in `ghost_job_detector.py`. Scores the JD text itself on specificity vs boilerplate.
 
-**Model:** `claude-opus-4-7`, `xhigh`
+**Model:** `claude-haiku-4-5`
 
 ## System prompt
 
