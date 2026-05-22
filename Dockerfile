@@ -1,9 +1,14 @@
 # AskPicky backend + bot — one image, two entrypoints.
 #
-# Base image: official Playwright Python image. Ships with chromium +
-# its dependencies pre-installed, which removes the manual
-# `playwright install` step + saves ~200MB of debian deps we'd
-# otherwise duplicate.
+# Base image: official Playwright Python image, noble variant.
+# - `noble` (Ubuntu 24.04 LTS) ships Python 3.12; `jammy` ships 3.10
+#   which is below our pyproject.toml floor of >=3.11.
+# - Chromium + the ~30 libs Playwright needs are pre-installed, so we
+#   skip the manual `playwright install` step + ~200MB of duplicate
+#   Debian deps.
+# - The Playwright Python SDK version must match the chromium bundled
+#   in the image, so `requirements.txt` pins `playwright==1.55.0`
+#   to the same minor as this tag.
 #
 # Build:
 #   docker build -t askpicky:latest .
@@ -15,7 +20,7 @@
 #   docker run --rm --env-file .env -v askpicky-data:/data askpicky:latest bot
 #
 # docker-compose.yml handles the multi-container orchestration.
-FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -32,7 +37,6 @@ RUN pip install -r requirements.txt
 # Source last — most-frequently-changing layer.
 COPY src/ /app/src/
 COPY scripts/ /app/scripts/
-COPY src/askpicky/prompts/ /app/src/askpicky/prompts/
 RUN pip install -e . --no-deps
 
 # Persistent state mount. The compose file mounts a named volume here
