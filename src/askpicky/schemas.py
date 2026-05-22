@@ -309,6 +309,13 @@ Intent = Literal[
     # New post-2026-04-25 intent (PROCESS Entry 43, Workstream F):
     # user forwards an offer letter PDF; pipeline returns OfferAnalysis.
     "analyse_offer",
+    # Architecture gap #6 — user has multiple GO verdicts and wants to
+    # know which to spend their finite hours on first. Deterministic
+    # composite ranker over their recent GO sessions.
+    "compare_verdicts",
+    # Architecture gap #8 — user disagrees with a verdict. Re-runs the
+    # verdict with their pushback text threaded into the prompt.
+    "challenge_verdict",
     "profile_query",
     "profile_edit",
     "recent",
@@ -845,6 +852,37 @@ class Verdict(BaseModel):
                 f"headline must be <=12 words; got {len(v.split())}: {v!r}"
             )
         return v
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.5 — Cross-verdict comparison (architecture gap #6)
+# ---------------------------------------------------------------------------
+
+
+class RankedSession(BaseModel):
+    """One row in a CompareVerdictsOutput. Captures the session
+    identity plus the composite score that placed it in the ranking.
+    """
+
+    session_id: str
+    job_id: Optional[str] = None
+    role_title: str
+    company_name: str
+    decision: Literal["GO", "NO_GO"]
+    confidence_pct: int
+    score: float  # composite — see compare_verdicts for the recipe
+    headline: str
+    rationale: str  # 1-2 sentences explaining WHY this ranking position
+
+
+class CompareVerdictsOutput(BaseModel):
+    """Output of the compare_verdicts intent. Ranks the user's recent
+    GO sessions by composite score so they know which finite hours
+    to spend on first. Deterministic — no LLM call.
+    """
+
+    ranked: list[RankedSession]
+    methodology: str  # plain-English description of the composite
 
 
 # ---------------------------------------------------------------------------

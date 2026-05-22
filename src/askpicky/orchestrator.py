@@ -179,9 +179,7 @@ async def handle_forward_job(
             ],
             stretch_concerns=[],
             motivation_fit=MotivationFitReport(
-                alignments=[],
-                misalignments=[],
-                no_signals=[],
+                motivation_evaluations=[],
                 deal_breaker_evaluations=[],
                 good_role_signal_evaluations=[],
             ),
@@ -196,6 +194,11 @@ async def handle_forward_job(
                 signals=[],
                 confidence="LOW",
                 raw_jd_score=GhostJobJDScore(
+                    named_hiring_manager=0.0,
+                    specific_duty_bullets=0.0,
+                    specific_tech_stack=0.0,
+                    specific_team_context=0.0,
+                    specific_success_metrics=0.0,
                     specificity_score=2.5,
                     specificity_signals=[],
                     vagueness_signals=[],
@@ -1375,6 +1378,198 @@ async def handle_analyse_offer(
         log.debug("memory.record post-offer-analysis skipped: %s", exc)
 
     return analysis
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.5 — Cross-verdict comparison + challenge (gaps #6 and #8)
+# ---------------------------------------------------------------------------
+
+
+async def handle_compare_verdicts(
+    *,
+    user: UserProfile,
+    storage: Storage,
+    limit: int = 10,
+) -> "CompareVerdictsOutput":
+    """Rank the user's recent GO sessions by composite score.
+
+    Deterministic — no LLM call. The composite balances three signals:
+      - verdict confidence (the verdict's own self-rated certainty)
+      - freshness (older verdicts are less useful — sponsor data
+        could have moved, the role may have been filled)
+      - signal density (verdicts with more reasoning points + fewer
+        stretch concerns are more substantive)
+
+    Architecture gap #6. Surfaces in the bot as "which of these 5 GOs
+    should I actually spend my finite hours on first?"
+    """
+    from datetime import datetime, timezone
+
+    from .schemas import CompareVerdictsOutput, RankedSession
+
+    sessions = await storage.get_recent_sessions(user_id=user.user_id, limit=limit * 2)
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    ranked: list[RankedSession] = []
+    for s in sessions:
+        if not s.verdict or s.verdict.decision != "GO":
+            continue
+
+        # Composite score in [0, 100].
+        confidence = float(s.verdict.confidence_pct)
+
+        # Freshness: linear decay from 1.0 at <=1 day to 0.5 at 14 days
+        # to 0.2 at 28+ days. Older verdicts get penalised — the verdict
+        # bundle ages faster than the JD itself does.
+        age_days = max(0, (today - s.created_at).days)
+        if age_days <= 1:
+            freshness = 1.0
+        elif age_days <= 14:
+            freshness = 1.0 - 0.5 * (age_days - 1) / 13
+        elif age_days <= 28:
+            freshness = 0.5 - 0.3 * (age_days - 14) / 14
+        else:
+            freshness = 0.2
+
+        # Signal density: more reasoning points = more substantive
+        # verdict; stretch concerns drag it down (1 per concern).
+        reasoning_count = len(s.verdict.reasoning)
+        stretch_count = len(s.verdict.stretch_concerns)
+        density = max(0.0, min(1.0, (reasoning_count - stretch_count) / 8.0))
+
+        # Composite: 60% confidence, 25% freshness, 15% density.
+        score = (
+            confidence * 0.60
+            + freshness * 100 * 0.25
+            + density * 100 * 0.15
+        )
+
+        # Try to lift a role + company name out of phase1 payload.
+        # Best-effort; missing fields render as "unknown".
+        role_title = "unknown role"
+        company_name = "unknown company"
+        if s.phase1_output:
+            extracted = s.phase1_output.get("extracted_jd") or {}
+            company = s.phase1_output.get("company_research") or {}
+            role_title = extracted.get("role_title", role_title) or role_title
+            company_name = company.get("company_name", company_name) or company_name
+
+        # Per-row rationale: just name the dominant driver. Always
+        # include the age in days so the bot can surface staleness
+        # uniformly across rows.
+        if freshness < 0.5:
+            rationale = (
+                f"GO but the verdict is {age_days} days old — re-forward "
+                f"before applying if you want fresh sponsor / CH data."
+            )
+        elif confidence >= 85 and freshness >= 0.8:
+            rationale = (
+                f"High confidence ({s.verdict.confidence_pct}%) and fresh "
+                f"({age_days} day(s) old) — the strongest signal in your queue."
+            )
+        elif confidence >= 70:
+            rationale = (
+                f"Solid GO at {s.verdict.confidence_pct}% with "
+                f"{stretch_count} concern(s); {age_days} day(s) old."
+            )
+        else:
+            rationale = (
+                f"GO at {s.verdict.confidence_pct}% with "
+                f"{stretch_count} stretch concern(s), "
+                f"{age_days} day(s) old. Worth a second look."
+            )
+
+        ranked.append(
+            RankedSession(
+                session_id=s.session_id,
+                job_id=s.job_id,
+                role_title=role_title,
+                company_name=company_name,
+                decision=s.verdict.decision,
+                confidence_pct=s.verdict.confidence_pct,
+                score=round(score, 1),
+                headline=s.verdict.headline,
+                rationale=rationale,
+            )
+        )
+
+    ranked.sort(key=lambda r: r.score, reverse=True)
+    ranked = ranked[:limit]
+
+    return CompareVerdictsOutput(
+        ranked=ranked,
+        methodology=(
+            "Composite = 60% verdict confidence + 25% freshness "
+            "(linear decay over 28 days) + 15% signal density "
+            "(reasoning points minus stretch concerns). Deterministic; "
+            "the ranking is reproducible per (sessions, today)."
+        ),
+    )
+
+
+async def handle_challenge_verdict(
+    *,
+    user: UserProfile,
+    session: Session,
+    challenge_text: str,
+    storage: Storage,
+) -> Verdict:
+    """Re-run the verdict on the same research bundle, with the user's
+    pushback text threaded into the verdict prompt.
+
+    Architecture gap #8. The user has read the verdict, disagreed, and
+    given a concrete reason ("you missed that they have a UK office",
+    "the sponsor licence renewed last week"). We don't re-run Phase 1
+    (the bundle is already there) — only the verdict, with a new
+    `user_challenge_text` plumbed through.
+
+    The challenge text is treated as a hint, not as ground truth. The
+    verdict agent is instructed to either accept and re-rank, or
+    explain why it's holding its position. Either is a valid outcome.
+    """
+    from .sub_agents import verdict as verdict_agent
+
+    if not session.phase1_output:
+        raise ValueError(
+            "Cannot challenge a verdict without a stored Phase 1 bundle."
+        )
+
+    bundle = ResearchBundle.model_validate(session.phase1_output)
+
+    # Reuse the same career-entry retrieval the original verdict used.
+    retrieved = await storage.retrieve_relevant_entries(
+        user_id=user.user_id,
+        query=(
+            f"{bundle.extracted_jd.role_title} "
+            f"{' '.join(bundle.extracted_jd.required_skills[:5])}"
+        ),
+        k=8,
+    )
+
+    # Pull outcome history for calibration (same as the first verdict).
+    prior_outcomes_text: Optional[str] = None
+    try:
+        from .memory.recall import recall_as_text
+
+        prior_outcomes_text = await recall_as_text(
+            user_id=user.user_id,
+            kind="application_outcome",
+            limit=10,
+        )
+    except Exception:  # pragma: no cover - defensive
+        pass
+
+    new_verdict = await verdict_agent.generate(
+        research_bundle=bundle,
+        user=user,
+        retrieved_entries=retrieved,
+        session_id=session.session_id,
+        prior_outcomes_text=prior_outcomes_text,
+        user_challenge_text=challenge_text,
+    )
+
+    await storage.save_verdict(session.session_id, new_verdict)
+    return new_verdict
 
 
 # ---------------------------------------------------------------------------

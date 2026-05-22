@@ -122,6 +122,7 @@ def _build_user_input(
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
     prior_outcomes_text: Optional[str] = None,
+    user_challenge_text: Optional[str] = None,
 ) -> str:
     payload = {
         "user_profile": _serialise_user(user),
@@ -130,6 +131,11 @@ def _build_user_input(
     }
     if prior_outcomes_text and prior_outcomes_text != "[no prior cross-application history for this user]":
         payload["prior_application_outcomes"] = prior_outcomes_text
+    # Architecture gap #8 — user has read a prior verdict and disagreed
+    # with it. Their pushback lands as a separate field so the verdict
+    # prompt's CHALLENGE HANDLING section can reason about it.
+    if user_challenge_text:
+        payload["user_challenge"] = user_challenge_text
     return json.dumps(payload, default=str, indent=2)
 
 
@@ -249,6 +255,7 @@ async def generate(
     retrieved_entries: list[CareerEntry],
     session_id: Optional[str] = None,
     prior_outcomes_text: Optional[str] = None,
+    user_challenge_text: Optional[str] = None,
 ) -> Verdict:
     if _mock_enabled():
         logger.warning(
@@ -263,7 +270,11 @@ async def generate(
         career_entries=retrieved_entries,
     )
 
-    user_input = _build_user_input(research_bundle, user, retrieved_entries, prior_outcomes_text)
+    user_input = _build_user_input(
+        research_bundle, user, retrieved_entries,
+        prior_outcomes_text=prior_outcomes_text,
+        user_challenge_text=user_challenge_text,
+    )
 
     system_prompt = SYSTEM_PROMPT
     if settings.enable_source_status_verdict:

@@ -84,6 +84,19 @@ _KEYWORD_RULES: list[tuple[str, list[re.Pattern]]] = [
         re.compile(r"\b(?:my\s+)?(?:job\s+)?history\b", re.IGNORECASE),
         re.compile(r"\bwhat\s+(?:have\s+)?(?:i|we)\s+(?:looked\s+at|forwarded)\b", re.IGNORECASE),
     ]),
+    ("compare_verdicts", [
+        re.compile(r"\bcompare\s+(?:my\s+)?(?:recent\s+)?(?:verdicts|gos|jobs|roles)\b", re.IGNORECASE),
+        re.compile(r"\bwhich\s+(?:role|job|verdict)\s+(?:should\s+i|to)\s+(?:apply|focus)\b", re.IGNORECASE),
+        re.compile(r"\brank\s+(?:my\s+)?(?:gos|verdicts|roles)\b", re.IGNORECASE),
+        re.compile(r"\bwhich\s+of\s+(?:these|my)\s+(?:gos|verdicts|roles)\b", re.IGNORECASE),
+    ]),
+    ("challenge_verdict", [
+        re.compile(r"\b(?:are\s+you\s+sure|why\s+(?:not|no_go)|disagree|pushback)\b", re.IGNORECASE),
+        re.compile(r"\b(?:i\s+think|i\s+know)\s+(?:you|they|the\s+company)\b", re.IGNORECASE),
+        re.compile(r"\bbut\s+(?:they|the\s+company)\s+(?:do|have|are|is)\b", re.IGNORECASE),
+        re.compile(r"\bchallenge\s+(?:this|the|that)\s+(?:verdict|decision|call)\b", re.IGNORECASE),
+        re.compile(r"\breconsider\b", re.IGNORECASE),
+    ]),
 ]
 
 # Chitchat anchors — short greeting / acknowledgement / test messages

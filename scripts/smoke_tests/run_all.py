@@ -85,6 +85,7 @@ _REGISTRY: list[_Entry] = [
     _Entry("local_ch_index",     "scripts.smoke_tests.local_ch_index",     cheap=True,  category="phase1"),
     _Entry("gazette_check",      "scripts.smoke_tests.gazette_check",      cheap=True,  category="phase1"),
     _Entry("agency_detection",   "scripts.smoke_tests.agency_detection",   cheap=True,  category="phase1"),
+    _Entry("compare_and_challenge", "scripts.smoke_tests.compare_and_challenge", cheap=True,  category="phase1"),
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True,  category="phase1"),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True,  category="phase1"),
     _Entry("salary_data",        "scripts.smoke_tests.salary_data",        cheap=True,  category="phase1"),
