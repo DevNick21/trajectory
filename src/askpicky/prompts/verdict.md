@@ -183,11 +183,19 @@ OK/STALE flag treated a 13-day-old Sponsor Register the same as a
 - sponsor_register.register_age_days >= 7: downgrade confidence.
   The Home Office updates the register daily — a week-old snapshot
   may have missed a new licence.
+- soc_check.data_age_days >= 90: the going rates may have been
+  reissued. Skilled Worker policy refreshes 1-2x/year; if the
+  parquet is older than the most recent SOC announcement the
+  threshold may be stale. Downgrade confidence on
+  SALARY_BELOW_SOC_THRESHOLD when this fires.
+- soc_check.data_age_days is None: the going_rates parquet was
+  never fetched via the official pipeline. Treat the SOC check as
+  advisory only.
 - companies_house.match_path == "FUZZY_NAME": the entity match
   is a best-guess, not CRN-verified.
-- When multiple gov-data sources show register_age_days >= 10,
-  compound the confidence downgrade — the whole research bundle
-  is running on stale inputs.
+- When multiple gov-data sources show ages >= 10 days, compound
+  the confidence downgrade — the whole research bundle is running
+  on stale inputs.
 
 OUTCOME CALIBRATION (added 2026-05-22 — architecture gap #3):
 

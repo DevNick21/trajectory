@@ -558,6 +558,11 @@ class SocCheckResult(BaseModel):
     # high confidence; a vague one gets low. Architecture gap #1.
     match_confidence: float = 1.0
     match_path: MatchPath = "EXACT_NAME"
+    # Days since the going_rates.parquet was refreshed. The going rates
+    # are reissued by Home Office on Skilled Worker policy updates
+    # (~1-2x/year). 30+ days is normal; a missing freshness sidecar means
+    # the rates were never properly fetched. Architecture gap #9.
+    data_age_days: Optional[int] = None
     source_status: SourceStatus = "OK"
 
 

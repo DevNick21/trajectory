@@ -119,6 +119,16 @@ def _new_entrant_eligible(user: UserProfile) -> bool:
     return False
 
 
+def _going_rates_age_days() -> Optional[int]:
+    """Freshness gradient for SOC going rates (architecture gap #9).
+
+    Mirrors sponsor_register._register_age_days. None when no sidecar
+    is available (parquet wasn't fetched through `fetch_gov_data.py`).
+    """
+    from ..data_freshness import age_days
+    return age_days(settings.data_dir / "processed" / "going_rates.parquet")
+
+
 def _verify_sync(
     jd: ExtractedJobDescription,
     user: UserProfile,
@@ -134,6 +144,8 @@ def _verify_sync(
             on_appendix_skilled_occupations=False,
             below_threshold=True,
             new_entrant_eligible=False,
+            data_age_days=None,
+            source_status="NO_DATA",
         )
 
     soc_code = str(jd.soc_code_guess).strip()
@@ -215,6 +227,7 @@ def _verify_sync(
         below_threshold=below,
         shortfall_gbp=shortfall,
         new_entrant_eligible=ne_eligible,
+        data_age_days=_going_rates_age_days(),
     )
 
 

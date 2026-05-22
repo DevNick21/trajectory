@@ -42,7 +42,10 @@ async def _body() -> tuple[list[str], list[str], float]:
         sponsor = await sponsor_register.lookup("Monzo Bank")
         messages.append(
             f"sponsor_register: Monzo -> status={sponsor.status}, "
-            f"matched_name={sponsor.matched_name!r}"
+            f"matched_name={sponsor.matched_name!r}, "
+            f"match_confidence={sponsor.match_confidence}, "
+            f"match_path={sponsor.match_path}, "
+            f"register_age_days={sponsor.register_age_days}"
         )
         if sponsor.status == "NOT_LISTED":
             failures.append(
@@ -50,6 +53,13 @@ async def _body() -> tuple[list[str], list[str], float]:
                 "parquet is empty (run scripts/fetch_gov_data.py) or the "
                 "register column names changed."
             )
+        # Architecture gap #1 + #9 — new fields must always populate, even
+        # on NOT_LISTED returns. The verdict prompt's AMBIGUITY TIER and
+        # DATA-FRESHNESS GRADIENT sections rely on these being present.
+        if sponsor.match_confidence is None:
+            failures.append("sponsor.match_confidence not populated")
+        if sponsor.match_path is None:
+            failures.append("sponsor.match_path not populated")
     except Exception as exc:
         failures.append(f"sponsor_register.lookup raised: {exc!r}")
 
@@ -86,14 +96,48 @@ async def _body() -> tuple[list[str], list[str], float]:
         messages.append(
             f"soc_check: 2136 -> going_rate={soc.going_rate_gbp}, "
             f"on_appendix={soc.on_appendix_skilled_occupations}, "
-            f"below_threshold={soc.below_threshold}"
+            f"below_threshold={soc.below_threshold}, "
+            f"data_age_days={soc.data_age_days}"
         )
         if soc.going_rate_gbp is None:
             failures.append(
                 "SOC 2136 returned no going_rate — going_rates.parquet may be empty."
             )
+        # Architecture gap #9 — `data_age_days` should populate when the
+        # going_rates.parquet was fetched via `scripts/fetch_gov_data.py`
+        # (which writes a sidecar). Local dev parquets without sidecars
+        # legitimately return None — informational only, not a failure.
+        if soc.data_age_days is None:
+            messages.append(
+                "soc_check.data_age_days=None — local parquet has no "
+                "freshness sidecar (production should run fetch_gov_data.py)"
+            )
     except Exception as exc:
         failures.append(f"soc_check.verify raised: {exc!r}")
+
+    # ---- SPONSOR_AMBIGUITY round-trip --------------------------------------
+    # The verdict prompt's AMBIGUITY TIER OVERRIDE emits StretchConcern
+    # entries with type="SPONSOR_AMBIGUITY". Pydantic would reject the
+    # whole verdict if that value were missing from StretchConcernType.
+    # Quick belt-and-braces check that the literal accepts it.
+    try:
+        from askpicky.schemas import StretchConcern, Citation
+        sc = StretchConcern(
+            type="SPONSOR_AMBIGUITY",
+            detail="Match confidence 0.84 with 2 alternative matches",
+            citations=[
+                Citation(
+                    kind="gov_data",
+                    data_field="sponsor_register.match_confidence",
+                    data_value="0.84",
+                )
+            ],
+        )
+        messages.append(f"StretchConcern SPONSOR_AMBIGUITY accepted: {sc.type}")
+    except Exception as exc:
+        failures.append(
+            f"StretchConcern(type='SPONSOR_AMBIGUITY') rejected: {exc!r}"
+        )
 
     # ---- Companies House (only if the API key is set) ----------------------
     ch_missing = require_env("COMPANIES_HOUSE_API_KEY")
