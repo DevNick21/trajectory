@@ -43,7 +43,9 @@ Every feature, shipped or proposed, passes or fails on these. Anything failing 2
 
 ## 4. How Picky talks
 
-The name personifies the assistant. The voice is not generic.
+The name personifies the assistant. The voice is not generic — and it carries through to the UI itself. Picky is a *character* the user can read reactions on, not a faceless tool.
+
+### Copy
 
 - Honest about uncertainty. ("Don't trust me on this one — we only have 3 reports.")
 - Opinionated. ("I wouldn't apply to this. Here's why.")
@@ -53,7 +55,20 @@ The name personifies the assistant. The voice is not generic.
 - Cites sources for every load-bearing claim.
 - Uses the user's writing style for generated content (CVs, cover letters, replies) — not its own.
 
-Banned-phrase catalogue enforces this floor. Style injection pulls user's voice across generators.
+### Picky-as-character (added 2026-05-22)
+
+The product previously read as a serious-but-mute analyst. The frontend now treats Picky as a character with visible reactions to the work it does:
+
+- **A mascot with states.** An animated avatar (the `PickyAvatar` component) carries the four product states the user actually cares about: `idle / thinking / go / no_go`. Idle blinks. Thinking gets a thinking-aura. GO is a celebratory bounce. NO_GO is a deflation with a small "UGH." sticker.
+- **A research-lab aesthetic.** Headings lean detective/case-file ("Case Files", "Inspect Evidence", "Risk Detected", "Approved Case"). The verdict is "Picky's call", not "the system's output". This makes the *position* feel like it's coming from someone.
+- **Theatrical reveal moments.** When the verdict lands, there's a brief visual transition (`MatrixTransition`) and a rotating GO/NO_GO stamp on the verdict card. These aren't decoration — they reinforce the §3-§4 promise that *Picky took a position*, not "an LLM emitted a JSON object."
+
+### What the character voice rules still keep
+
+- No celebratory emoji or AI clichés. The mascot's reactions replace the emoji surface; emoji in copy is still banned.
+- No exclamation marks in default-state UI text. The verdict card's serif headlines ("Go for it.", "Picky says no.") are positions, not cheers.
+- Theatre serves the position. Any flourish that doesn't reinforce "Picky took a side" is decoration and gets cut. Loading shimmer on a card that has nothing to load is decoration. A rotating stamp on the verdict card that names the decision is theatre.
+- Banned-phrase catalogue still enforces the prose floor. Style injection still pulls the user's voice across generators.
 
 ---
 
@@ -420,11 +435,15 @@ This doc is the new canonical reference. All older docs should point here for pr
 
 ## 13. Visual / UI direction
 
-- Brand colour: **VSCode blue** (`#007ACC` primary, `#0066AA` hover, `#1E1E1E` surface dark, `#252526` panel) with neutral greys.
-- Voice in the UI matches voice in copy: blunt, opinionated, honest about uncertainty. No celebratory emoji, no exclamation marks in default UI states.
-- Single typeface family (system stack + monospace for citations) — no decorative fonts.
-- Density over decoration. Citations are first-class, not hidden in tooltips.
-- Motion only where it conveys state (Phase 1 progress, verdict reveal). No motion for decoration.
+Revised 2026-05-22 to match the Picky-as-character voice (see §4).
+
+- **Brand colour:** **VSCode blue** (`#007ACC` primary) on a deep dark canvas (Zinc-9 cards on Zinc-12 background). Status colours: success green, destructive red, warning amber — saturated, not muted.
+- **Typography is a brand asset.** Three self-hosted families (no third-party CDN — GDPR): **Fraunces** (serif display, for verdict headlines and the brand mark), **Inter** (sans body), **JetBrains Mono** (citations, agent labels, gov-data IDs). Self-hosted via `@fontsource/*` packages — no Google Fonts CDN calls at runtime.
+- **Layout: sidebar + canvas.** 256px sidebar with the PickyAvatar logo, nav, and a live status block (real session counts — never hardcoded marketing copy). Main canvas is a wide research-lab surface.
+- **Voice in the UI matches voice in copy.** Blunt, opinionated, honest about uncertainty. No celebratory emoji. No exclamation marks in default-state UI text. Verdict serif headlines ("Go for it." / "Picky says no.") are positions, not cheers.
+- **Citations are first-class.** Cited substrings are visually distinct (mono font, inline link affordance) and not hidden in tooltips.
+- **Purposeful theatre.** Motion serves state OR reinforces "Picky took a position" — never decoration. The verdict reveal gets a brief matrix-style transition; the verdict card gets a rotating GO/NO_GO stamp; the PickyAvatar mascot has per-state reactions (idle blink, thinking aura, GO bounce, NO_GO "UGH." sticker). Loading shimmer on a card with nothing to load is still decoration and still gets cut.
+- **Honest status surfaces.** Anywhere the UI claims a system fact ("N roles checked this week", "X% confidence on this verdict"), the number is pulled from real data. Hardcoded marketing copy in a system-status slot violates the §4 "honest about uncertainty" rule and is treated as a bug.
 
 ---
 
