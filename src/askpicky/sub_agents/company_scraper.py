@@ -251,7 +251,23 @@ _CANDIDATE_PATHS = [
     "/investors",
     "/security",
     "/trust",
+    # Legal-disclosure pages — Companies Act 2006 §82 requires UK
+    # registered companies to publish their legal name + CRN on any
+    # business correspondence. These are the pages where the boilerplate
+    # most often lives. Feeds entity_resolution.footer_extractor.
     "/privacy",
+    "/privacy-policy",
+    "/terms",
+    "/terms-of-service",
+    "/terms-and-conditions",
+    "/terms-of-use",
+    "/legal",
+    "/legal-notice",
+    "/imprint",                    # German + DACH convention
+    "/cookie-policy",
+    "/modern-slavery-statement",   # mandatory for UK companies > £36m turnover
+    "/contact",
+    "/contact-us",
 ]
 
 

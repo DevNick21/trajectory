@@ -62,6 +62,20 @@ _CRN_THEN_ANCHOR_RE = re.compile(
     r"(?i)\b(" + _CRN_TOKEN + r")\b[^.]{0,40}?(?:" + "|".join(_ANCHORS) + r")"
 )
 
+# Loose fallback: "<Some Name> Ltd/Limited/PLC, 12345678" in proximity.
+# Catches the abbreviated footer style ("Acme Ltd | 12345678") that
+# omits the long-form "Registered in England" wording. We require the
+# CRN to appear within 80 chars of a UK legal-entity suffix so this
+# doesn't fire on order numbers + invoice IDs.
+_LEGAL_SUFFIX_NEAR_CRN_RE = re.compile(
+    r"(?i)\b(Limited|Ltd\.?|PLC|LLP|LLC|Inc\.?|Corp\.?)\b"
+    r"[^.]{0,80}?\b(" + _CRN_TOKEN + r")\b"
+)
+_CRN_NEAR_LEGAL_SUFFIX_RE = re.compile(
+    r"(?i)\b(" + _CRN_TOKEN + r")\b[^.]{0,80}?"
+    r"\b(Limited|Ltd\.?|PLC|LLP|LLC|Inc\.?|Corp\.?)\b"
+)
+
 # Legal-name disclosure. UK companies often state the trading-name to
 # registered-name link explicitly: "loveholidays is a trading name of
 # We Love Holidays Limited". Capture that.
@@ -114,13 +128,26 @@ def _scan_text(text: str, *, source_url: Optional[str] = None) -> FooterHints:
 
 
 def _find_crn(text: str) -> Optional[str]:
-    # Prefer anchor-then-CRN (more specific). Fall back to CRN-then-anchor.
-    match = _ANCHOR_THEN_CRN_RE.search(text)
-    if match:
-        return _normalise_crn(match.group(1))
-    match = _CRN_THEN_ANCHOR_RE.search(text)
-    if match:
-        return _normalise_crn(match.group(1))
+    """Four patterns, most-specific first.
+
+    1. Anchor + CRN     ("Registered in England No. 12345678")
+    2. CRN + anchor     ("12345678 (Companies House)")
+    3. Legal-suffix + CRN  ("Acme Ltd ... 12345678" in footer)
+    4. CRN + legal-suffix  ("12345678 — Acme Limited")
+
+    Each pattern's CRN-only capture group is normalised (8-digit
+    zero-pad). We stop at the first hit — order encodes precedence,
+    not exhaustive search.
+    """
+    for pattern, group_idx in (
+        (_ANCHOR_THEN_CRN_RE, 1),
+        (_CRN_THEN_ANCHOR_RE, 1),
+        (_LEGAL_SUFFIX_NEAR_CRN_RE, 2),
+        (_CRN_NEAR_LEGAL_SUFFIX_RE, 1),
+    ):
+        match = pattern.search(text)
+        if match:
+            return _normalise_crn(match.group(group_idx))
     return None
 
 

@@ -352,9 +352,64 @@ async def resolve_company_identity(
         if scored and scored[0][0] >= _CH_ACCEPT_THRESHOLD:
             top_score, top_hit = scored[0]
             crn = top_hit.get("company_number")
+
+            # LAYER 6 — LLM-judge fallback on ambiguous picks.
+            # The deterministic layers don't catch every long-tail edge
+            # case (sites without a discoverable footer, ties between
+            # active candidates, fresh-but-not-shell incorporations).
+            # On those we route to a cheap Haiku judge that sees the
+            # candidate set + the scraped page context and picks.
+            # Otherwise we trust the deterministic top pick.
+            second_score = scored[1][0] if len(scored) > 1 else None
+            from .judge import (
+                JudgeCandidate,
+                judge_candidates,
+                should_invoke_judge,
+            )
+            if should_invoke_judge(
+                top_score=top_score,
+                second_score=second_score,
+                top_hit=top_hit,
+            ):
+                from datetime import date as _date, datetime as _dt
+                judge_inputs: list[JudgeCandidate] = []
+                for score, hit in scored[:5]:
+                    doc = hit.get("date_of_creation") or hit.get("incorporation_date")
+                    age_days = None
+                    if doc:
+                        try:
+                            age_days = (
+                                _date.today() - _dt.strptime(doc, "%Y-%m-%d").date()
+                            ).days
+                        except (ValueError, TypeError):
+                            pass
+                    judge_inputs.append(JudgeCandidate(
+                        company_number=hit.get("company_number") or "",
+                        company_name=hit.get("title") or "",
+                        company_status=(hit.get("company_status") or None),
+                        date_of_creation=doc,
+                        ensemble_score=score,
+                        incorporation_age_days=age_days,
+                    ))
+                judged_crn = await judge_candidates(
+                    raw_name=raw_name,
+                    domain=domain,
+                    candidates=judge_inputs,
+                )
+                if judged_crn:
+                    # Re-rank: the judge's pick wins. Pull its hit to
+                    # top of `scored` so the rest of the flow uses it.
+                    for i, (s, h) in enumerate(scored):
+                        if h.get("company_number") == judged_crn:
+                            top_score, top_hit = s, h
+                            crn = judged_crn
+                            sources.append("llm_judge")
+                            break
+
             trace.chosen_via = "companies_house_search"
             trace.chosen_score = top_score
-            sources.append("companies_house")
+            if "companies_house" not in sources:
+                sources.append("companies_house")
             profile = await _ch_profile(crn) if crn else None
             if profile:
                 identity = await _identity_from_ch_profile(
