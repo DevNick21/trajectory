@@ -49,7 +49,7 @@ _EXPECTED_EVENTS: set[str] = {
     "phase_1_company_scraper_summariser",
     "companies_house",
     "reviews",
-    "salary_data",
+    "gazette_check",
     "sponsor_register",          # marked even when skipped for uk_resident
     "soc_check",                 # marked even when skipped for uk_resident
     "phase_1_ghost_job_jd_scorer",
@@ -87,9 +87,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         from askpicky.sub_agents import (
             companies_house as ch_agent,
             company_scraper,
+            gazette_check,
             ghost_job_detector,
             red_flags as rf_agent,
-            salary_data as sal_agent,
             soc_check as soc_agent,
             sponsor_register as sr_agent,
         )
@@ -109,7 +109,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             "company_scraper.run": company_scraper.run,
             "ch_agent.lookup": ch_agent.lookup,
             "askpicky_llm.call_in_session": askpicky_llm.call_in_session,
-            "sal_agent.fetch": sal_agent.fetch,
+            "gazette_check.check": gazette_check.check,
             "sr_agent.lookup": sr_agent.lookup,
             "soc_agent.verify": soc_agent.verify,
             "ghost_job_detector.score": ghost_job_detector.score,
@@ -139,8 +139,11 @@ async def _body() -> tuple[list[str], list[str], float]:
                 return _StubReviewsOut()
             raise NotImplementedError(f"unexpected managed session {name!r}")
 
-        async def _fake_salary(*, role, location, soc_code, posted_band):
-            return bundle.salary_signals
+        async def _fake_gazette(*, company_name, canonical_name=None, crn=None):
+            # No insolvency notices for the fixture company — the Phase 1
+            # journey runs the happy path. Other tests can swap this stub
+            # to inject an active 2450 / 2410 etc.
+            return []
 
         async def _fake_sponsor(*, company_name, identity=None):
             return bundle.sponsor_status
@@ -158,7 +161,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         ch_agent.lookup = _fake_ch
         askpicky_llm.call_in_session = _fake_call_in_session
         orchestrator.call_in_session = _fake_call_in_session  # if imported
-        sal_agent.fetch = _fake_salary
+        gazette_check.check = _fake_gazette
         sr_agent.lookup = _fake_sponsor
         soc_agent.verify = _fake_soc
         ghost_job_detector.score = _fake_ghost
@@ -281,7 +284,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             company_scraper.run = originals["company_scraper.run"]
             ch_agent.lookup = originals["ch_agent.lookup"]
             askpicky_llm.call_in_session = originals["askpicky_llm.call_in_session"]
-            sal_agent.fetch = originals["sal_agent.fetch"]
+            gazette_check.check = originals["gazette_check.check"]
             sr_agent.lookup = originals["sr_agent.lookup"]
             soc_agent.verify = originals["soc_agent.verify"]
             ghost_job_detector.score = originals["ghost_job_detector.score"]

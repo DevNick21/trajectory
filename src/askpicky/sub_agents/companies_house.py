@@ -99,11 +99,115 @@ async def _filings(company_number: str) -> list[dict]:
         return resp.json().get("items", [])
 
 
+async def _officers(company_number: str) -> list[dict]:
+    """`/company/{number}/officers` — directors, secretaries, etc.
+
+    Returns each officer's `appointed_on` + `resigned_on` (None if
+    still active). 6-month-window counts of resignations and new
+    appointments are computed by the caller.
+    """
+    async with await _client() as client:
+        resp = await client.get(
+            f"/company/{company_number}/officers",
+            params={"items_per_page": 50},
+        )
+        if resp.status_code != 200:
+            return []
+        return resp.json().get("items", [])
+
+
+async def _charges(company_number: str) -> list[dict]:
+    """`/company/{number}/charges` — registered debt/mortgages.
+
+    A sudden flurry of new charges in the last 6 months is a known
+    pre-failure liquidity-scramble signal: the company is securing
+    cash against its remaining assets to keep going.
+    """
+    async with await _client() as client:
+        resp = await client.get(
+            f"/company/{company_number}/charges",
+            params={"items_per_page": 50},
+        )
+        if resp.status_code != 200:
+            return []
+        return resp.json().get("items", [])
+
+
+async def _psc(company_number: str) -> list[dict]:
+    """`/company/{number}/persons-with-significant-control`.
+
+    PSC changes (ownership turning over fast) flag ownership-side
+    restructuring — sometimes precedes the company being sold or
+    the parent company going under.
+    """
+    async with await _client() as client:
+        resp = await client.get(
+            f"/company/{company_number}/persons-with-significant-control",
+            params={"items_per_page": 50},
+        )
+        if resp.status_code != 200:
+            return []
+        return resp.json().get("items", [])
+
+
 def _years_since(d: Optional[date]) -> int:
     if d is None:
         return 99
     today = date.today()
     return (today - d).days // 365
+
+
+def _within_last_n_months(d: Optional[date], months: int = 6) -> bool:
+    if d is None:
+        return False
+    today = date.today()
+    return (today - d).days <= months * 30
+
+
+def _count_recent_director_changes(
+    officers: list[dict],
+) -> tuple[int, int]:
+    """Returns (resignations_6mo, appointments_6mo).
+
+    Officer payloads carry `appointed_on` and `resigned_on` ISO dates.
+    We count resignations from the resigned date and new appointments
+    from the appointed date. Both windows are last 6 months.
+    """
+    resigned = 0
+    appointed = 0
+    for o in officers:
+        # Officer type filter — count directors + secretaries; skip
+        # nominee / LLP-member roles that don't carry the same signal.
+        role = (o.get("officer_role") or "").lower()
+        if "director" not in role and "secretary" not in role:
+            continue
+        if _within_last_n_months(_parse_date(o.get("resigned_on"))):
+            resigned += 1
+        if _within_last_n_months(_parse_date(o.get("appointed_on"))):
+            appointed += 1
+    return resigned, appointed
+
+
+def _count_recent_charges(charges: list[dict]) -> int:
+    """Count debt/mortgage charges registered in the last 6 months."""
+    return sum(
+        1 for c in charges
+        if _within_last_n_months(_parse_date(c.get("delivered_on")))
+    )
+
+
+def _count_recent_psc_changes(psc_items: list[dict]) -> int:
+    """Count PSCs whose `notified_on` or `ceased_on` fell in the last 6 months.
+
+    Either signal means ownership churned recently.
+    """
+    count = 0
+    for p in psc_items:
+        if _within_last_n_months(_parse_date(p.get("notified_on"))):
+            count += 1
+        elif _within_last_n_months(_parse_date(p.get("ceased_on"))):
+            count += 1
+    return count
 
 
 def _pick_best_search_hit(
@@ -202,10 +306,28 @@ async def lookup(
     if not profile:
         return None
 
-    try:
-        filings = await _filings(company_number)
-    except Exception:
+    # Pull filings + officers + charges + PSC in parallel. Each
+    # endpoint is independent at the API level, so async-gather is a
+    # free win versus the previous serial pulls.
+    import asyncio as _asyncio
+    filings, officers, charges, psc_items = await _asyncio.gather(
+        _filings(company_number),
+        _officers(company_number),
+        _charges(company_number),
+        _psc(company_number),
+        return_exceptions=True,
+    )
+    # asyncio.gather with return_exceptions=True swallows individual
+    # failures into the result list — coerce each back to [] so the
+    # downstream counters never see an exception object.
+    if isinstance(filings, Exception):
         filings = []
+    if isinstance(officers, Exception):
+        officers = []
+    if isinstance(charges, Exception):
+        charges = []
+    if isinstance(psc_items, Exception):
+        psc_items = []
 
     accounts = profile.get("accounts", {}) or {}
     confirmation = profile.get("confirmation_statement", {}) or {}
@@ -224,6 +346,10 @@ async def lookup(
         for f in filings
     )
 
+    resignations_6mo, appointments_6mo = _count_recent_director_changes(officers)
+    charges_6mo = _count_recent_charges(charges)
+    psc_6mo = _count_recent_psc_changes(psc_items)
+
     return CompaniesHouseSnapshot(
         company_number=company_number,
         status=_map_status(profile.get("company_status")),
@@ -236,4 +362,8 @@ async def lookup(
         no_filings_in_years=_years_since(most_recent),
         resolution_to_wind_up=resolution_to_wind_up,
         director_disqualifications=0,  # Requires a separate endpoint; skeleton skips.
+        recent_director_resignations_6mo=resignations_6mo,
+        recent_director_appointments_6mo=appointments_6mo,
+        recent_charges_6mo=charges_6mo,
+        psc_changes_6mo=psc_6mo,
     )

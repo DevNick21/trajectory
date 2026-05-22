@@ -472,6 +472,15 @@ class CompaniesHouseSnapshot(BaseModel):
     no_filings_in_years: int = 0
     resolution_to_wind_up: bool = False
     director_disqualifications: int = 0
+    # Pre-failure distress signals (added 2026-05-22). Director churn
+    # and a sudden flurry of debt charges or PSC changes show up in
+    # CH WEEKS before headlines about layoffs or restructuring. None
+    # of these are auto-NO_GO on their own — the verdict treats them
+    # as stretch concerns that compound with other distress signals.
+    recent_director_resignations_6mo: int = 0
+    recent_director_appointments_6mo: int = 0
+    recent_charges_6mo: int = 0
+    psc_changes_6mo: int = 0
     source_status: SourceStatus = "OK"
 
 
@@ -616,8 +625,17 @@ class ResearchBundle(BaseModel):
     sponsor_status: Optional[SponsorStatus] = None
     soc_check: Optional[SocCheckResult] = None
     ghost_job: GhostJobAssessment
-    salary_signals: SalarySignals
+    # Salary signals removed from Phase 1 fan-out 2026-05-22 — most JDs
+    # don't post a band, so the comparison was noisy and the verdict
+    # leaned on signals that weren't there. `salary_strategist` (the
+    # on-demand intent) still computes live signals when the user
+    # explicitly asks for salary advice.
+    salary_signals: Optional[SalarySignals] = None
     red_flags: RedFlagsReport
+    # Gazette insolvency notices for the resolved entity. Empty list
+    # when nothing's been filed (the common case). When present, any
+    # active 2410/2441/2450 entry is a hard NO_GO.
+    gazette_signals: list[GazetteSignal] = Field(default_factory=list)
     bundle_completed_at: datetime
     # Names of source fields whose text was truncated by the content
     # shield before reaching downstream agents. Verdict and generators
@@ -636,8 +654,12 @@ HardBlockerType = Literal[
     "LIKELY_GHOST_JOB",
     "COMPANIES_HOUSE_DISSOLVED",
     "COMPANIES_HOUSE_NO_FILINGS",
-    "BELOW_PERSONAL_FLOOR",
-    "BELOW_MARKET_FLOOR",
+    # GAZETTE_INSOLVENCY_NOTICE = an active winding-up petition,
+    # appointment of administrators, or resolution to wind up has been
+    # published in The Gazette. The official UK public record — when
+    # a creditor files a petition or a board passes a resolution, this
+    # is the legally-binding paper trail. Auto-NO_GO.
+    "GAZETTE_INSOLVENCY_NOTICE",
     "DEAL_BREAKER_TRIGGERED",
     # Visa holder only
     "NOT_ON_SPONSOR_REGISTER",
@@ -651,6 +673,13 @@ HardBlockerType = Literal[
 StretchConcernType = Literal[
     "POSSIBLE_GHOST_JOB",
     "COMPANIES_HOUSE_DISTRESS",
+    # Pre-failure distress signals from CH that don't auto-NO_GO on
+    # their own but compound when stacked. Surfaced separately so the
+    # verdict's reasoning can name what's behind the downgraded
+    # confidence.
+    "DIRECTOR_CHURN",       # >=3 director resignations in last 6 months
+    "CHARGES_FLURRY",       # >=3 new debt charges in last 6 months
+    "PSC_CHURN",            # ownership turning over fast
     "MOTIVATION_MISMATCH",
     "EXPERIENCE_GAP",
     "CULTURE_SIGNAL_MISMATCH",
@@ -660,6 +689,32 @@ StretchConcernType = Literal[
     # stretch concern so the user can see why the verdict downgraded.
     "CONTENT_INTEGRITY_CONCERN",
 ]
+
+
+class GazetteSignal(BaseModel):
+    """One published insolvency notice from The Gazette.
+
+    The Gazette is the UK's official public record (Crown Copyright,
+    OGL). When a company hits financial trouble the legally-binding
+    paper trail appears here weeks before the press picks it up:
+      - 2410 Appointment of Administrators
+      - 2441 Resolutions for Winding Up
+      - 2450 Winding-Up Petitions (creditor-filed)
+
+    Any of these on a forwarded company is the strongest pre-failure
+    signal we have access to. Free API, no key needed.
+    """
+
+    notice_code: str            # e.g. "2450"
+    notice_type: str            # human-readable e.g. "Winding-Up Petition"
+    published_at: Optional[date] = None
+    notice_id: Optional[str] = None
+    url: Optional[str] = None   # link to the notice on thegazette.co.uk
+    company_name_on_notice: Optional[str] = None
+    # Petitions can be dismissed; administrators sometimes return the
+    # company to its directors. `active` reflects whether the notice
+    # has been superseded by a later one (best-effort).
+    active: bool = True
 
 
 class HardBlocker(BaseModel):

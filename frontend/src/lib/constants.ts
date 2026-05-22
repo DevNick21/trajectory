@@ -11,7 +11,7 @@ export const PHASE_1_AGENTS = [
   // Phase 1C (parallel — ordered by typical completion latency)
   "sponsor_register",
   "soc_check",
-  "salary_data",
+  "gazette_check",
   "reviews",
   "phase_1_ghost_job_jd_scorer",
   "phase_1_red_flags",
@@ -24,11 +24,11 @@ export type Phase1AgentName = (typeof PHASE_1_AGENTS)[number];
 export const PHASE_1_AGENT_LABELS: Record<string, string> = {
   phase_1_jd_extractor: "Job description parser",
   phase_1_company_scraper_summariser: "Company researcher",
-  companies_house: "Companies House check",
+  companies_house: "Companies House (status, director churn, charges, PSC)",
   sponsor_register: "Sponsor register",
   soc_check: "SOC code & salary threshold",
-  salary_data: "Salary benchmarks",
-  reviews: "Glassdoor reviews",
+  gazette_check: "The Gazette insolvency notices",
+  reviews: "Reviews aggregator",
   phase_1_ghost_job_jd_scorer: "Ghost-job detector",
   phase_1_red_flags: "Red flags",
 };

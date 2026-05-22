@@ -75,9 +75,9 @@ async def _body() -> tuple[list[str], list[str], float]:
         from askpicky.sub_agents import (
             companies_house as ch_agent,
             company_scraper,
+            gazette_check,
             ghost_job_detector,
             red_flags as rf_agent,
-            salary_data as sal_agent,
             soc_check as soc_agent,
             sponsor_register as sr_agent,
             verdict as verdict_module,
@@ -154,7 +154,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             "company_scraper.run": company_scraper.run,
             "ch_agent.lookup": ch_agent.lookup,
             "askpicky_llm.call_in_session": askpicky_llm.call_in_session,
-            "sal_agent.fetch": sal_agent.fetch,
+            "gazette_check.check": gazette_check.check,
             "sr_agent.lookup": sr_agent.lookup,
             "soc_agent.verify": soc_agent.verify,
             "ghost_job_detector.score": ghost_job_detector.score,
@@ -178,8 +178,8 @@ async def _body() -> tuple[list[str], list[str], float]:
                 return _StubReviewsOut()
             raise NotImplementedError(f"unexpected managed session {name!r}")
 
-        async def _fake_salary(*, role, location, soc_code, posted_band):
-            return bundle.salary_signals
+        async def _fake_gazette(*, company_name, canonical_name=None, crn=None):
+            return []
 
         async def _fake_sponsor(*, company_name, identity=None):
             return not_listed
@@ -196,7 +196,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         company_scraper.run = _fake_scraper
         ch_agent.lookup = _fake_ch
         askpicky_llm.call_in_session = _fake_call_in_session
-        sal_agent.fetch = _fake_salary
+        gazette_check.check = _fake_gazette
         sr_agent.lookup = _fake_sponsor
         soc_agent.verify = _fake_soc
         ghost_job_detector.score = _fake_ghost
@@ -275,7 +275,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             company_scraper.run = originals["company_scraper.run"]
             ch_agent.lookup = originals["ch_agent.lookup"]
             askpicky_llm.call_in_session = originals["askpicky_llm.call_in_session"]
-            sal_agent.fetch = originals["sal_agent.fetch"]
+            gazette_check.check = originals["gazette_check.check"]
             sr_agent.lookup = originals["sr_agent.lookup"]
             soc_agent.verify = originals["soc_agent.verify"]
             ghost_job_detector.score = originals["ghost_job_detector.score"]

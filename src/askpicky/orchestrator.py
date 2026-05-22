@@ -63,7 +63,7 @@ PHASE_1_AGENTS: list[str] = [
     # reviews).
     "sponsor_register",
     "soc_check",
-    "salary_data",
+    "gazette_check",
     "reviews",
     "phase_1_ghost_job_jd_scorer",
     "phase_1_red_flags",
@@ -91,7 +91,7 @@ async def handle_forward_job(
         companies_house as ch_agent,
         red_flags as rf_agent,
         ghost_job_detector,
-        salary_data as sal_agent,
+        gazette_check,
         sponsor_register as sr_agent,
         soc_check as soc_agent,
         verdict as verdict_agent,
@@ -233,29 +233,33 @@ async def handle_forward_job(
                 reviews_future.set_result([])
             return []
 
-    async def run_salary():
-        from .schemas import SalarySignals
+    async def run_gazette():
+        """The Gazette insolvency-notice check. Hard blocker on any
+        active winding-up petition / administrator appointment /
+        resolution to wind up. Empty list when the company is fine,
+        which is the common case."""
+        canonical = None
+        if company_identity is not None:
+            canonical = getattr(company_identity, "canonical_name", None)
+        crn = None
+        if company_identity is not None:
+            crn = getattr(company_identity, "crn", None)
         try:
             result = await asyncio.wait_for(
-                sal_agent.fetch(
-                    role=jd.role_title,
-                    location=jd.location,
-                    soc_code=jd.soc_code_guess,
-                    posted_band=dict(jd.salary_band) if jd.salary_band else None,
+                gazette_check.check(
+                    company_name=company_research.company_name,
+                    canonical_name=canonical,
+                    crn=crn,
                 ),
                 timeout=timeout,
             )
-            await mark("salary_data")
+            await mark("gazette_check")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             timed_out = isinstance(exc, asyncio.TimeoutError)
-            log.warning("salary_data failed (timed_out=%s): %s", timed_out, exc)
-            await mark("salary_data")
-            return SalarySignals(
-                sources_consulted=[],
-                data_citations=[],
-                source_status="UNREACHABLE",
-            )
+            log.warning("gazette_check failed (timed_out=%s): %s", timed_out, exc)
+            await mark("gazette_check")
+            return []
 
     async def run_sponsor():
         if user.user_type != "visa_holder":
@@ -377,14 +381,14 @@ async def handle_forward_job(
 
     (
         review_excerpts,
-        salary_signals,
+        gazette_signals,
         sponsor_status,
         soc_result,
         ghost_assessment,
         red_flags_report,
     ) = await asyncio.gather(
         run_reviews(),
-        run_salary(),
+        run_gazette(),
         run_sponsor(),
         run_soc(),
         run_ghost(),
@@ -408,8 +412,12 @@ async def handle_forward_job(
         sponsor_status=sponsor_status,
         soc_check=soc_result,
         ghost_job=ghost_assessment,
-        salary_signals=salary_signals,
+        # Salary signals dropped from Phase 1 fan-out 2026-05-22.
+        # `salary_strategist` (on-demand intent) still computes
+        # live ASHE-anchored advice when the user asks.
+        salary_signals=None,
         red_flags=red_flags_report,
+        gazette_signals=gazette_signals,
         bundle_completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
