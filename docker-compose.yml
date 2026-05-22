@@ -1,0 +1,70 @@
+# AskPicky — one-command launch for local dev + production.
+#
+# Quickstart:
+#   cp .env.example .env       # fill ANTHROPIC_API_KEY, TELEGRAM_BOT_TOKEN, etc.
+#   docker compose up --build  # boots API + bot + frontend + Nginx
+#
+# Three services share the same image (backend) — one runs uvicorn,
+# one runs the Telegram long-poller. Frontend is a separate Node-built
+# Nginx image that proxies /api/* to the backend. SQLite + FAISS +
+# gov-data parquets live on a named volume so container restarts
+# preserve state.
+#
+# For hot-reload dev:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# (mounts source code into backend/bot + runs vite dev server.)
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: askpicky:latest
+    container_name: askpicky-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ASKPICKY_DATA_DIR: /data
+      WEB_ORIGIN: http://localhost:5173
+    volumes:
+      - askpicky-data:/data
+    ports:
+      - "8000:8000"
+    command: ["api"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  bot:
+    image: askpicky:latest
+    container_name: askpicky-bot
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      ASKPICKY_DATA_DIR: /data
+    volumes:
+      - askpicky-data:/data
+    command: ["bot"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: askpicky-frontend:latest
+    container_name: askpicky-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    # Nginx proxies /api/* upstream to the `backend` service.
+
+volumes:
+  askpicky-data:
+    name: askpicky-data

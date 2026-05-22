@@ -59,8 +59,29 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _local_search(name: str) -> list[dict]:
+    """Search the local CH bulk-data parquet. Empty list if no parquet."""
+    try:
+        from .local_ch_index import search_by_name
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("local_ch_index unavailable: %s", exc)
+        return []
+    hits = search_by_name(name)
+    return [h.as_search_item() for h in hits]
+
+
 async def _ch_search(name: str, *, items_per_page: int = _CH_SEARCH_LIMIT) -> list[dict]:
-    """Companies House /search/companies. Empty list on missing key or error."""
+    """Local CH parquet first; rate-limited API as fallback.
+
+    The parquet (built by `scripts/fetch_ch_bulk.py`) gives us 5M UK
+    companies + their previous names with zero rate limit. The API only
+    runs when the parquet is missing — typically a fresh install before
+    the operator has fetched the monthly snapshot.
+    """
+    local = _local_search(name)
+    if local:
+        return local
+
     api_key = settings.companies_house_api_key
     if not api_key:
         return []

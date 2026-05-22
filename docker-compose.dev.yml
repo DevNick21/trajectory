@@ -1,0 +1,43 @@
+# Dev overlay — applies on top of docker-compose.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# What it adds:
+#   - Source code mounted into backend + bot containers so edits hot-
+#     reload without rebuilds (uvicorn --reload).
+#   - Vite dev server replaces the Nginx static build for the frontend.
+#   - Backend port :8000 + frontend port :5173 stay the same as the
+#     non-Docker dev experience.
+
+services:
+  backend:
+    command: ["uvicorn", "askpicky.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - askpicky-data:/data
+    environment:
+      ASKPICKY_TEST_MODE: ""  # ensure prod-mode secret check runs
+
+  bot:
+    volumes:
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - askpicky-data:/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE: http://backend:8000
+
+volumes:
+  frontend-node-modules:

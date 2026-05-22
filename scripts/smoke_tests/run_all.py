@@ -82,6 +82,7 @@ _REGISTRY: list[_Entry] = [
 
     # ── phase1 — gov data + extractor agents ───────────────────────────
     _Entry("entity_resolver",    "scripts.smoke_tests.entity_resolver",    cheap=True,  category="phase1"),
+    _Entry("local_ch_index",     "scripts.smoke_tests.local_ch_index",     cheap=True,  category="phase1"),
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True,  category="phase1"),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True,  category="phase1"),
     _Entry("salary_data",        "scripts.smoke_tests.salary_data",        cheap=True,  category="phase1"),
