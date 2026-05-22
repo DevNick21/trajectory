@@ -3,7 +3,7 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-05-22 20:22 BST · commit `9760a0e` (Agent consolidation: tier-0 intent router, deterministic ghost-scorer, merged interview questions + CV parser/narrator, more Haiku). Uncommitted in working tree: Gazette parser rewrite + cheap smoke — agent #6 (Gazette) is now live-verified against thegazette.co.uk, see [HANDOFF.md](./HANDOFF.md) §3D.*
+*Last updated 2026-05-22 23:30 BST · HEAD `60add03` (Close gap #7: signal weights). Gazette parser live-verified in `f0a5cbf`. New deterministic modules since `9760a0e`: triage (Haiku, gap #4), agency_detection (regex, gap #5), signal_weights (deterministic priors, gap #7). See [HANDOFF.md](./HANDOFF.md) §4 for the architecture-gap closure trail.*
 
 ## Agent inventory
 

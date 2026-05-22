@@ -4,7 +4,7 @@
 > final product. If a judge asks "why did you choose X?", the answer
 > is in here.
 
-*Last updated 2026-05-22 15:59 BST · commit `ca61263` (AskPicky overhaul). Subsequent commits `ea35fcf`, `9760a0e`, `d03b6fd` introduced distress signals, agent consolidation, and frontend cv_enrich wiring respectively — each of those should have a PROCESS entry but the file has not yet been amended to record them. See [HANDOFF.md](./HANDOFF.md) §3 for the missing context until backfilled.*
+*Last updated 2026-05-22 23:30 BST · HEAD `60add03`. Backlogged entries (not yet written into PROCESS body): `ea35fcf` (distress signals), `9760a0e` (agent consolidation), `d03b6fd` (frontend cv_enrich), `f0a5cbf` (Gazette verification), and the `210dd8d`→`60add03` architecture-gap closure stream (gaps #1–#9 from the 2026-05-17 review). See [HANDOFF.md](./HANDOFF.md) §3 + §4 for the missing context until backfilled.*
 
 ---
 

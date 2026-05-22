@@ -3,7 +3,7 @@
 > Read-in for a fresh Anthropic agent picking up this repo.
 > Time-box this doc to ~10 minutes. Then read [CLAUDE.md](./CLAUDE.md) before touching code.
 
-*Authored 2026-05-22 20:50 BST · HEAD `d03b6fd` (Frontend cv_enrich wiring + verdict prompt update for new distress signals). Uncommitted at time of writing: Gazette parser rewrite + cheap smoke + this doc + sibling timestamp updates. Working tree status captured in §9.*
+*Authored 2026-05-22 20:50 BST. Last updated 2026-05-22 23:30 BST · HEAD `60add03` (Close gap #7: explicit per-pillar signal weights as verdict priors). All 9 architecture gaps from the 2026-05-17 review are now closed at the data layer + verdict prompt level; see §4. Working tree status in §9.*
 
 ---
 
@@ -94,21 +94,23 @@ This is the most important context for picking up. The repo went through two sim
 
 ## 4. Known architectural gaps — status as of 2026-05-22
 
-Pulled from [docs/architecture_review_2026_05_17.md](./docs/architecture_review_2026_05_17.md). **Five gaps closed (data layer + prompt) in the uncommitted working tree** — see §9.
+Pulled from [docs/architecture_review_2026_05_17.md](./docs/architecture_review_2026_05_17.md). **All 9 gaps closed (data layer + verdict prompt) as of commits `210dd8d` → `60add03`.** What's left is the optional learning loop on top of gap #7.
 
-1. **Hard gates are binary** — *closed.* `match_confidence: float` + `match_path: MatchPath` (`EXACT_NAME / FUZZY_NAME / CRN_VERIFIED / NO_MATCH / LOOKS_LIKE_SUB_ENTITY`) added to `CompaniesHouseSnapshot`, `SponsorStatus`, `SocCheckResult` in [schemas.py](src/askpicky/schemas.py). `SponsorStatus.status` literal gained `AMBIGUOUS`. New `SPONSOR_AMBIGUITY` stretch concern in `StretchConcernType`. The verdict prompt at [prompts/verdict.md](src/askpicky/prompts/verdict.md) now has an explicit AMBIGUITY TIER OVERRIDE that demotes NOT_LISTED → stretch concern when match_confidence < 0.95 OR alternative_matches non-empty OR register_age_days >= 7 OR match_path ∈ {FUZZY_NAME, NO_MATCH}; same treatment for `soc_check.match_confidence < 0.7`.
-2. **Entity resolution is by-name when CRN is available** — *partially closed at the resolver layer* via `9d0bb4b` / `ce1eaab` (multi-token blocking, dissolved-shell penalty, footer-CRN scrape, LLM-judge fallback). **Remaining:** parent/subsidiary walks using CH's group structure; CRN-driven Sponsor Register lookup.
-3. **No outcome feedback into verdict calibration** — *closed.* [orchestrator.py](src/askpicky/orchestrator.py) recalls `application_outcome` memory and threads `prior_outcomes_text` into [verdict.py](src/askpicky/sub_agents/verdict.py). Verdict prompt has an OUTCOME CALIBRATION section that uses prior outcomes to adjust confidence (not decision — "a dissolved company is still a NO_GO even if the user has ignored 10 of them").
-4. **Cost-of-verdict mismatched** — *closed.* New [triage.py](src/askpicky/sub_agents/triage.py) (Haiku, ~$0.02) classifies every forward as `SERIOUS / EXPLORATORY / DEFINITE_PASS` before Phase 1; DEFINITE_PASS short-circuits the $1-2 pipeline with a canned NO_GO. Wired into orchestrator Phase 0. Gated by `enable_triage_before_verdict` (default on, env: `ENABLE_TRIAGE_BEFORE_VERDICT`).
-5. **Recruitment-agency vs hiring-entity confusion** — *still open.*
-6. **No competitive ranking** (`compare_verdicts` intent) — *still open.*
-7. **Phase 1 signal weighting delegated to the LLM** — *still open.*
-8. **No conversational refinement** (`challenge_verdict` intent) — *still open.*
-9. **Data-freshness is binary and silent** — *closed for SponsorStatus.* New `age_days()` in [data_freshness.py](src/askpicky/data_freshness.py); `register_age_days: Optional[int]` on `SponsorStatus`. Verdict prompt now has a DATA-FRESHNESS GRADIENT section that downgrades confidence when `register_age_days >= 7` and compounds the downgrade when multiple sources are stale. **Remaining:** propagate `data_age_days` to CH / SOC outputs (today only sponsor_register populates it).
+1. **Hard gates were binary** — *closed.* `match_confidence: float` + `match_path: MatchPath` (`EXACT_NAME / FUZZY_NAME / CRN_VERIFIED / NO_MATCH / LOOKS_LIKE_SUB_ENTITY`) on `CompaniesHouseSnapshot`, `SponsorStatus`, `SocCheckResult` in [schemas.py](src/askpicky/schemas.py). `SponsorStatus.status` literal gained `AMBIGUOUS`. `StretchConcernType` gained `SPONSOR_AMBIGUITY` + `AGENCY_POSTING`. Verdict prompt's AMBIGUITY TIER OVERRIDE demotes NOT_LISTED → stretch concern when match_confidence < 0.95, alternative_matches non-empty, register_age_days >= 7, status == AMBIGUOUS, or match_path ∈ {FUZZY_NAME, NO_MATCH, LOOKS_LIKE_SUB_ENTITY}; same treatment for soc_check.match_confidence < 0.7.
+2. **Entity resolution ignored CRN** — *closed.* Resolver-layer hardening landed in `9d0bb4b` / `ce1eaab` (multi-token blocking, dissolved-shell penalty, footer-CRN scrape, LLM-judge fallback). Parent/subsidiary walk added in `d9576dd`: `_extract_corporate_parents` pulls corporate PSCs from CH (filtering individuals + ceased PSCs + dedup); `_walk_parent_sponsors` in [orchestrator.py](src/askpicky/orchestrator.py) re-runs sponsor lookup against each parent when sponsor.status == NOT_LISTED, demoting to AMBIGUOUS + match_path=LOOKS_LIKE_SUB_ENTITY when any parent matches. Verdict prompt has a "Parent-walk specifically" paragraph.
+3. **No outcome → verdict calibration** — *closed.* [orchestrator.py](src/askpicky/orchestrator.py) recalls `application_outcome` memory and threads `prior_outcomes_text` into [verdict.py](src/askpicky/sub_agents/verdict.py). Verdict prompt's OUTCOME CALIBRATION section uses prior outcomes to adjust confidence — never decision ("a dissolved company is still a NO_GO even if the user has ignored 10 of them").
+4. **Cost-of-verdict mismatched** — *closed.* [triage.py](src/askpicky/sub_agents/triage.py) (Haiku, ~$0.02) classifies every forward as SERIOUS/EXPLORATORY/DEFINITE_PASS before Phase 1; DEFINITE_PASS short-circuits the $1-2 pipeline. Gated by `enable_triage_before_verdict` (default on).
+5. **Recruitment-agency vs hiring-entity confusion** — *closed.* New [agency_detection.py](src/askpicky/agency_detection.py) (pure regex, ~0.5ms). Strong/weak phrase ladder + known agency company-name fragments. `ExtractedJobDescription` gained `is_agency_post`, `agency_client_name`, `agency_signals`. `_extract_jd` overlays them post-LLM. Verdict prompt has an AGENCY POSTING TIER OVERRIDE that demotes NOT_LISTED → AGENCY_POSTING stretch concern when the JD was an agency post.
+6. **No competitive ranking** — *closed.* New `compare_verdicts` intent + `handle_compare_verdicts` in orchestrator. Deterministic composite: 60% verdict confidence + 25% freshness (linear decay over 28 days) + 15% signal density. NO_GOs excluded; per-row rationale always names the dominant driver. New `CompareVerdictsOutput` / `RankedSession` schemas.
+7. **Phase 1 signal weighting was implicit** — *closed (static priors).* New [signal_weights.py](src/askpicky/signal_weights.py) returns per-(user_type, soc_code) weight dicts summing to 1.0. Verdict's `_build_user_input` includes `signal_weights` in the payload. Verdict prompt's SIGNAL WEIGHTS section instructs: use as priors for confidence calibration (3x effect on a 0.28-weight pillar vs 0.08-weight), hard-blocker rules still fire deterministically, weights calibrate the *confidence number*, not the decision. **Optional next step:** outcome-driven re-weighting (replace static dict with storage lookup keyed by the same tuple).
+8. **No conversational refinement** — *closed.* New `challenge_verdict` intent + `handle_challenge_verdict` orchestrator handler. Reuses the same research bundle, re-runs the verdict with `user_challenge_text` threaded through. Verdict prompt's CHALLENGE HANDLING section spells out two valid moves (accept-and-rerank, hold-the-position); never silently change the decision; never sycophantically lower confidence on a clean hard blocker.
+9. **Data-freshness was binary** — *closed.* New `age_days()` in [data_freshness.py](src/askpicky/data_freshness.py). `register_age_days` on `SponsorStatus`; `data_age_days` on `SocCheckResult`. Verdict prompt's DATA-FRESHNESS GRADIENT section: ≥7 days for sponsor downgrades confidence; ≥90 days for SOC downgrades SALARY_BELOW_SOC_THRESHOLD; multiple stale sources compound. CH data is fresh-per-request so doesn't need an age field.
 
-The pattern in the uncommitted work: **schemas + data layer + verdict prompt landed together as one logical unit.** Net effect: gaps #1, #3, #4, #9 now reasoned about by the verdict; gap #2 partially closed at the resolver layer; gaps #5/6/7/8 still open. ASKPICKY.md §10 sequences the remaining work (CRN-based entity resolution + parent/subsidiary walk is P1; challenge_verdict is P2).
+**Pattern across the close-out:** schemas + data layer + verdict prompt all landed as one unit per gap. Smokes cover the deterministic plumbing (`agency_detection`, `compare_and_challenge`, `parent_walk`, `signal_weights`, `gazette_check`) without requiring live LLM calls. The verdict prompt now reasons about provenance, freshness, outcomes, identity ambiguity, agency posts, parent-walks, and per-pillar priors — none of which were surfaces it had access to before May 2026.
 
-Process-safety side-note: [storage.py](src/askpicky/storage.py) extracted FAISS + sentence-transformer plumbing into an `EmbeddingStore` class (instance-level locks, lazy init). Module-level globals retained as backward-compat aliases. Was a fragility called out in the architecture review.
+**Process-safety side-note:** [storage.py](src/askpicky/storage.py) extracted FAISS + sentence-transformer plumbing into an `EmbeddingStore` class (instance-level locks, lazy init). Module-level globals retained as backward-compat aliases. Was a multi-process fragility called out in the architecture review.
+
+**Bug found while closing the gaps:** the triage DEFINITE_PASS branch in orchestrator.py initially constructed `MotivationFitReport` and `GhostJobJDScore` with non-existent fields. Would have crashed any time triage fired. Fixed in `b56edad`.
 
 ---
 
@@ -131,15 +133,15 @@ From ASKPICKY.md §10. **P0 must ship before any premium work begins.**
 ### P1 (first premium feature ships)
 1. Live going-rates parser (gov.uk Appendix Skilled Occupations).
 2. **Salary defensibility for visa roles** — Premium feature #1.
-3. CRN-based entity resolution + parent/subsidiary walk (gap #2).
+3. ~~CRN-based entity resolution + parent/subsidiary walk (gap #2).~~ — done in `d9576dd`.
 4. Sponsor licence change alerts on saved roles.
 5. **Real-time hiring intent verification** (promote `verdict_deep_research` managed session from flag to premium) — Premium feature #2.
 
 ### P2 (data network reaches ~1,000 contributors)
 1. **Aggregated employer-behaviour benchmarks** — Premium feature #3.
 2. Methodology transparency UI + "Insufficient data" honest UI.
-3. Outcome → verdict calibration loop (gap #3).
-4. `challenge_verdict` intent (gap #8).
+3. ~~Outcome → verdict calibration loop (gap #3).~~ — done in `210dd8d`. Optional follow-up: outcome-driven re-weighting of [signal_weights.py](src/askpicky/signal_weights.py).
+4. ~~`challenge_verdict` intent (gap #8).~~ — done in `b56edad`.
 
 ### P3 (late premium + quality)
 1. **Application autopsy after rejection** — Premium feature #4.
@@ -171,7 +173,10 @@ src/askpicky/
 │                             / direct_operator) — see voice.py
 ├── schemas.py                ALL Pydantic models (~2000 lines, single source)
 ├── llm.py                    four-adapter dispatch + cost tracker
-└── config.py                 Settings (env-driven; ASKPICKY_TEST_MODE=1 opts out)
+├── config.py                 Settings (env-driven; ASKPICKY_TEST_MODE=1 opts out)
+├── agency_detection.py       Deterministic recruitment-agency post detector (gap #5)
+├── signal_weights.py         Per-pillar verdict priors (gap #7)
+└── data_freshness.py         age_days() + is_stale() for parquet sidecars (gap #9)
 
 frontend/                     Vite + React 18 + TanStack Query + Tailwind
 demo/                         Remotion v4 composition (5400 frames @ 30fps)

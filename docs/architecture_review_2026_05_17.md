@@ -5,7 +5,7 @@
 > "Source Global Research" returned NOT_LISTED and the user flagged it
 > as a deeper architectural problem rather than a sponsor-matching bug.
 
-*Authored 2026-05-17 · still open as of 2026-05-22 (HEAD `d03b6fd`). Partial fixes since: resolver hardening (`9d0среди4b`/`ce1eaab` — multi-token blocking, dissolved-shell penalty, footer-CRN scrape, LLM-judge fallback) addresses gaps #2 and #5 at the resolver layer; CH officers/charges/PSC signals (`ea35fcf`) deepen gap #1's data-layer richness without adding the missing `match_confidence` field. Gaps #3, #4, #6, #7, #8, #9 remain untouched. See [HANDOFF.md](../HANDOFF.md) §4 for the live status of each gap.*
+*Authored 2026-05-17 · ALL 9 GAPS CLOSED as of 2026-05-22 HEAD `60add03`. Closure trail: gap #4 (triage) + gap #1 (match_confidence/match_path) + gap #3 (outcome calibration) + half of gap #9 (sponsor freshness) in `210dd8d`; SOC half of gap #9 in `bd2d05c`; gap #5 (agency detection) in `35b7ae5`; gaps #6 (compare_verdicts) + #8 (challenge_verdict) in `b56edad`; gap #2 (parent/subsidiary walk) in `d9576dd`; gap #7 (signal weights priors) in `60add03`. See [HANDOFF.md](../HANDOFF.md) §4 for the live state of each fix. Only optional follow-up: outcome-driven re-weighting of signal_weights.py (currently static).*
 
 ## Triggering case
 
