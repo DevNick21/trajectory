@@ -346,6 +346,10 @@ def _is_opus_47(model: str) -> bool:
     return "opus-4-7" in model.lower()
 
 
+def _is_haiku(model: str) -> bool:
+    return "haiku" in model.lower()
+
+
 def _build_messages_request(
     *,
     tool: dict,
@@ -361,8 +365,10 @@ def _build_messages_request(
     if is_opus47:
         extra["thinking"] = {"type": "adaptive"}
 
-    # Pass effort through verbatim if it's a known API value.
-    if effort in _VALID_API_EFFORTS:
+    # Pass effort through verbatim if it's a known API value AND the
+    # model supports it. Haiku 4.5 is not a thinking model and rejects
+    # output_config.effort with a 400 — silently drop it there.
+    if effort in _VALID_API_EFFORTS and not _is_haiku(model):
         extra["output_config"] = {"effort": effort}
 
     # max_tokens — sized to give adaptive thinking room while staying

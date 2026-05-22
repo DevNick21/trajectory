@@ -321,12 +321,13 @@ async def cv_import(
 ) -> dict:
     """Extract structured data from an uploaded CV (PDF / DOCX / TXT).
 
-    Used by the onboarding wizard's first stage to pre-fill name,
-    location, contact email, role rows, education, projects, and
-    skills. The user reviews/edits the extracted result before the
-    rest of the wizard runs. Stateless — no session or profile is
-    written here; the wizard's localStorage draft holds the result
-    until the user clicks Finish.
+    Single Haiku call (~5s) — returns the full CVImport shape with
+    name, location, contact email, role rows + bullets, education,
+    projects, skills, professional_summary, and the chronological
+    narrative bio.
+
+    Stateless — no session or profile is written here; the wizard's
+    localStorage draft holds the result until the user clicks Finish.
     """
     data = await file.read()
     if not data:
@@ -343,7 +344,7 @@ async def cv_import(
             },
         )
 
-    from ...sub_agents.cv_parser import extract_text, tier0_extract
+    from ...sub_agents.cv_parser import extract_text, parse as parse_cv
 
     try:
         text = extract_text(data=data, filename=file.filename or "")
@@ -367,52 +368,12 @@ async def cv_import(
             },
         )
 
-    # Tier 0 — regex + heuristics. ~50ms, no LLM. Returns name, email,
-    # location, role skeletons, skills list, raw_text. The wizard
-    # advances on this immediately; the user can edit while the
-    # optional Tier 1 enrichment runs in the background via
-    # /api/onboarding/cv_enrich.
     try:
-        out = tier0_extract(text)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "cv_parse_failed", "message": str(exc)},
-        )
-    return out.model_dump(mode="json")
-
-
-# Optional Tier 1 enrichment — frontend calls this AFTER /cv_import
-# to fill in bullets, education, projects. Runs on Haiku (~5s).
-@router.post("/onboarding/cv_enrich")
-async def cv_enrich(
-    payload: dict,
-) -> dict:
-    """LLM-enrichment pass over already-extracted CV text.
-
-    Body: `{ "raw_text": "<the text the wizard got back from cv_import>" }`.
-    Returns the same CVImport shape, this time with bullets, education,
-    projects, skills, and professional_summary populated.
-    """
-    raw_text = (payload or {}).get("raw_text") or ""
-    if not raw_text or len(raw_text.strip()) < 50:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "raw_text_required"},
-        )
-    from ...sub_agents.cv_parser import parse as parse_cv
-    try:
-        out = await parse_cv(cv_text=raw_text)
+        out = await parse_cv(cv_text=text)
     except Exception as exc:
-        log.exception("cv_parser tier 1 failed")
+        log.exception("cv_parser failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"code": "cv_parse_failed", "message": str(exc)[:200]},
         )
     return out.model_dump(mode="json")
-
-
-# The career narrative is now produced inline by `cv_parser.parse` —
-# `/cv_enrich` returns the parsed CV WITH the `narrative` field
-# populated. The standalone `/cv_narrate` endpoint was retired
-# 2026-05-22 (one Haiku call, two outputs).
