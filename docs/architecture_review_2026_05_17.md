@@ -5,6 +5,8 @@
 > "Source Global Research" returned NOT_LISTED and the user flagged it
 > as a deeper architectural problem rather than a sponsor-matching bug.
 
+*Authored 2026-05-17 · still open as of 2026-05-22 (HEAD `d03b6fd`). Partial fixes since: resolver hardening (`9d0среди4b`/`ce1eaab` — multi-token blocking, dissolved-shell penalty, footer-CRN scrape, LLM-judge fallback) addresses gaps #2 and #5 at the resolver layer; CH officers/charges/PSC signals (`ea35fcf`) deepen gap #1's data-layer richness without adding the missing `match_confidence` field. Gaps #3, #4, #6, #7, #8, #9 remain untouched. See [HANDOFF.md](../HANDOFF.md) §4 for the live status of each gap.*
+
 ## Triggering case
 
 Query "Source Global Research" against the UK Home Office Sponsor

@@ -4,6 +4,8 @@
 > Read this first, every session.
 > For **what AskPicky is** (positioning, free/premium split, roadmap), read [ASKPICKY.md](./ASKPICKY.md). That document is canonical and supersedes anything here on contradiction.
 
+*Last updated 2026-05-22 20:22 BST · commit `9760a0e` (Agent consolidation: tier-0 intent router, deterministic ghost-scorer, merged interview questions + CV parser/narrator, more Haiku). Uncommitted in working tree: Gazette parser rewrite + cheap smoke.*
+
 ---
 
 ## Project

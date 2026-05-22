@@ -4,6 +4,8 @@
 > final product. If a judge asks "why did you choose X?", the answer
 > is in here.
 
+*Last updated 2026-05-22 15:59 BST · commit `ca61263` (AskPicky overhaul). Subsequent commits `ea35fcf`, `9760a0e`, `d03b6fd` introduced distress signals, agent consolidation, and frontend cv_enrich wiring respectively — each of those should have a PROCESS entry but the file has not yet been amended to record them. See [HANDOFF.md](./HANDOFF.md) §3 for the missing context until backfilled.*
+
 ---
 
 ## How to read this doc
@@ -854,7 +856,7 @@ savings at the expense of UX integrity.
 
 ---
 
-## Entry 29 — Skilled Worker going rates: 2026 refresh (2026-04-23)
+## Entry 29bis — Skilled Worker going rates: 2026 refresh (2026-04-23)
 
 **Trigger.** April 2026 visa-holder demos would have failed on most
 SOCs. Entry 27 had noted SOC 2136 was refreshed to the 2026 regime
@@ -1072,12 +1074,7 @@ opportunistically when next touching CLAUDE.md:
   `model_validator(mode="after")` per-kind required-field
   enforcement that's now in `schemas.Citation`.
 
-**Numbering note.** PROCESS.md has a duplicate `Entry 29` (the
-"Architectural lesson" entry from the onboarding parser pass and
-the "Skilled Worker going rates 2026 refresh" entry from the
-Friday-PM fixes). The brief said `Append only`, so this entry is
-numbered 32 (next sequential after Entry 31). A future cleanup pass
-should renumber the duplicate to 29bis or similar.
+**Numbering note.** PROCESS.md previously had duplicate `Entry 29` and `Entry 44`. Renamed 2026-05-22: the second Entry 29 (Skilled Worker going rates 2026 refresh) → 29bis, the second Entry 44 (Multi-provider CV tailor) → 44bis.
 
 ---
 
@@ -2185,7 +2182,7 @@ The remaining LOW-tier items (manual prompt-cache wrapping, in-memory rate-limit
 
 ---
 
-## Entry 44 — Multi-provider CV tailor routed by ATS host (2026-04-26)
+## Entry 44bis — Multi-provider CV tailor routed by ATS host (2026-04-26)
 
 **What was on the table.** A single CV tailoring path on Opus 4.7 xhigh, routed through `cv_tailor_agentic` (multi-turn FAISS-search loop) for every job, regardless of where the JD came from. CLAUDE.md Rule 7 explicitly mandates Opus 4.7 for all Phase 4 generators.
 

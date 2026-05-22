@@ -1,6 +1,8 @@
 # AskPicky — Product Definition (v1.0)
 
-*Canonical source of truth. Supersedes CLAUDE.md, AGENTS.md, PROCESS.md, new_claude.md, trajec_notes.md where any contradiction exists. Last edited 2026-05-22.*
+*Canonical source of truth. Supersedes CLAUDE.md, AGENTS.md, PROCESS.md, new_claude.md, trajec_notes.md where any contradiction exists.*
+
+*Last updated 2026-05-22 15:59 BST · commit `ca61263` (AskPicky overhaul: rebrand + cuts + cross-surface outcomes + identity resolver). Subsequent commits `ea35fcf` (distress signals: salary out, Gazette in, CH officers/charges/PSC in), `9760a0e` (agent consolidation), and `d03b6fd` (frontend cv_enrich + verdict prompt update) are consistent with this spec.*
 
 ---
 

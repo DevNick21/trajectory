@@ -5,6 +5,8 @@
 
 AGPL-3.0 · Python 3.11+ · Anthropic SDK + first-party Citations · No auto-apply, ever.
 
+*Last updated 2026-05-22 20:33 BST · HEAD `d03b6fd` (Frontend cv_enrich wiring + verdict prompt update for new distress signals). Uncommitted in working tree: Gazette parser rewrite + cheap smoke. See [HANDOFF.md](./HANDOFF.md) §9.*
+
 ---
 
 ## What it does

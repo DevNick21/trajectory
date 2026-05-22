@@ -3,6 +3,8 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
+*Last updated 2026-05-22 20:22 BST · commit `9760a0e` (Agent consolidation: tier-0 intent router, deterministic ghost-scorer, merged interview questions + CV parser/narrator, more Haiku). Uncommitted in working tree: Gazette parser rewrite + cheap smoke — agent #6 (Gazette) is now live-verified against thegazette.co.uk, see [HANDOFF.md](./HANDOFF.md) §3D.*
+
 ## Agent inventory
 
 The **Adapter** column is the `llm.py` dispatcher each agent uses (see CLAUDE.md "Adapter dispatch in `llm.py`"). Picking a different adapter for an existing agent is a substantial change — the post-2026-04-25 migration assigned each.
