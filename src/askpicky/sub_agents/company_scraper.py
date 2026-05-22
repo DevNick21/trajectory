@@ -533,7 +533,7 @@ async def _extract_jd(
         f"<untrusted_content>\n{safe_jd}\n</untrusted_content>"
     )
     user_input = "\n\n".join(user_input_parts)
-    return await call_agent(
+    extracted = await call_agent(
         agent_name="phase_1_jd_extractor",
         system_prompt=JD_EXTRACTOR_SYSTEM_PROMPT,
         user_input=user_input,
@@ -547,6 +547,31 @@ async def _extract_jd(
         effort="medium",
         session_id=session_id,
     )
+
+    # Architecture gap #5 — flag recruitment-agency posts so the
+    # verdict knows the gov-data lookups ran against the agency, not
+    # the actual employer. Pure regex, ~0.5ms, never an LLM call.
+    from ..agency_detection import detect_agency_post
+
+    # `company_name` on the JD isn't directly available — derive a
+    # best-guess from the posting domain. The orchestrator's resolver
+    # later supersedes this with the canonical name; for agency-name
+    # matching here we just want a coarse signal.
+    agency = detect_agency_post(
+        jd_text=extracted.jd_text_full or jd_text,
+        company_name=_host(job_url),
+    )
+    if agency.is_agency_post:
+        logger.info(
+            "Agency post detected for %s: client=%r signals=%s",
+            job_url, agency.agency_client_name, agency.agency_signals[:3],
+        )
+        extracted = extracted.model_copy(update={
+            "is_agency_post": True,
+            "agency_client_name": agency.agency_client_name,
+            "agency_signals": agency.agency_signals,
+        })
+    return extracted
 
 
 async def _summarise_company(

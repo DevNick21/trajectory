@@ -462,6 +462,16 @@ class ExtractedJobDescription(BaseModel):
     jd_text_full: str
     specificity_signals: list[str]
     vagueness_signals: list[str]
+    # Agency-post detection (architecture gap #5). Populated by
+    # agency_detection.detect_agency_post() post-JD-extraction. When
+    # true, the JD was posted by a recruitment agency on behalf of a
+    # client — every downstream gov-data lookup runs against the
+    # AGENCY's name, not the actual employer's. The verdict prompt's
+    # AGENCY POSTING TIER OVERRIDE demotes NOT_LISTED → stretch
+    # concern when this fires.
+    is_agency_post: bool = False
+    agency_client_name: Optional[str] = None
+    agency_signals: list[str] = Field(default_factory=list)
 
 
 class CompaniesHouseSnapshot(BaseModel):
@@ -731,6 +741,11 @@ StretchConcernType = Literal[
     # FUZZY_NAME match_path, or register_age_days >= 7 — see
     # prompts/verdict.md AMBIGUITY TIER OVERRIDE (architecture gap #1).
     "SPONSOR_AMBIGUITY",
+    # JD was posted by a recruitment agency on behalf of an unnamed
+    # or differently-named client. All gov-data lookups ran against
+    # the agency, not the actual employer — verdict should soften
+    # any NOT_LISTED / company-distress signals. Architecture gap #5.
+    "AGENCY_POSTING",
 ]
 
 

@@ -50,6 +50,17 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS:
    register age to the user. Recommend they verify directly with
    the company or on gov.uk.
 
+   **AGENCY POSTING TIER OVERRIDE (added 2026-05-22):** when
+   extracted_jd.is_agency_post == true, the Sponsor Register lookup
+   ran against the recruitment agency, not the actual employer.
+   NOT_LISTED becomes a stretch concern AGENCY_POSTING (not a hard
+   blocker). Surface the agency_signals that triggered the
+   detection. If extracted_jd.agency_client_name is populated, name
+   the client and recommend the user search the Sponsor Register
+   for that name themselves before applying. If the client is
+   anonymous, recommend they ask the recruiter for the client's
+   legal name before committing time. Architecture gap #5.
+
 7. sponsor_register.status in {B_RATED, SUSPENDED} -> HARD BLOCKER
    (type: SPONSOR_B_RATED or SPONSOR_SUSPENDED).
 
