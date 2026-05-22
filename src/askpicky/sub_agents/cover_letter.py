@@ -129,9 +129,18 @@ async def generate(
             )
         return failures
 
+    # Compose: Thought Partner persona (outer rhetoric) + base prompt
+    # (Citations API contract). The user's style profile is injected
+    # into `user_input` below, so all three voice layers — persona,
+    # phonetics, task — ship together.
+    from ..voice import compose_system_prompt
+    layered_prompt = compose_system_prompt(
+        base_prompt=SYSTEM_PROMPT,
+        persona="thought_partner",
+    )
     result = await call_with_citations(
         agent_name="cover_letter",
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=layered_prompt,
         user_input=user_input,
         documents=documents,
         model=settings.opus_model_id,

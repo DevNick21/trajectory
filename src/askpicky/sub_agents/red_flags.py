@@ -89,7 +89,7 @@ async def detect(
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=RedFlagsReport,
-        model=settings.opus_model_id,
+        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
         effort="xhigh",
         session_id=session_id,
     )

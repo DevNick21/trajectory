@@ -1,7 +1,8 @@
 """PA — Draft Reply.
 
-Drafts a reply to a recruiter message in the user's voice.
-System prompt verbatim from AGENTS.md §15.
+Drafts a reply to a recruiter message in the user's voice + the
+Direct Operator persona (short, specific, single CTA, easy out).
+Base system prompt from AGENTS.md §15.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from ..schemas import (
     WritingStyleProfile,
 )
 from ..validators.banned_phrases import contains_banned
+from ..voice import VoicePersona, compose_system_prompt
 
 SYSTEM_PROMPT = load_prompt("draft_reply")
 
@@ -114,12 +116,19 @@ async def generate(
         default=str,
     )
 
+    # Compose: Direct Operator persona (outer) + base prompt (inner).
+    # Style profile is already injected via the JSON `user_input` block
+    # above — the persona adds structural rhetoric on top.
+    layered_prompt = compose_system_prompt(
+        base_prompt=SYSTEM_PROMPT,
+        persona="direct_operator",
+    )
     return await call_agent(
         agent_name="draft_reply",
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=layered_prompt,
         user_input=user_input,
         output_schema=DraftReplyOutput,
-        model=settings.opus_model_id,
+        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
         effort="xhigh",
         post_validate=_post_validate,
     )

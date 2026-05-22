@@ -21,6 +21,19 @@ from typing import AsyncIterator
 _TERMINAL_EVENT_TYPES = ("done", "error")
 
 
+# Headers every SSE response should ship. `X-Accel-Buffering: no` tells
+# Nginx (and any other accel-aware proxy) to flush each chunk through
+# instead of buffering until the connection closes — without it, the
+# Phase 1 ticks sit on the proxy's egress buffer and the UI shows a
+# frozen checklist until the verdict drops at the end. The other two
+# headers prevent CDN/intermediate caches from holding the stream.
+SSE_HEADERS = {
+    "X-Accel-Buffering": "no",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+}
+
+
 async def event_stream(queue: asyncio.Queue) -> AsyncIterator[dict]:
     """Yield queue events as sse-starlette frames until a terminal event.
 

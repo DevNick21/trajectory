@@ -274,11 +274,20 @@ async def generate(
     last_searches = 0
     user_input = base_user_input
 
+    # Compose: Value Architect persona (Action -> Result -> Impact
+    # rhetoric for every bullet) + base CV-tailor prompt. The user's
+    # style profile is in `user_input`.
+    from ..voice import compose_system_prompt
+    layered_prompt = compose_system_prompt(
+        base_prompt=SYSTEM_PROMPT,
+        persona="value_architect",
+    )
+
     for attempt in range(2):
         executor = CVTailorToolExecutor(user, session_id=None)
         cv = await call_agent_with_tools(
             agent_name="cv_tailor_agentic",
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=layered_prompt,
             user_input=user_input,
             tools=[_SEARCH_TOOL, _PROFILE_TOOL],
             tool_executor=executor.execute,

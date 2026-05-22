@@ -312,7 +312,8 @@ async def full_prep(
                 except (asyncio.CancelledError, Exception):
                     pass
 
-    return EventSourceResponse(stream())
+    from ..sse import SSE_HEADERS
+    return EventSourceResponse(stream(), headers=SSE_HEADERS)
 
 
 # ---------------------------------------------------------------------------

@@ -85,7 +85,7 @@ async def generate(
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=LikelyQuestionsOutput,
-        model=settings.opus_model_id,
+        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
         effort="xhigh",
         post_validate=_make_post_validate(citation_ctx),
     )

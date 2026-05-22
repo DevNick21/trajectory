@@ -123,19 +123,103 @@ async def _ch_profile(crn: str) -> Optional[dict]:
         return None
 
 
+# Companies that hit ALL of these are shells / brand-squat artefacts,
+# NOT the real trading entity. The resolver must refuse to anchor to
+# one of these even if its name is an exact match for the query.
+# Triggered the 2026-05-22 loveholidays misfire — a dissolved CRN
+# incorporated 2025-04-03 with no filings was picked over the real
+# WE LOVE HOLIDAYS LIMITED (active since 2011).
+def _is_shell_candidate(hit: dict) -> tuple[bool, str]:
+    """Heuristic: True when this hit looks like a brand-squat shell.
+
+    Returns (is_shell, reason) so the trace can record WHY we skipped.
+    Cheap pure-data check — runs on every CH search hit pre-score.
+    """
+    status = (hit.get("company_status") or "").lower()
+    if status not in {"dissolved", "liquidation", "receivership"}:
+        return False, ""
+
+    # CH search items don't always carry incorporation_date; the
+    # /company/{number} profile does. Read both shapes — when the
+    # field is missing, default to "looks fine".
+    date_of_creation = (
+        hit.get("date_of_creation")
+        or hit.get("incorporation_date")
+        or (hit.get("date_of_cessation") and None)
+    )
+    if not date_of_creation:
+        # No incorporation date in the search item — let the profile
+        # fetch decide. Don't reject blindly.
+        return False, ""
+
+    try:
+        from datetime import date as _date, datetime as _dt
+        incorporated = _dt.strptime(date_of_creation, "%Y-%m-%d").date()
+        age_days = (_date.today() - incorporated).days
+    except (ValueError, TypeError):
+        return False, ""
+
+    # Dissolved AND under a year old = brand-squat shell. The real
+    # employer at any meaningful scale has trading history.
+    if age_days < 365:
+        return True, f"dissolved + only {age_days} days old"
+    return False, ""
+
+
 def _score_ch_hits(
     raw_name: str, hits: list[dict],
 ) -> list[tuple[float, dict]]:
-    """Score each CH search hit against the input. Returns sorted (desc)."""
+    """Score each CH search hit against the input. Returns sorted (desc).
+
+    Shell candidates (dissolved + freshly-incorporated brand squats)
+    are dropped before scoring — these are the loveholidays-style
+    misfires the resolver MUST refuse to anchor.
+    """
     scored: list[tuple[float, dict]] = []
     for hit in hits:
         candidate = hit.get("title") or ""
         if not candidate:
             continue
+        is_shell, reason = _is_shell_candidate(hit)
+        if is_shell:
+            logger.info(
+                "Dropping shell candidate %s (%s): %s",
+                hit.get("company_number"), candidate, reason,
+            )
+            continue
         combined, _ = ensemble_score(raw_name, candidate)
         scored.append((combined, hit))
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored
+
+
+def _domain_to_alias_seeds(domain: Optional[str]) -> list[str]:
+    """Turn a domain like 'loveholidays.com' into extra alias seeds.
+
+    Brand-name domains often differ from the legal name (drop "the",
+    "we", "ltd"). Feeding the bare stem AND a small set of common
+    prefix variants to the alias expander recovers matches like
+    loveholidays -> WE LOVE HOLIDAYS LIMITED that pure first-token
+    blocking can never reach.
+    """
+    if not domain:
+        return []
+    # Strip protocol + www + everything after the first slash.
+    stem = domain.lower().strip()
+    for prefix in ("https://", "http://", "www."):
+        if stem.startswith(prefix):
+            stem = stem[len(prefix):]
+    stem = stem.split("/", 1)[0]
+    # Drop the TLD chunk — keep loveholidays from loveholidays.com.
+    label = stem.rsplit(".", 1)[0].split(".")[-1]
+    if not label or len(label) < 3:
+        return []
+    seeds = {label}
+    # Common prefixed variants. "we" / "the" / "your" prefixes show up
+    # in legal names where the brand drops them.
+    for prefix in ("we ", "the ", "your "):
+        seeds.add(prefix + label)
+    return sorted(seeds)
 
 
 async def _sponsor_lookup_async(name: str):
@@ -187,6 +271,12 @@ async def resolve_company_identity(
 
     # 2. Alias expansion + cache lookup by exact alias match.
     aliases = expand_aliases(raw_name)
+    # Domain-derived seeds give us a second anchor when the brand is
+    # buried inside a legal name (loveholidays -> we love holidays).
+    for seed in _domain_to_alias_seeds(domain):
+        for variant in expand_aliases(seed):
+            if variant and variant not in aliases:
+                aliases.append(variant)
     if additional_aliases:
         for extra in additional_aliases:
             normalised = normalise_name(extra)

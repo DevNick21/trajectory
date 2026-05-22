@@ -301,4 +301,5 @@ async def forward_job(
                 _RUNNING_TASKS.add(runner_task)
                 runner_task.add_done_callback(_RUNNING_TASKS.discard)
 
-    return EventSourceResponse(stream())
+    from ..sse import SSE_HEADERS
+    return EventSourceResponse(stream(), headers=SSE_HEADERS)

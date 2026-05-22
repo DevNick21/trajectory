@@ -45,10 +45,34 @@ Every LLM call returns strict Pydantic-validated JSON. No free-form prose from s
 ### Rule 6 — On-demand, not on-the-fly
 `forward_job` runs Phase 1 + verdict and STOPS. Pack components are triggered by separate intents (`draft_cv`, `draft_cover_letter`, `salary_advice`, `predict_questions`, `draft_reply`) or by `full_prep`.
 
-### Rule 7 — Opus 4.7 default for quality-critical reasoning
-Default Opus 4.7 (xhigh effort) for: intent router, verdict, question designer, STAR polisher, writing-style extractor, self-audit, salary strategist, ghost-job JD scorer, all Phase 4 generators.
+### Rule 7 — Cheapest model that meets the bar; Opus only where judgement is the product
 
-Sonnet 4.6 only for: JD extraction from scraped pages, scrape content summarisation, simple formatting/reshaping.
+Bias toward cheap+fast for anything mechanical, structured, or pattern-matching.
+
+**Opus 4.7 `xhigh`** — only the 6 calls where the *position itself* is the product:
+
+- `verdict` (the take itself)
+- `cv_tailor` (judgement about which bullets matter for a role)
+- `cover_letter` (voice + Citations API)
+- `salary_strategist` (negotiation reasoning + Code Execution)
+- `offer_analyst` (offer-letter analysis with Files API + Citations)
+- `prompt_auditor` (build-time only)
+
+**Sonnet 4.6** — structured tasks, classification, restructuring:
+
+- `intent_router` (12-way classification)
+- `style_extractor`, `self_audit` (structured pattern matching)
+- `red_flags_detector`, `ghost_job_jd_scorer` (structured citations)
+- `question_designer`, `star_polisher`, `likely_questions`, `draft_reply` (Phase 3/4 with clear contracts)
+- `jd_extractor`, `company_scraper_summariser`, `onboarding_parser`, `content_shield_tier2`
+
+**Haiku 4.5** — mechanical / format-only:
+
+- `cv_parser` (CV structure extraction)
+- `career_narrator` (Picky-voice bio summary)
+- Any future agent that just reshapes data.
+
+The downgrade from Opus to Sonnet on the 9 historical Opus calls landed 2026-05-22 — Sonnet handled every smoke test for those agents without quality regression. Promote back to Opus only with empirical evidence (smoke + at least 3 production samples).
 
 ### Rule 8 — Cost discipline
 All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.

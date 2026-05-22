@@ -87,11 +87,17 @@ async def _parse_voice_stages(req: OnboardingFinaliseRequest) -> dict:
             log.warning("onboarding parser for %s failed: %s", stage, exc)
             return None
 
+    # Run both voice-stage parses in parallel — they're independent
+    # Sonnet calls, no point sequencing them. Halves the finalise
+    # latency on this leg.
+    import asyncio as _asyncio
+    motivations_result, deal_breakers_result = await _asyncio.gather(
+        _maybe_parse("motivations", req.motivations_text),
+        _maybe_parse("deal_breakers", req.deal_breakers_text),
+    )
     return {
-        "motivations": await _maybe_parse("motivations", req.motivations_text),
-        "deal_breakers": await _maybe_parse(
-            "deal_breakers", req.deal_breakers_text,
-        ),
+        "motivations": motivations_result,
+        "deal_breakers": deal_breakers_result,
     }
 
 
@@ -163,24 +169,38 @@ async def finalise(
     writing samples feed the style extractor. All writes share the
     same `now` timestamp so downstream queries can correlate them.
     """
+    import asyncio as _asyncio
     from ...sub_agents.style_extractor import extract as extract_style
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # --- Writing style profile (Opus 4.7 xhigh — optional) -------------
-    writing_style_profile_id: Optional[str] = None
-    if req.writing_samples:
+    # Style extraction + voice-stage parsing are independent — fan them
+    # out in parallel instead of sequencing two slow LLM calls. The
+    # style extractor was downgraded from Opus to Sonnet in the
+    # 2026-05-22 model audit, so this section now runs ~3x faster
+    # than the original sequential Opus path.
+    async def _run_style():
+        if not req.writing_samples:
+            return None
         try:
             profile = await extract_style(
                 user_id=user_id, samples=req.writing_samples,
             )
-            await storage.save_writing_style_profile(profile)
-            writing_style_profile_id = profile.profile_id
+            return profile
         except Exception as exc:
             log.warning("style_extractor failed during finalise: %s", exc)
+            return None
 
-    # --- Voice-stage parsing --------------------------------------------
-    parsed = await _parse_voice_stages(req)
+    style_profile_result, parsed = await _asyncio.gather(
+        _run_style(),
+        _parse_voice_stages(req),
+    )
+
+    writing_style_profile_id: Optional[str] = None
+    if style_profile_result is not None:
+        await storage.save_writing_style_profile(style_profile_result)
+        writing_style_profile_id = style_profile_result.profile_id
+
     motivations, drains = _derive_motivations_and_drains(
         parsed["motivations"], req.motivations_text,
     )
@@ -323,7 +343,7 @@ async def cv_import(
             },
         )
 
-    from ...sub_agents.cv_parser import extract_text, parse as parse_cv
+    from ...sub_agents.cv_parser import extract_text, tier0_extract
 
     try:
         text = extract_text(data=data, filename=file.filename or "")
@@ -347,13 +367,77 @@ async def cv_import(
             },
         )
 
+    # Tier 0 — regex + heuristics. ~50ms, no LLM. Returns name, email,
+    # location, role skeletons, skills list, raw_text. The wizard
+    # advances on this immediately; the user can edit while the
+    # optional Tier 1 enrichment runs in the background via
+    # /api/onboarding/cv_enrich.
     try:
-        out = await parse_cv(cv_text=text)
+        out = tier0_extract(text)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "cv_parse_failed", "message": str(exc)},
+        )
+    return out.model_dump(mode="json")
+
+
+# Optional Tier 1 enrichment — frontend calls this AFTER /cv_import
+# to fill in bullets, education, projects. Runs on Haiku (~5s).
+@router.post("/onboarding/cv_enrich")
+async def cv_enrich(
+    payload: dict,
+) -> dict:
+    """LLM-enrichment pass over already-extracted CV text.
+
+    Body: `{ "raw_text": "<the text the wizard got back from cv_import>" }`.
+    Returns the same CVImport shape, this time with bullets, education,
+    projects, skills, and professional_summary populated.
+    """
+    raw_text = (payload or {}).get("raw_text") or ""
+    if not raw_text or len(raw_text.strip()) < 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "raw_text_required"},
+        )
+    from ...sub_agents.cv_parser import parse as parse_cv
+    try:
+        out = await parse_cv(cv_text=raw_text)
     except Exception as exc:
-        log.exception("cv_parser failed")
+        log.exception("cv_parser tier 1 failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"code": "cv_parse_failed", "message": str(exc)[:200]},
         )
-
     return out.model_dump(mode="json")
+
+
+# Career narrator — feeds the "Career so far" stage with a Picky-voice
+# bio summary instead of raw CV bullets.
+@router.post("/onboarding/cv_narrate")
+async def cv_narrate(
+    payload: dict,
+) -> dict:
+    """Generate a 2-3 paragraph career narrative from a parsed CV.
+
+    Body: a `CVImport` dict (the shape /cv_import or /cv_enrich returned).
+    Returns: `{ "narrative": "<2-3 paragraph chronological bio>" }`.
+    """
+    from ...schemas import CVImport
+    from ...sub_agents.career_narrator import narrate
+    try:
+        cv = CVImport.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "invalid_cv_payload", "message": str(exc)[:200]},
+        )
+    try:
+        narrative = await narrate(cv=cv)
+    except Exception as exc:
+        log.exception("career_narrator failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "narrator_failed", "message": str(exc)[:200]},
+        )
+    return {"narrative": narrative}

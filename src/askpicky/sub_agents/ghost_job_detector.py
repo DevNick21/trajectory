@@ -64,7 +64,7 @@ async def _score_jd(
             f"{jd.jd_text_full[:16_000]}"
         ),
         output_schema=GhostJobJDScore,
-        model=settings.opus_model_id,
+        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
         effort="xhigh",
         session_id=session_id,
     )

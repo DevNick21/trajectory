@@ -123,15 +123,34 @@ async def handle_forward_job(
     # ── Phase 1A.5: unified company identity resolution ────────────────────
     # One canonical name + CRN per real-world employer, shared by every
     # downstream lookup (companies_house, sponsor_register, and the
-    # front-page sponsor-search / visa-eligibility tools). Failures
-    # degrade gracefully — `resolve_company_identity` always returns a
-    # CompanyIdentity, even if just a thin row with `confidence=0`.
+    # front-page sponsor-search / visa-eligibility tools).
+    #
+    # Pipeline with the five hardening layers:
+    #   L1 (alias expansion) — handled inside resolve_company_identity.
+    #   L2 (domain seeds)    — pass company_research.company_domain.
+    #   L3 (footer CRN)      — extract here from scraped_pages; if found,
+    #                          pass as crn_hint so resolve_company_identity
+    #                          short-circuits to the direct profile fetch.
+    #   L4 (shell penalty)   — applied inside _score_ch_hits.
+    #   L5 (multi-token block) — applied in local_ch_index.search_by_name.
     company_identity = None
     try:
         from .entity_resolution import resolve_company_identity
+        from .entity_resolution.footer_extractor import extract_hints
+        footer_hints = extract_hints(company_research.scraped_pages)
+        extra_aliases = (
+            [footer_hints.legal_name] if footer_hints.legal_name else None
+        )
+        if footer_hints.crn:
+            log.info(
+                "Footer CRN found: %s (legal_name=%r) — using as crn_hint",
+                footer_hints.crn, footer_hints.legal_name,
+            )
         company_identity = await resolve_company_identity(
             company_research.company_name,
             domain=company_research.company_domain,
+            crn_hint=footer_hints.crn,
+            additional_aliases=extra_aliases,
         )
         log.info(
             "company identity: id=%s crn=%s conf=%.2f via=%s",
