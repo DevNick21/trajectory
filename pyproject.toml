@@ -29,3 +29,13 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.pyright]
+typeCheckingMode = "basic"
+include = ["src"]
+exclude = ["**/__pycache__", "**/node_modules", "tests", "scripts", "frontend", "demo"]
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+pythonVersion = "3.11"

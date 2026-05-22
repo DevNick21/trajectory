@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # ambiguous-band candidates. Off by default — Splink is an
     # opt-in upgrade requiring an offline training pass.
     enable_splink_sponsor_match: bool = False
+    # Pre-verdict triage (architecture gap #4). A Haiku call (~$0.02)
+    # classifies forwards as SERIOUS/EXPLORATORY/DEFINITE_PASS before
+    # the full Phase 1 pipeline. Only SERIOUS gets the full Opus verdict.
+    # Single biggest cost-leverage move. Defaults on.
+    enable_triage_before_verdict: bool = True
 
     # --- paths
     data_dir: Path = Path("./data")

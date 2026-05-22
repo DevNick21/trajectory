@@ -87,6 +87,7 @@ _REGISTRY: list[_Entry] = [
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True,  category="phase1"),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True,  category="phase1"),
     _Entry("salary_data",        "scripts.smoke_tests.salary_data",        cheap=True,  category="phase1"),
+    _Entry("process_entries",    "scripts.smoke_tests.process_entry_numbers", cheap=True,  category="phase1"),
     _Entry("ghost_job",          "scripts.smoke_tests.ghost_job",          cheap=False, category="phase1"),
     _Entry("red_flags",          "scripts.smoke_tests.red_flags",          cheap=False, category="phase1"),
     _Entry("style_extractor",    "scripts.smoke_tests.style_extractor",    cheap=False, category="phase1"),

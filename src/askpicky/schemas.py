@@ -37,6 +37,17 @@ class ReviewExcerpt(BaseModel):
 # data older than the freshness window (see scripts/fetch_gov_data.py).
 SourceStatus = Literal["OK", "UNREACHABLE", "NO_DATA", "STALE"]
 
+# How a Phase 1 match was obtained. Carried on every gov-data output so
+# the verdict agent can distinguish "exact match on CRN" from "fuzzy name
+# guess" from "we couldn't find anything". Architecture gap #1.
+MatchPath = Literal[
+    "EXACT_NAME",
+    "FUZZY_NAME",
+    "CRN_VERIFIED",
+    "NO_MATCH",
+    "LOOKS_LIKE_SUB_ENTITY",
+]
+
 
 class Citation(BaseModel):
     """Every claim in generated output must carry one of these."""
@@ -481,6 +492,13 @@ class CompaniesHouseSnapshot(BaseModel):
     recent_director_appointments_6mo: int = 0
     recent_charges_6mo: int = 0
     psc_changes_6mo: int = 0
+    # Confidence that this CRN actually belongs to the company the user
+    # is asking about (0.0-1.0). Resolver confidence below 0.5 means
+    # we may have anchored on the wrong entity — verdict should surface
+    # as CONTENT_INTEGRITY_CONCERN rather than confident NO_GO.
+    # Architecture gaps #1 + #2.
+    match_confidence: float = 1.0
+    match_path: MatchPath = "EXACT_NAME"
     source_status: SourceStatus = "OK"
 
 
@@ -502,12 +520,23 @@ class SponsorAlternativeMatch(BaseModel):
 
 class SponsorStatus(BaseModel):
     status: Literal[
-        "LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED", "UNKNOWN"
+        "LISTED", "NOT_LISTED", "B_RATED", "SUSPENDED", "UNKNOWN",
+        "AMBIGUOUS",
     ]
     matched_name: Optional[str] = None
     rating: Optional[str] = None
     visa_routes: list[str] = Field(default_factory=list)
     last_register_update: Optional[date] = None
+    # How many days since the Sponsor Register parquet was refreshed.
+    # Daily-updated source; a 13-day-old file is very different from a
+    # 1-day-old one. Surfaces the freshness gradient (architecture gap #9).
+    register_age_days: Optional[int] = None
+    # How confident the resolver is in the entity match (0.0-1.0).
+    # Below 0.95 AND alternative_matches non-empty → AMBIGUOUS tier.
+    # Architecture gap #1.
+    match_confidence: float = 1.0
+    # How the match was obtained.
+    match_path: MatchPath = "EXACT_NAME"
     source_status: SourceStatus = "OK"
     # Runner-up matches when scores cluster (top-K, K-1). Empty when the
     # primary match is unambiguous or there is no match at all.
@@ -524,6 +553,11 @@ class SocCheckResult(BaseModel):
     below_threshold: bool
     shortfall_gbp: Optional[int] = None
     new_entrant_eligible: bool = False
+    # Confidence in the SOC code assignment (0.0-1.0). The JD extractor
+    # guesses SOC from the JD text — a JD full of specific duties gets
+    # high confidence; a vague one gets low. Architecture gap #1.
+    match_confidence: float = 1.0
+    match_path: MatchPath = "EXACT_NAME"
     source_status: SourceStatus = "OK"
 
 
@@ -688,6 +722,10 @@ StretchConcernType = Literal[
     # SUSPICIOUS for the bundle backing this verdict. Surfaces as a
     # stretch concern so the user can see why the verdict downgraded.
     "CONTENT_INTEGRITY_CONCERN",
+    # NOT_LISTED with low match_confidence, non-empty alternative_matches,
+    # FUZZY_NAME match_path, or register_age_days >= 7 — see
+    # prompts/verdict.md AMBIGUITY TIER OVERRIDE (architecture gap #1).
+    "SPONSOR_AMBIGUITY",
 ]
 
 
@@ -739,6 +777,32 @@ class MotivationFitReport(BaseModel):
     motivation_evaluations: list[dict]
     deal_breaker_evaluations: list[dict]
     good_role_signal_evaluations: list[dict]
+
+
+# ---------------------------------------------------------------------------
+# Triage layer (architecture gap #4)
+# ---------------------------------------------------------------------------
+
+
+TriageClassification = Literal["SERIOUS", "EXPLORATORY", "DEFINITE_PASS"]
+
+
+class TriageResult(BaseModel):
+    """Pre-Phase-1 classification of a forwarded job. A Haiku call (~$0.02)
+    that gates whether the full $1-2 Phase 1 pipeline runs at all. Only
+    SERIOUS forwards get the full Opus verdict; DEFINITE_PASS gets a
+    lightweight "obvious fit" response; EXPLORATORY runs the verdict
+    with medium effort. Architecture gap #4.
+    """
+
+    classification: TriageClassification
+    # Brief reason (1 sentence) for the classification. Shown to the user
+    # as a progress tick before Phase 1 stream begins.
+    reasoning_brief: str
+    # When DEFINITE_PASS, which signals make it obvious:
+    # e.g. "user has 5+ years in exact tech stack, company is known
+    # sponsor, role title matches career history exactly".
+    obvious_signals: list[str] = Field(default_factory=list)
 
 
 class Verdict(BaseModel):

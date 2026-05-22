@@ -22,12 +22,15 @@ from .schemas import (
     CVOutput,
     DraftReplyOutput,
     ExtractedJobDescription,
+    GhostJobAssessment,
+    GhostJobJDScore,
     HardBlocker,
     JobSearchContext,
     LikelyQuestionsOutput,
     MotivationFitReport,
     Pack,
     ReasoningPoint,
+    RedFlagsReport,
     ResearchBundle,
     SalaryRecommendation,
     Session,
@@ -119,6 +122,91 @@ async def handle_forward_job(
     # Cache scraped pages from company_research
     for page in company_research.scraped_pages:
         await storage.cache_scraped_page(page.url, page.text, page.fetched_at)
+
+    # ── Phase 0: Triage (architecture gap #4) ──────────────────────────────
+    # A Haiku call (~$0.02) that gates whether the full $1-2 Phase 1
+    # pipeline runs at all. DEFINITE_PASS skips the pipeline entirely;
+    # EXPLORATORY runs the verdict with medium effort; SERIOUS gets the
+    # full Opus verdict. Single biggest cost-leverage move.
+    triage_result = None
+    try:
+        from .sub_agents.triage import classify as triage_classify
+        triage_result = await triage_classify(
+            jd=jd,
+            user=user,
+            retrieved_entries=None,  # triage is pre-retrieval by design
+        )
+        await mark("phase_0_triage")
+        log.info(
+            "Phase 0 triage: %s — %s",
+            triage_result.classification,
+            triage_result.reasoning_brief,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("Triage failed (non-fatal, defaults to SERIOUS): %s", exc)
+
+    if triage_result and triage_result.classification == "DEFINITE_PASS":
+        log.info(
+            "Triage DEFINITE_PASS — skipping Phase 1 pipeline for %s: %s",
+            job_url,
+            triage_result.reasoning_brief,
+        )
+        verdict = Verdict(
+            decision="NO_GO",
+            confidence_pct=95,
+            headline="Skip this one — " + triage_result.reasoning_brief[:80],
+            reasoning=[
+                ReasoningPoint(
+                    point=triage_result.reasoning_brief,
+                    citation=Citation(
+                        kind="gov_data",
+                        data_field="triage_classification",
+                        data_value="DEFINITE_PASS",
+                    ),
+                )
+            ],
+            hard_blockers=[
+                HardBlocker(
+                    type="DEAL_BREAKER_TRIGGERED",
+                    detail="Triage classified this as DEFINITE_PASS: "
+                    + triage_result.reasoning_brief,
+                    citation=Citation(
+                        kind="gov_data",
+                        data_field="triage_classification",
+                        data_value="DEFINITE_PASS",
+                    ),
+                )
+            ],
+            stretch_concerns=[],
+            motivation_fit=MotivationFitReport(
+                alignments=[],
+                misalignments=[],
+                no_signals=[],
+                deal_breaker_evaluations=[],
+                good_role_signal_evaluations=[],
+            ),
+        )
+        # Build minimal bundle so the session has the JD and company name
+        minimal_bundle = ResearchBundle(
+            session_id=session.session_id,
+            extracted_jd=jd,
+            company_research=company_research,
+            ghost_job=GhostJobAssessment(
+                probability="LIKELY_REAL",
+                signals=[],
+                confidence="LOW",
+                raw_jd_score=GhostJobJDScore(
+                    specificity_score=2.5,
+                    specificity_signals=[],
+                    vagueness_signals=[],
+                ),
+            ),
+            red_flags=RedFlagsReport(flags=[], checked=False),
+            bundle_completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        await storage.save_phase1_output(session.session_id, minimal_bundle)
+        await storage.save_verdict(session.session_id, verdict)
+        return minimal_bundle, verdict
 
     # ── Phase 1A.5: unified company identity resolution ────────────────────
     # One canonical name + CRN per real-world employer, shared by every
@@ -466,6 +554,23 @@ async def handle_forward_job(
         k=8,
     )
 
+    # Architecture gap #3 — outcome-to-verdict calibration. Before the
+    # verdict reasons about a company, recall the user's prior application
+    # outcomes so the agent can calibrate its confidence. The user who has
+    # ignored 5 NO_GOs and succeeded anyway gets a different verdict from
+    # the user with zero history.
+    prior_outcomes_text: Optional[str] = None
+    try:
+        from .memory.recall import recall_as_text
+
+        prior_outcomes_text = await recall_as_text(
+            user_id=user.user_id,
+            kind="application_outcome",
+            limit=10,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("Prior outcome recall failed (non-fatal): %s", exc)
+
     # Single verdict call. The ensemble path (parallel x2 with conservative
     # merge) was cut in the 2026-05-22 overhaul — voice-incompatible with
     # Picky's confident voice (ASKPICKY.md §10 "Cut entirely"). The deep-
@@ -476,6 +581,7 @@ async def handle_forward_job(
         user=user,
         retrieved_entries=retrieved,
         session_id=session.session_id,
+        prior_outcomes_text=prior_outcomes_text,
     )
 
     await storage.save_verdict(session.session_id, verdict)
@@ -1088,28 +1194,36 @@ async def handle_full_prep(
         handle_salary_advice(session, user, storage)
     )
 
-    results = await asyncio.gather(
+    (cv_result, cl_result, lq_result, sal_result,) = await asyncio.gather(
         cv_task, cl_task, lq_task, sal_task, return_exceptions=True
     )
 
     cv_out = cl_out = lq_out = sal_out = None
     files: dict[str, Path] = {}
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            log.error("full_prep sub-task %d failed: %s", i, result)
-            continue
-        if i == 0:
-            cv_out, cv_docx, cv_pdf = result
-            files["cv_docx"] = cv_docx
-            files["cv_pdf"] = cv_pdf
-        elif i == 1:
-            cl_out, cl_docx, cl_pdf = result
-            files["cover_letter_docx"] = cl_docx
-            files["cover_letter_pdf"] = cl_pdf
-        elif i == 2:
-            lq_out = result
-        elif i == 3:
-            sal_out = result
+
+    if isinstance(cv_result, Exception):
+        log.error("full_prep draft_cv failed: %s", cv_result)
+    else:
+        cv_out, cv_docx, cv_pdf = cv_result
+        files["cv_docx"] = cv_docx
+        files["cv_pdf"] = cv_pdf
+
+    if isinstance(cl_result, Exception):
+        log.error("full_prep draft_cover_letter failed: %s", cl_result)
+    else:
+        cl_out, cl_docx, cl_pdf = cl_result
+        files["cover_letter_docx"] = cl_docx
+        files["cover_letter_pdf"] = cl_pdf
+
+    if isinstance(lq_result, Exception):
+        log.error("full_prep predict_questions failed: %s", lq_result)
+    else:
+        lq_out = lq_result
+
+    if isinstance(sal_result, Exception):
+        log.error("full_prep salary_advice failed: %s", sal_result)
+    else:
+        sal_out = sal_result
 
     pack = Pack(
         session_id=session.session_id,

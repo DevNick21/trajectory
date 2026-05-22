@@ -395,8 +395,103 @@ async def upsert_user_profile(profile: UserProfile) -> None:
 # ---------------------------------------------------------------------------
 
 
-_embedding_model = None
+class EmbeddingStore:
+    """Owns the sentence-transformer model + FAISS index as instance
+    attributes rather than module-level globals. This makes multi-process
+    deployment possible (each process gets its own index) and simplifies
+    hot-reload scenarios. Previously these were module-level globals
+    guarded by threading locks — stable for single-process but a known
+    fragility for any multi-worker setup.
+
+    Lazily initialised on first use; thread-safe via instance lock.
+    """
+
+    def __init__(self) -> None:
+        self._model = None
+        self._index = None
+        self._id_map: list[str] = []
+        self._lock = threading.Lock()
+
+    def _get_model(self):
+        if self._model is None:
+            with self._lock:
+                if self._model is None:
+                    from sentence_transformers import SentenceTransformer
+
+                    self._model = SentenceTransformer(settings.embedding_model_name)
+        return self._model
+
+    def _ensure_index(self):
+        if self._index is not None:
+            return
+
+        with self._lock:
+            if self._index is not None:
+                return
+
+            import faiss
+
+            path = settings.faiss_index_path
+            id_map_path = Path(str(path) + ".ids.json")
+            if path.exists() and id_map_path.exists():
+                self._index = faiss.read_index(str(path))
+                self._id_map = json.loads(id_map_path.read_text())
+            else:
+                self._index = faiss.IndexFlatIP(settings.embedding_dim)
+                self._id_map = []
+
+    def get_index(self):
+        self._ensure_index()
+        return self._index, self._id_map
+
+    def save_sync(self) -> None:
+        import faiss
+
+        self._ensure_index()
+        path = settings.faiss_index_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        faiss.write_index(self._index, str(path))
+        Path(str(path) + ".ids.json").write_text(json.dumps(self._id_map))
+
+    def compute_embedding(self, text: str):
+        model = self._get_model()
+        return model.encode([text], convert_to_numpy=True, show_progress_bar=False)[0]
+
+    def add_to_index(self, entry_id: str, embedding) -> None:
+        self._ensure_index()
+        import numpy as np
+
+        vec = np.asarray([embedding], dtype=np.float32)
+        self._index.add(vec)
+        self._id_map.append(entry_id)
+
+    def search(self, query_vector, k: int = 5):
+        self._ensure_index()
+        import numpy as np
+
+        if len(self._id_map) == 0:
+            return [], []
+        vec = np.asarray([query_vector], dtype=np.float32)
+        return self._index.search(vec, min(k, len(self._id_map)))
+
+
+# Retain the old module-level API for backwards compat during migration.
+# New code should use ``EmbeddingStore`` instances directly.
+_embedding_store: Optional[EmbeddingStore] = None
+
+_embedding_model = None  # deprecated alias — kept for imports that bypass Storage
 _embedding_lock = threading.Lock()
+
+_faiss_index = None  # deprecated alias
+_faiss_id_map: list[str] = []
+_faiss_lock = threading.Lock()
+
+
+def _get_embedding_store() -> EmbeddingStore:
+    global _embedding_store
+    if _embedding_store is None:
+        _embedding_store = EmbeddingStore()
+    return _embedding_store
 
 
 def _get_embedding_model():
@@ -408,11 +503,6 @@ def _get_embedding_model():
 
                 _embedding_model = SentenceTransformer(settings.embedding_model_name)
     return _embedding_model
-
-
-_faiss_index = None
-_faiss_id_map: list[str] = []  # position-in-index -> entry_id
-_faiss_lock = threading.Lock()
 
 
 def _faiss():

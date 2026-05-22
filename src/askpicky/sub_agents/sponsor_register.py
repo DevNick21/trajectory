@@ -58,7 +58,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from ..config import settings
-from ..data_freshness import is_stale
+from ..data_freshness import age_days, is_stale
 from ..schemas import SponsorAlternativeMatch, SponsorStatus
 
 logger = logging.getLogger(__name__)
@@ -688,6 +688,39 @@ def _freshness_status() -> str:
     return "OK"
 
 
+def _register_age_days() -> Optional[int]:
+    """Freshness gradient (architecture gap #9). Surface the actual age
+    so the verdict can distinguish 1-day-old from 13-day-old data."""
+    return age_days(_parquet_path())
+
+
+def _match_confidence(best_score: float, threshold: float) -> float:
+    """Map a fuzzy-match score (0-100) to a 0.0-1.0 confidence.
+
+    >95 → 1.0 (exact/CRN match), 92-95 → 0.9, 85-92 → 0.7,
+    80-85 → 0.5, <80 → 0.3. These are calibrated against the Splink
+    rescoring band and the ambiguous_band thresholds in config.
+    """
+    if best_score >= 95:
+        return 1.0
+    if best_score >= 92:
+        return 0.9
+    if best_score >= 85:
+        return 0.7
+    if best_score >= 80:
+        return 0.5
+    return 0.3
+
+
+def _match_path(best_score: float, threshold: float) -> str:
+    """Map a fuzzy-match score to a MatchPath enum value."""
+    if best_score >= 95:
+        return "EXACT_NAME"
+    if best_score >= 80:
+        return "FUZZY_NAME"
+    return "NO_MATCH"
+
+
 # ---------------------------------------------------------------------------
 # Public lookup — signature unchanged for backwards compat
 # ---------------------------------------------------------------------------
@@ -695,6 +728,14 @@ def _freshness_status() -> str:
 
 def _lookup_sync(company_name: str) -> SponsorStatus:
     threshold = float(getattr(settings, "sponsor_match_threshold", 92.0))
+    freshness_status = _freshness_status()
+    reg_age = _register_age_days()
+    no_match_defaults = dict(
+        source_status=freshness_status,
+        register_age_days=reg_age,
+        match_confidence=0.0,
+        match_path="NO_MATCH",
+    )
     try:
         idx = _get_index()
     except FileNotFoundError as e:
@@ -702,14 +743,14 @@ def _lookup_sync(company_name: str) -> SponsorStatus:
         return SponsorStatus(
             status="NOT_LISTED",
             matched_name=None,
-            source_status=_freshness_status(),
+            **no_match_defaults,
         )
     except Exception as e:  # pragma: no cover — guard against pandas/parquet errors
         logger.error("Sponsor index build failed: %s", e)
         return SponsorStatus(
             status="NOT_LISTED",
             matched_name=None,
-            source_status=_freshness_status(),
+            **no_match_defaults,
         )
 
     matches = _topk_matches(
@@ -719,7 +760,7 @@ def _lookup_sync(company_name: str) -> SponsorStatus:
         return SponsorStatus(
             status="NOT_LISTED",
             matched_name=None,
-            source_status=_freshness_status(),
+            **no_match_defaults,
         )
 
     best = matches[0]
@@ -757,6 +798,9 @@ def _lookup_sync(company_name: str) -> SponsorStatus:
         rating=rating or None,
         visa_routes=visa_routes,
         last_register_update=_last_updated(idx.df, idx.last_updated_col),
+        register_age_days=_register_age_days(),
+        match_confidence=_match_confidence(best.score, threshold),
+        match_path=_match_path(best.score, threshold),
         source_status=_freshness_status(),
         alternative_matches=alternative_matches,
     )

@@ -77,3 +77,21 @@ def is_stale(
     if fetched.tzinfo is None:
         fetched = fetched.replace(tzinfo=timezone.utc)
     return datetime.now(timezone.utc) - fetched > timedelta(days=window_days)
+
+
+def age_days(parquet_path: Path) -> Optional[int]:
+    """Return the age of the parquet in whole days, or None when unknown.
+
+    This is the freshness gradient (architecture gap #9). Instead of a
+    binary OK/STALE flag, the verdict prompt can reason with the actual
+    age: a 13-day-old Sponsor Register (updated daily) is very different
+    from a 1-day-old one. Callers can surface this as
+    `register_age_days` / `data_age_days` on their output payload.
+    """
+    fetched = read_fetched_at(parquet_path)
+    if fetched is None:
+        return None
+    if fetched.tzinfo is None:
+        fetched = fetched.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - fetched
+    return delta.days

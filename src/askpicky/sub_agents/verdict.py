@@ -121,12 +121,15 @@ def _build_user_input(
     bundle: ResearchBundle,
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
+    prior_outcomes_text: Optional[str] = None,
 ) -> str:
     payload = {
         "user_profile": _serialise_user(user),
         "research_bundle": _serialise_bundle(bundle),
         "retrieved_career_entries": _serialise_entries(retrieved_entries),
     }
+    if prior_outcomes_text and prior_outcomes_text != "[no prior cross-application history for this user]":
+        payload["prior_application_outcomes"] = prior_outcomes_text
     return json.dumps(payload, default=str, indent=2)
 
 
@@ -245,6 +248,7 @@ async def generate(
     user: UserProfile,
     retrieved_entries: list[CareerEntry],
     session_id: Optional[str] = None,
+    prior_outcomes_text: Optional[str] = None,
 ) -> Verdict:
     if _mock_enabled():
         logger.warning(
@@ -259,7 +263,7 @@ async def generate(
         career_entries=retrieved_entries,
     )
 
-    user_input = _build_user_input(research_bundle, user, retrieved_entries)
+    user_input = _build_user_input(research_bundle, user, retrieved_entries, prior_outcomes_text)
 
     system_prompt = SYSTEM_PROMPT
     if settings.enable_source_status_verdict:
