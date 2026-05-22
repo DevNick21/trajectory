@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 const PICKY_COMMENTS = [
-  "Let's start with the basics. Any old CV will do—I'll strip the fluff.",
+  "Let's start with the basics. Any old CV will do.",
   "Your name and current coordinates. Just so I know who I'm working for.",
   "The Bureaucracy. If you need a sponsor, I'll check every company's register entry.",
   "Let's talk numbers. I'll compare these against ASHE market percentiles.",
