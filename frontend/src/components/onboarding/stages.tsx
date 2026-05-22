@@ -6,7 +6,12 @@
 
 import { useState } from "react";
 
-import { ApiError, importCV, type CVImportResponse } from "@/lib/api";
+import {
+  ApiError,
+  enrichCV,
+  importCV,
+  type CVImportResponse,
+} from "@/lib/api";
 import type { OnboardingAnswers } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,12 +41,16 @@ function applyCVImportToAnswers(
   imp: CVImportResponse,
   current: OnboardingAnswers,
 ): Partial<OnboardingAnswers> {
-  // Build a career-narrative paragraph from the extracted roles so the
-  // free-text "Career so far" stage already has substance the user can
-  // edit. Skip if the user has already typed something there.
-  const narrative = current.career_narrative.trim()
-    ? current.career_narrative
-    : imp.roles
+  // "Career so far" is filled from (in order of preference):
+  //   1. What the user has already typed (don't overwrite)
+  //   2. The Haiku-generated narrative bio from /cv_enrich
+  //   3. A bullet-stitched fallback from extracted roles (tier-0)
+  let narrative = current.career_narrative;
+  if (!narrative.trim()) {
+    if (imp.narrative && imp.narrative.trim()) {
+      narrative = imp.narrative.trim();
+    } else if (imp.roles.length > 0) {
+      narrative = imp.roles
         .slice(0, 3)
         .map(
           (r) =>
@@ -49,6 +58,8 @@ function applyCVImportToAnswers(
         )
         .filter(Boolean)
         .join("\n\n");
+    }
+  }
 
   // Use the raw CV text as the first writing sample. style_extractor
   // benefits more from one full CV than from a 3-line "I am passionate
@@ -71,6 +82,7 @@ function applyCVImportToAnswers(
 
 export function StageCVUpload({ answers, update }: StageProps) {
   const [busy, setBusy] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [last, setLast] = useState<CVImportResponse | null>(null);
 
@@ -78,9 +90,32 @@ export function StageCVUpload({ answers, update }: StageProps) {
     setError(null);
     setBusy(true);
     try {
-      const out = await importCV(file);
-      setLast(out);
-      update(applyCVImportToAnswers(out, answers));
+      // Tier-0: regex + heuristics, returns in ~2s with name, email,
+      // location, and role skeletons. The wizard advances on this.
+      const tier0 = await importCV(file);
+      setLast(tier0);
+      update(applyCVImportToAnswers(tier0, answers));
+
+      // Tier-1 (Haiku, ~5s): bullets, education, projects, narrative.
+      // Fires in the background so the user can keep editing the
+      // already-populated fields. Failures are silent — tier-0 was
+      // enough to get going.
+      if (tier0.raw_text && tier0.raw_text.length > 50) {
+        setEnriching(true);
+        enrichCV(tier0.raw_text)
+          .then((tier1) => {
+            // Merge — keep the user's edits, fill in only what they
+            // haven't touched. applyCVImportToAnswers already handles
+            // the "don't overwrite typed text" guard.
+            setLast(tier1);
+            update(applyCVImportToAnswers(tier1, answers));
+          })
+          .catch(() => {
+            // Silent — tier-0 is already in the form. Don't alarm the
+            // user about a background enrichment failure.
+          })
+          .finally(() => setEnriching(false));
+      }
     } catch (err) {
       const msg =
         err instanceof ApiError
@@ -125,6 +160,10 @@ export function StageCVUpload({ answers, update }: StageProps) {
         />
         {busy ? (
           <span className="text-sm">Reading your CV…</span>
+        ) : enriching ? (
+          <span className="text-sm text-muted-foreground">
+            CV imported · enriching bullets in the background…
+          </span>
         ) : (
           <>
             <span className="text-sm font-medium">

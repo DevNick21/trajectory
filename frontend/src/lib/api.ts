@@ -272,6 +272,10 @@ export interface CVImportResponse {
   education: CVImportEducation[];
   projects: CVImportProject[];
   skills: string[];
+  // 2-3 paragraph chronological narrative bio. Tier-0 returns null;
+  // /cv_enrich populates this from the same Haiku call that fills the
+  // bullets / education / projects.
+  narrative?: string | null;
   raw_text: string;
   extraction_confidence: number;
 }
@@ -300,6 +304,18 @@ export const importCV = async (file: File): Promise<CVImportResponse> => {
     throw new ApiError(resp.status, code, message);
   }
   return (await resp.json()) as CVImportResponse;
+};
+
+// Tier-1 enrichment over already-extracted CV text. Runs on Haiku
+// (~5s) and returns the same CVImportResponse shape with bullets,
+// education, projects, narrative populated. The wizard fires this
+// in the background once tier-0 returns so the user can keep editing
+// the visible fields while the slower bits land.
+export const enrichCV = async (rawText: string): Promise<CVImportResponse> => {
+  return request<CVImportResponse>("/api/onboarding/cv_enrich", {
+    method: "POST",
+    body: JSON.stringify({ raw_text: rawText }),
+  });
 };
 
 // ---------------------------------------------------------------------------
