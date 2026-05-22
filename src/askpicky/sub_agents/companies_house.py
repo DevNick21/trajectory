@@ -210,6 +210,44 @@ def _count_recent_psc_changes(psc_items: list[dict]) -> int:
     return count
 
 
+def _extract_corporate_parents(psc_items: list[dict]) -> list[dict]:
+    """Pull corporate (non-individual) PSCs out of the raw PSC items.
+
+    Architecture gap #2 — when the JD's company is a subsidiary, the
+    Sponsor Register lookup against that exact name returns NOT_LISTED
+    but the parent IS often on the register. We return one row per
+    corporate parent for the orchestrator's parent-walk step.
+
+    Filters:
+      - Only `kind in {corporate-entity-person-with-significant-control,
+        legal-person-person-with-significant-control}` — skip individuals.
+      - Skip parents whose `ceased_on` is set (no longer in control).
+      - Deduplicate by name.
+
+    Returns dicts of {name, crn, kind}. Caller wraps in ParentCompany.
+    """
+    _CORPORATE_KINDS = {
+        "corporate-entity-person-with-significant-control",
+        "legal-person-person-with-significant-control",
+    }
+    seen: set[str] = set()
+    out: list[dict] = []
+    for p in psc_items:
+        kind = (p.get("kind") or "").lower()
+        if kind not in _CORPORATE_KINDS:
+            continue
+        if p.get("ceased_on"):
+            continue
+        name = (p.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        ident = p.get("identification") or {}
+        crn = ident.get("registration_number") or None
+        out.append({"name": name, "crn": str(crn) if crn else None, "kind": kind})
+    return out
+
+
 def _pick_best_search_hit(
     query: str,
     hits: list[dict],
@@ -349,6 +387,9 @@ async def lookup(
     resignations_6mo, appointments_6mo = _count_recent_director_changes(officers)
     charges_6mo = _count_recent_charges(charges)
     psc_6mo = _count_recent_psc_changes(psc_items)
+    corporate_parents = _extract_corporate_parents(psc_items)
+
+    from ..schemas import ParentCompany
 
     return CompaniesHouseSnapshot(
         company_number=company_number,
@@ -366,4 +407,5 @@ async def lookup(
         recent_director_appointments_6mo=appointments_6mo,
         recent_charges_6mo=charges_6mo,
         psc_changes_6mo=psc_6mo,
+        parent_companies=[ParentCompany(**p) for p in corporate_parents],
     )

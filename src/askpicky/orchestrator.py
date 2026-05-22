@@ -487,6 +487,18 @@ async def handle_forward_job(
         return_exceptions=False,
     )
 
+    # Architecture gap #2 — parent/subsidiary CRN walk. When the JD's
+    # company is a subsidiary that's NOT_LISTED on the Sponsor Register
+    # but the parent IS, re-lookup against each corporate PSC parent
+    # name and surface matches as alternative_matches with
+    # match_path=LOOKS_LIKE_SUB_ENTITY. Skipped when sponsor lookup
+    # already found a match or no CH parents exist.
+    sponsor_status = await _walk_parent_sponsors(
+        sponsor_status=sponsor_status,
+        ch_snapshot=ch_snapshot,
+        sr_agent=sr_agent,
+    )
+
     # Emitter flush is the caller's responsibility now (Wave 1 ADR-002).
     # bot/handlers.py calls emitter.close() → streamer.flush() on the
     # Telegram path; api/routes/sessions.py closes the SSEEmitter in
@@ -638,6 +650,80 @@ async def _load_session_bundle(
     if session.phase1_output:
         return ResearchBundle.model_validate(session.phase1_output)
     return None
+
+
+async def _walk_parent_sponsors(
+    *,
+    sponsor_status,
+    ch_snapshot,
+    sr_agent,
+):
+    """Architecture gap #2 — parent/subsidiary CRN walk.
+
+    When the JD's company is a subsidiary that's NOT_LISTED on the
+    Sponsor Register but its corporate PSC parents may be listed,
+    re-lookup each parent and append matches to
+    `sponsor_status.alternative_matches` with
+    match_path=LOOKS_LIKE_SUB_ENTITY.
+
+    Pure additive — never demotes an existing match. Returns the
+    (possibly-updated) sponsor_status. No-op when:
+      - sponsor already found a primary match (status != NOT_LISTED), OR
+      - companies_house didn't return parent_companies, OR
+      - all parents are unlisted too.
+    """
+    from .schemas import SponsorAlternativeMatch
+
+    if sponsor_status is None or ch_snapshot is None:
+        return sponsor_status
+    if sponsor_status.status != "NOT_LISTED":
+        return sponsor_status
+    parents = ch_snapshot.parent_companies
+    if not parents:
+        return sponsor_status
+
+    new_matches: list[SponsorAlternativeMatch] = list(
+        sponsor_status.alternative_matches or []
+    )
+    matched_any = False
+    for parent in parents:
+        try:
+            parent_status = await sr_agent.lookup(parent.name)
+        except Exception as exc:  # pragma: no cover - defensive
+            log.warning(
+                "Parent-walk sponsor lookup failed for %r: %s",
+                parent.name, exc,
+            )
+            continue
+        if parent_status.status in {"LISTED", "B_RATED", "SUSPENDED"}:
+            matched_any = True
+            new_matches.append(
+                SponsorAlternativeMatch(
+                    matched_name=(
+                        parent_status.matched_name or parent.name
+                    ),
+                    rating=parent_status.rating,
+                    status=parent_status.status,
+                    # Best-confidence sentinel: a parent-walked match
+                    # is high-recall but low-direct-relevance. Score
+                    # 80 (above the alt-match threshold) so the
+                    # verdict prompt's AMBIGUITY TIER picks it up.
+                    score=80.0,
+                )
+            )
+
+    if not matched_any:
+        return sponsor_status
+
+    # Demote status to AMBIGUOUS so the verdict prompt's tier override
+    # routes NOT_LISTED → stretch concern instead of hard blocker.
+    return sponsor_status.model_copy(
+        update={
+            "status": "AMBIGUOUS",
+            "match_path": "LOOKS_LIKE_SUB_ENTITY",
+            "alternative_matches": new_matches,
+        }
+    )
 
 
 async def _get_style_profile(

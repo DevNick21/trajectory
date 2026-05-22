@@ -39,16 +39,25 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS:
 
    **AMBIGUITY TIER OVERRIDE (added 2026-05-22):** NOT_LISTED alone
    is NOT a hard blocker when ANY of these conditions are true
-   (architecture gap #1):
+   (architecture gaps #1 + #2):
    - sponsor_register.match_confidence < 0.95
    - sponsor_register.alternative_matches is non-empty
    - sponsor_register.register_age_days >= 7
-   - sponsor_register.match_path == "FUZZY_NAME" or == "NO_MATCH"
+   - sponsor_register.match_path == "FUZZY_NAME" or == "NO_MATCH" or
+     == "LOOKS_LIKE_SUB_ENTITY"
+   - sponsor_register.status == "AMBIGUOUS"
 
    In these cases classify as AMBIGUOUS_SPONSOR (stretch concern,
    not hard blocker). Surface the alternative matches and the
-   register age to the user. Recommend they verify directly with
-   the company or on gov.uk.
+   register age to the user.
+
+   **Parent-walk specifically:** when match_path ==
+   "LOOKS_LIKE_SUB_ENTITY", the orchestrator found that the JD's
+   company is a subsidiary whose parent IS on the register. The
+   alternative_matches list holds the parent name(s). Tell the user
+   to confirm with the recruiter whether the visa would be sponsored
+   by the parent (a common arrangement) or whether the subsidiary
+   has its own separate licence (it usually doesn't).
 
    **AGENCY POSTING TIER OVERRIDE (added 2026-05-22):** when
    extracted_jd.is_agency_post == true, the Sponsor Register lookup

@@ -481,6 +481,21 @@ class ExtractedJobDescription(BaseModel):
     agency_signals: list[str] = Field(default_factory=list)
 
 
+class ParentCompany(BaseModel):
+    """A corporate Person-with-Significant-Control extracted from CH.
+
+    When the JD's company is a subsidiary (e.g. "Acme Tech Ltd"), the
+    Sponsor Register lookup against that exact name returns NOT_LISTED
+    — but the parent ("Acme Holdings Plc") may well be on the register.
+    Architecture gap #2. The orchestrator surfaces matched parents as
+    alternative_matches with match_path=LOOKS_LIKE_SUB_ENTITY.
+    """
+
+    name: str
+    crn: Optional[str] = None
+    kind: Optional[str] = None  # "corporate-entity-person-with-significant-control"
+
+
 class CompaniesHouseSnapshot(BaseModel):
     company_number: str
     status: Literal[
@@ -516,6 +531,14 @@ class CompaniesHouseSnapshot(BaseModel):
     # Architecture gaps #1 + #2.
     match_confidence: float = 1.0
     match_path: MatchPath = "EXACT_NAME"
+    # Corporate Persons-with-Significant-Control — i.e. the parent
+    # entities that own the subject company. Architecture gap #2: the
+    # JD's company is often a subsidiary that's NOT_LISTED on the
+    # Sponsor Register, but the parent IS. Surfaced so the verdict
+    # agent and the orchestrator's parent-walk can re-lookup against
+    # parent names. Empty when the company has no corporate PSCs
+    # (sole-director SMEs) or when the PSC endpoint failed.
+    parent_companies: list[ParentCompany] = Field(default_factory=list)
     source_status: SourceStatus = "OK"
 
 
