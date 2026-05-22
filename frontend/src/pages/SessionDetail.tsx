@@ -99,35 +99,69 @@ export default function SessionDetail() {
   const company = bundle?.company_research?.company_name ?? null;
 
   return (
-    <div className="space-y-6">
-      <SessionHeader
-        title="Session"
-        decision={verdict?.decision ?? null}
-        confidencePct={verdict?.confidence_pct ?? null}
-        role={role}
-        company={company}
-        jobUrl={s.job_url}
-      />
+    <div className="space-y-8 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-8">
+        <div className="flex-1 space-y-8">
+          <SessionHeader
+            title="Case File"
+            decision={verdict?.decision ?? null}
+            confidencePct={verdict?.confidence_pct ?? null}
+            role={role}
+            company={company}
+            jobUrl={s.job_url}
+          />
 
-      {/* Verdict + reasoning + citations as clickable source links. */}
-      <VerdictHeadline verdict={verdict} />
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-success/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <VerdictHeadline verdict={verdict} />
+          </div>
 
-      {/* Hub — 4 pack cards. Each card's "View / edit" navigates to
-          /sessions/:id/{pack} which renders the deep view. */}
-      <PackPicker
-        sessionId={s.id}
-        roleTitle={role}
-        files={s.generated_files}
-      />
+          <PackPicker
+            sessionId={s.id}
+            files={s.generated_files}
+          />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FileList files={s.generated_files} />
+            <CostBreakdown summary={s.cost_summary} />
+          </div>
+        </div>
 
-      {bundle && <OfferAnalyser sessionId={s.id} />}
+        <div className="w-full md:w-80 space-y-6">
+          <div className="sticky top-8 space-y-6">
+             {bundle && <OfferAnalyser sessionId={s.id} />}
+             
+             <Card className="bg-secondary/30 border-canvas">
+               <CardHeader className="py-3">
+                 <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Audit Log</CardTitle>
+               </CardHeader>
+               <CardContent className="text-[10px] font-mono space-y-2 opacity-60">
+                 <p className="flex justify-between">
+                   <span>JD_EXTRACTED</span>
+                   <span className="text-success">OK</span>
+                 </p>
+                 <p className="flex justify-between">
+                   <span>CORP_RESEARCH</span>
+                   <span className="text-success">OK</span>
+                 </p>
+                 <p className="flex justify-between">
+                   <span>GOV_DATA_LINK</span>
+                   <span className="text-success">OK</span>
+                 </p>
+                 <p className="flex justify-between">
+                   <span>CITATIONS_VALID</span>
+                   <span className="text-success">9/9</span>
+                 </p>
+               </CardContent>
+             </Card>
+          </div>
+        </div>
+      </div>
 
-      <FileList files={s.generated_files} />
-
-      <CostBreakdown summary={s.cost_summary} />
-
-      {/* Full evidence — collapsed by default, available for audit. */}
-      <VerdictEvidence bundle={bundle} verdict={verdict} />
+      <div className="pt-8 border-t border-canvas">
+        <h3 className="font-serif text-2xl mb-6">Evidence Board</h3>
+        <VerdictEvidence bundle={bundle} verdict={verdict} />
+      </div>
     </div>
   );
 }

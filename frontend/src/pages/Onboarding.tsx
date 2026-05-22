@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "motion/react";
+import PickyAvatar from "@/components/PickyAvatar";
 
 import { ApiError, finaliseOnboarding } from "@/lib/api";
 import {
@@ -10,12 +12,21 @@ import {
 } from "@/lib/onboarding";
 import { STAGES } from "@/components/onboarding/stages";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-// Eight-stage wizard. Persistence is localStorage (ADR-003 — no
-// server-side session state). On finalise the draft is cleared and
-// the user lands back on /.
+const PICKY_COMMENTS = [
+  "Let's start with the basics. Any old CV will do—I'll strip the fluff.",
+  "Your name and current coordinates. Just so I know who I'm working for.",
+  "The Bureaucracy. If you need a sponsor, I'll check every company's register entry.",
+  "Let's talk numbers. I'll compare these against ASHE market percentiles.",
+  "How urgent is this? I need to know how hard to push on salary.",
+  "What actually gets you out of bed? I'll score roles against these.",
+  "What makes you walk away? I'll flag these as HARD BLOCKERS.",
+  "The Narrative. Tell it your way—I'll use it to ground my drafts.",
+  "Your Voice. Paste samples so I don't sound like a generic bot.",
+  "Final Review. Scrutinize everything before I commit it to the archive."
+];
 
 export default function Onboarding() {
   const { answers, update, reset } = useOnboardingDraft();
@@ -37,7 +48,7 @@ export default function Onboarding() {
     const result = validateForFinalise(answers);
     if (!result.ok) {
       setSubmitError(
-        `Still missing: ${result.missing.join(", ")}. Go back and fill those in.`,
+        `Missing critical parameters: ${result.missing.join(", ")}.`,
       );
       return;
     }
@@ -54,7 +65,7 @@ export default function Onboarding() {
           ? err.message
           : err instanceof Error
             ? err.message
-            : "Finalise failed.";
+            : "Calibration failed.";
       setSubmitError(message);
     } finally {
       setIsSubmitting(false);
@@ -64,67 +75,112 @@ export default function Onboarding() {
   const StageComponent = currentStage?.component ?? null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <ProgressStrip total={totalSteps} active={stepIndex} />
-
-      <Card>
-        <CardHeader>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Step {stepIndex + 1} of {totalSteps} ·{" "}
-            {isReview ? "Review" : currentStage!.title}
-          </p>
-        </CardHeader>
-        <CardContent>
-          {StageComponent ? (
-            <StageComponent answers={answers} update={update} />
-          ) : (
-            <ReviewPanel />
-          )}
-        </CardContent>
-      </Card>
-
-      {submitError && (
-        <p className="text-sm text-destructive" role="alert">
-          {submitError}
+    <div className="max-w-4xl mx-auto px-4 py-12">
+      <div className="flex flex-col items-center mb-12 text-center">
+        <PickyAvatar state={isSubmitting ? "thinking" : "idle"} className="h-24 w-24 mb-6" />
+        <h1 className="font-serif text-3xl mb-2">Picky Calibration</h1>
+        <p className="text-muted-foreground font-mono text-xs uppercase tracking-widest">
+          Step {stepIndex + 1} of {totalSteps} — {isReview ? "Final Review" : currentStage?.title}
         </p>
-      )}
-
-      <div className="flex items-center justify-between">
-        <Button
-          variant="outline"
-          onClick={goBack}
-          disabled={stepIndex === 0 || isSubmitting}
-        >
-          ← Back
-        </Button>
-        {isReview ? (
-          <Button onClick={handleFinalise} disabled={isSubmitting}>
-            {isSubmitting ? "Finalising…" : "Finish onboarding"}
-          </Button>
-        ) : (
-          <Button onClick={goNext}>Next →</Button>
-        )}
       </div>
-    </div>
-  );
-}
 
-// ---------------------------------------------------------------------------
-// Progress strip — pills, one per step
-// ---------------------------------------------------------------------------
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-start">
+        <div className="md:col-span-4 space-y-6 hidden md:block">
+          <Card className="bg-secondary/30 border-canvas overflow-hidden">
+            <div className="h-1 bg-primary/20 w-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-primary"
+                initial={{ width: "0%" }}
+                animate={{ width: `${((stepIndex + 1) / totalSteps) * 100}%` }}
+              />
+            </div>
+            <CardContent className="p-6">
+              <p className="font-serif italic text-lg leading-relaxed mb-4">
+                "{PICKY_COMMENTS[stepIndex]}"
+              </p>
+              <div className="pt-4 border-t border-canvas space-y-4">
+                 {STAGES.map((s, i) => (
+                   <div key={s.key} className={cn(
+                     "flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest transition-opacity",
+                     i === stepIndex ? "opacity-100 text-primary" : i < stepIndex ? "opacity-40" : "opacity-20"
+                   )}>
+                     <div className={cn("h-1.5 w-1.5 rounded-full", i <= stepIndex ? "bg-primary" : "bg-muted")} />
+                     {s.title}
+                   </div>
+                 ))}
+                 <div className={cn(
+                   "flex items-center gap-3 text-[10px] font-mono uppercase tracking-widest transition-opacity",
+                   isReview ? "opacity-100 text-primary" : "opacity-20"
+                 )}>
+                   <div className={cn("h-1.5 w-1.5 rounded-full", isReview ? "bg-primary" : "bg-muted")} />
+                   Review
+                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-function ProgressStrip({ total, active }: { total: number; active: number }) {
-  return (
-    <div className="flex gap-1">
-      {Array.from({ length: total }, (_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "h-1.5 flex-1 rounded-full transition-colors",
-            i <= active ? "bg-primary" : "bg-muted",
+        <div className="md:col-span-8 space-y-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={stepIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="shadow-2xl shadow-primary/5 border-canvas">
+                <CardContent className="p-8">
+                  {StageComponent ? (
+                    <StageComponent answers={answers} update={update} />
+                  ) : (
+                    <ReviewPanel />
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </AnimatePresence>
+
+          {submitError && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-mono"
+            >
+              <span className="font-bold mr-2">CALIBRATION ERROR:</span>
+              {submitError}
+            </motion.div>
           )}
-        />
-      ))}
+
+          <div className="flex items-center justify-between pt-4">
+            <Button
+              variant="ghost"
+              className="font-mono text-xs uppercase tracking-widest"
+              onClick={goBack}
+              disabled={stepIndex === 0 || isSubmitting}
+            >
+              [ Previous ]
+            </Button>
+            
+            {isReview ? (
+              <Button 
+                onClick={handleFinalise} 
+                disabled={isSubmitting}
+                className="font-bold uppercase tracking-[0.2em] px-8 h-12"
+              >
+                {isSubmitting ? "Processing..." : "Commit Profile"}
+              </Button>
+            ) : (
+              <Button 
+                onClick={goNext}
+                className="font-bold uppercase tracking-[0.2em] px-8 h-12"
+              >
+                Continue →
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -135,26 +191,32 @@ function ProgressStrip({ total, active }: { total: number; active: number }) {
 
 function ReviewPanel() {
   return (
-    <div className="space-y-3 text-sm">
-      <h2 className="text-lg font-semibold">Ready to go?</h2>
-      <p className="text-muted-foreground">
-        Finishing writes your profile to the shared store. Both
-        Telegram and the web surface read from it after this.
-      </p>
-      <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-        <li>
-          Motivations, deal-breakers, and green flags are parsed
-          server-side — plain text is fine.
-        </li>
-        <li>
-          Writing samples feed a one-shot Opus pass that builds your
-          style profile. That's what makes generated output sound like
-          you, not AI.
-        </li>
-        <li>
-          You can skip back and edit anything before hitting finish.
-        </li>
-      </ul>
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-2xl font-serif">Confirm Archive Details</h2>
+        <p className="text-muted-foreground text-sm">
+          Committing this profile will calibrate my search filters and writing generators. You can always re-calibrate later.
+        </p>
+      </div>
+      
+      <div className="grid grid-cols-1 gap-4 font-mono text-[10px] uppercase tracking-widest opacity-60">
+        <div className="p-4 rounded-xl border border-canvas flex justify-between">
+          <span>Sponsor Register Audit</span>
+          <span className="text-success">READY</span>
+        </div>
+        <div className="p-4 rounded-xl border border-canvas flex justify-between">
+          <span>Salary Percentile Link</span>
+          <span className="text-success">READY</span>
+        </div>
+        <div className="p-4 rounded-xl border border-canvas flex justify-between">
+          <span>Voice Style Profiler</span>
+          <span className="text-success">READY</span>
+        </div>
+      </div>
+
+      <div className="p-4 rounded-xl bg-secondary/30 border border-canvas italic text-sm text-muted-foreground">
+        "I'm ready when you are. Just hit that button and let's get to work. There are a lot of bad jobs out there, and someone needs to find them before you do."
+      </div>
     </div>
   );
 }

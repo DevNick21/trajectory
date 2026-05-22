@@ -1,3 +1,6 @@
+import CommandPalette from "@/components/CommandPalette";
+import PickyAvatar from "@/components/PickyAvatar";
+import SidebarStatus from "@/components/SidebarStatus";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
@@ -13,66 +16,82 @@ import { cn } from "@/lib/utils";
 
 const navLink = ({ isActive }: { isActive: boolean }) =>
   cn(
-    "text-sm transition-colors",
+    "flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-200 group",
     isActive
-      ? "text-foreground font-medium"
-      : "text-foreground/60 hover:text-foreground",
+      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-medium"
+      : "text-muted-foreground hover:bg-secondary hover:text-foreground",
   );
 
 export default function App() {
   return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b border-canvas">
-        <div className="container flex h-14 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
-            <span
-              aria-hidden
-              className="flex h-7 w-7 items-center justify-center rounded-sm bg-primary text-primary-foreground text-sm font-bold font-mono leading-none"
-            >
-              ?
-            </span>
-            <span className="font-semibold tracking-tight text-foreground">
-              AskPicky
-            </span>
-            <span className="hidden sm:inline text-xs text-foreground/40 tracking-tight">
-              verify before you apply
-            </span>
+    <div className="min-h-screen flex bg-background text-foreground overflow-hidden">
+      <aside className="w-64 border-r border-canvas flex flex-col bg-card/30 backdrop-blur-xl">
+        <div className="p-6">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-2xl shadow-primary/20">
+              <PickyAvatar />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-serif text-xl leading-tight">AskPicky</span>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">
+                Research Lab
+              </span>
+            </div>
           </Link>
-          <nav className="flex items-center gap-5">
-            <NavLink to="/" end className={navLink}>
-              Dashboard
-            </NavLink>
-            <NavLink to="/applications" className={navLink}>
-              Applications
-            </NavLink>
-            <NavLink to="/queue" className={navLink}>
-              Queue
-            </NavLink>
-            <NavLink to="/offer" className={navLink}>
-              Offer
-            </NavLink>
-            <NavLink to="/onboarding" className={navLink}>
-              Profile
-            </NavLink>
-          </nav>
         </div>
-      </header>
-      <main className="flex-1 container py-8">
-        <OnboardingGate>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/applications" element={<Applications />} />
-            <Route path="/queue" element={<Queue />} />
-            <Route path="/offer" element={<Offer />} />
-            <Route path="/sessions/:id" element={<SessionDetail />} />
-            <Route path="/sessions/:id/:pack" element={<SessionPack />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-          </Routes>
-        </OnboardingGate>
-      </main>
-      {/* App-wide toast surface. richColors maps the four
-          (success / info / warning / error) variants to the colors in
-          the mockup. */}
+
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          <NavLink to="/" end className={navLink}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/applications" className={navLink}>
+            Applications
+          </NavLink>
+          <NavLink to="/queue" className={navLink}>
+            Queue
+          </NavLink>
+          <NavLink to="/offer" className={navLink}>
+            Offer
+          </NavLink>
+          <div className="pt-4 mt-4 border-t border-canvas">
+            <NavLink to="/onboarding" className={navLink}>
+              User Profile
+            </NavLink>
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-canvas">
+          <SidebarStatus />
+        </div>
+      </aside>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-14 border-b border-canvas flex items-center px-8 justify-between bg-background/50 backdrop-blur-md z-10">
+          <div className="flex items-center gap-4">
+            <span className="text-xs text-muted-foreground font-mono">system.status == "ALIVE"</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <CommandPalette />
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-8 relative">
+          <OnboardingGate>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/applications" element={<Applications />} />
+              <Route path="/queue" element={<Queue />} />
+              <Route path="/offer" element={<Offer />} />
+              <Route path="/sessions/:id" element={<SessionDetail />} />
+              <Route path="/sessions/:id/:pack" element={<SessionPack />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+            </Routes>
+          </OnboardingGate>
+        </main>
+      </div>
+
+      {/* Toaster sits top-right so it doesn't collide with the
+          ChatDrawer floating launcher in the bottom-right corner. */}
       <Toaster theme="dark" richColors closeButton position="top-right" />
       <ChatDrawer />
     </div>

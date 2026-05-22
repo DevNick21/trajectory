@@ -74,6 +74,7 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        serif: ["Fraunces", "serif"],
         mono: [
           "JetBrains Mono",
           "ui-monospace",

@@ -68,21 +68,24 @@ export default function CareerHistory({
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">My career history</CardTitle>
+    <Card className="bg-secondary/20 border-canvas h-full flex flex-col">
+      <CardHeader className="py-3 bg-secondary/40 border-b border-canvas">
+        <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
+          <span>Source Repository</span>
+          <span className="opacity-40">{q.data?.entries.length ?? 0} NODES</span>
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto p-4 custom-scrollbar">
         {q.isPending ? (
-          <div className="space-y-2">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
+          <div className="space-y-4">
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
           </div>
         ) : q.isError ? (
-          <p className="text-sm text-destructive">
-            Couldn&rsquo;t load career entries.
-          </p>
+          <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/10 text-[10px] font-mono text-destructive uppercase">
+            SYNC_FAILURE: CONNECTION_TIMEOUT
+          </div>
         ) : (
           <CareerList
             entries={q.data?.entries ?? []}
@@ -163,10 +166,6 @@ function EntryCard({
   const Icon = KIND_ICON[entry.kind] ?? FileText;
   const ref = useRef<HTMLLIElement>(null);
 
-  // Smooth-scroll into view when this entry becomes the citation target.
-  // Tracks `shouldScroll` flips so the same entry can be re-targeted by
-  // re-clicking a bullet (the parent reducer already mints a fresh
-  // scrollKey on every select_bullet action).
   useEffect(() => {
     if (shouldScroll && ref.current) {
       ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -179,25 +178,26 @@ function EntryCard({
       variants={itemVariants}
       layout
       data-entry-id={entry.entry_id}
-      animate={{
-        boxShadow: highlighted
-          ? "0 0 0 3px hsl(var(--ring) / 0.5)"
-          : "0 0 0 0px hsl(var(--ring) / 0)",
-        backgroundColor: highlighted
-          ? "hsl(var(--accent))"
-          : "hsl(var(--card))",
-      }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
       className={cn(
-        "rounded-md border p-3 text-sm",
-        highlighted ? "border-primary" : "border-border",
+        "rounded-xl border p-4 text-xs transition-all duration-500",
+        highlighted 
+          ? "border-primary bg-primary/10 shadow-lg shadow-primary/20 scale-[1.02] z-10" 
+          : "border-canvas bg-background/50 opacity-60 hover:opacity-100 hover:border-muted-foreground/30"
       )}
     >
-      <div className="mb-1 flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-        <Icon className="h-3.5 w-3.5" aria-hidden />
-        {KIND_LABEL[entry.kind] ?? entry.kind}
+      <div className="mb-3 flex items-center justify-between">
+        <div className={cn(
+          "flex items-center gap-2 text-[9px] font-bold uppercase tracking-widest",
+          highlighted ? "text-primary" : "text-muted-foreground"
+        )}>
+          <Icon className="h-3 w-3" aria-hidden />
+          {KIND_LABEL[entry.kind] ?? entry.kind}
+        </div>
+        {highlighted && (
+          <span className="text-[8px] font-mono bg-primary/20 text-primary px-1.5 py-0.5 rounded">CITED</span>
+        )}
       </div>
-      <p className="line-clamp-3 leading-snug">{entry.raw_text}</p>
+      <p className="leading-relaxed font-mono text-[11px] line-clamp-4">{entry.raw_text}</p>
     </motion.li>
   );
 }

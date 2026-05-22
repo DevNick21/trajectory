@@ -43,15 +43,17 @@ export default function SplitPane({
   children,
 }: Props) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,30%)_minmax(0,1fr)]">
-      <div className="flex flex-col gap-4">
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,25%)_minmax(0,1fr)]">
+      <div className="flex flex-col gap-6 overflow-hidden">
         <ContextCard bundle={bundle} />
-        <CareerHistory
-          highlightedEntryIds={highlightedEntryIds ?? new Set<string>()}
-          scrollKey={scrollKey ?? null}
-        />
+        <div className="flex-1 overflow-hidden">
+          <CareerHistory
+            highlightedEntryIds={highlightedEntryIds ?? new Set<string>()}
+            scrollKey={scrollKey ?? null}
+          />
+        </div>
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -62,65 +64,51 @@ function ContextCard({ bundle }: { bundle: ContextBundle | null }) {
 
   if (!jd && !cr) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Context</CardTitle>
+      <Card className="bg-destructive/5 border-destructive/20">
+        <CardHeader className="py-3">
+          <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-destructive">Signal Lost</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          No research bundle on this session.
+        <CardContent className="text-xs text-muted-foreground italic">
+          No research bundle detected.
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Context</CardTitle>
+    <Card className="bg-secondary/30 border-canvas overflow-hidden">
+      <CardHeader className="py-3 bg-secondary/50 border-b border-canvas">
+        <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-primary" />
+          Target Parameters
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
+      <CardContent className="p-4 space-y-4 text-xs">
         {jd?.role_title && (
-          <Field label="Role" hint={jd.seniority_signal}>
-            {jd.role_title}
+          <Field label="Designation" hint={jd.seniority_signal?.toUpperCase()}>
+            <span className="font-serif text-lg tracking-tight">{jd.role_title}</span>
           </Field>
         )}
         {cr?.company_name && (
-          <Field label="Company" hint={cr.company_domain ?? undefined}>
-            {cr.company_name}
+          <Field label="Entity" hint={cr.company_domain ?? undefined}>
+             <span className="font-mono">{cr.company_name}</span>
           </Field>
         )}
         {jd?.location && (
-          <Field label="Location">
+          <Field label="Geographic Range">
             {jd.location}
             {jd.remote_policy && (
-              <span className="text-muted-foreground"> · {jd.remote_policy}</span>
+              <span className="text-primary font-bold"> · {jd.remote_policy}</span>
             )}
           </Field>
         )}
         {jd?.salary_band && (
-          <Field label="Posted band">
-            <span className="tabular-nums">
+          <Field label="Market Valuation">
+            <span className="font-mono text-success font-bold">
               £{jd.salary_band.min_gbp?.toLocaleString()}–£
               {jd.salary_band.max_gbp?.toLocaleString()}
             </span>
           </Field>
-        )}
-        {jd?.required_skills && jd.required_skills.length > 0 && (
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Required skills
-            </p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {jd.required_skills.slice(0, 12).map((s) => (
-                <span
-                  key={s}
-                  className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
-                >
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
         )}
       </CardContent>
     </Card>
@@ -137,12 +125,12 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+    <div className="space-y-1">
+      <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">
         {label}
       </p>
-      <p className="font-medium">{children}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <div className="text-sm font-medium leading-tight">{children}</div>
+      {hint && <p className="text-[10px] font-mono opacity-50 uppercase">{hint}</p>}
     </div>
   );
 }

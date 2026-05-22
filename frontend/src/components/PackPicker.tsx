@@ -4,7 +4,6 @@ import { motion } from "motion/react";
 import {
   Briefcase,
   Check,
-  Loader2,
   PoundSterling,
   Sparkles,
   Mail,
@@ -81,11 +80,10 @@ const PACKS: PackDef[] = [
 
 interface Props {
   sessionId: string;
-  roleTitle: string | null;
   files: GeneratedFile[];
 }
 
-export default function PackPicker({ sessionId, roleTitle, files }: Props) {
+export default function PackPicker({ sessionId, files }: Props) {
   const queryClient = useQueryClient();
   const [running, setRunning] = useState<Set<PackGeneratorName>>(new Set());
   const [errors, setErrors] = useState<Partial<Record<PackGeneratorName, string>>>({});
@@ -138,31 +136,24 @@ export default function PackPicker({ sessionId, roleTitle, files }: Props) {
   };
 
   return (
-    <Card>
+    <Card className="border-canvas bg-card/50">
       <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:space-y-0">
         <div>
-          <CardTitle>
-            Choose your application pack
-            {roleTitle && (
-              <span className="font-normal text-muted-foreground">
-                {" "}
-                for {roleTitle}
-              </span>
-            )}
+          <CardTitle className="font-serif text-2xl">
+            Asset Production
           </CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Based on your profile, job analysis, and tailored questions.
+          <p className="mt-1 text-sm text-muted-foreground italic">
+            "High-precision documents tailored to the target role's DNA."
           </p>
         </div>
-        {/* Targeted questions status — stub until the workflow lands. */}
-        <Badge variant="outline" className="self-start gap-1.5">
-          <Check className="h-3.5 w-3.5" aria-hidden />
-          Targeted questions answered
+        <Badge variant="outline" className="self-start gap-1.5 font-mono text-[10px] uppercase border-primary/20 bg-primary/5 text-primary">
+          <Check className="h-3 w-3" aria-hidden />
+          System Primed
         </Badge>
       </CardHeader>
       <CardContent>
         <motion.div
-          className="grid gap-3 sm:grid-cols-2"
+          className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
           variants={gridVariants}
           initial="initial"
           animate="animate"
@@ -179,13 +170,6 @@ export default function PackPicker({ sessionId, roleTitle, files }: Props) {
             />
           ))}
         </motion.div>
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Need to change your answers?{" "}
-          <span className="cursor-not-allowed underline opacity-60">
-            Revisit questions
-          </span>
-        </p>
       </CardContent>
     </Card>
   );
@@ -212,75 +196,67 @@ function PackCard({
   return (
     <motion.div
       variants={cardVariants}
-      whileHover={{ y: -2 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      whileHover={{ y: -4 }}
       className={cn(
-        "flex flex-col gap-3 rounded-md border p-4 transition-colors",
-        generated && "border-success/40 bg-success/5",
+        "group relative flex flex-col justify-between gap-4 rounded-xl border p-5 transition-all duration-300",
+        generated 
+          ? "border-success/30 bg-success/5 shadow-lg shadow-success/5" 
+          : "border-canvas bg-secondary/20 hover:border-primary/50"
       )}
     >
-      <div className="flex items-start gap-3">
-        <span
+      <div className="space-y-3">
+        <div
           aria-hidden
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
-            generated ? "bg-success/10 text-success" : "bg-accent text-accent-foreground",
+            "flex h-12 w-12 items-center justify-center rounded-xl transition-transform group-hover:scale-110 duration-300",
+            generated ? "bg-success/20 text-success shadow-lg shadow-success/20" : "bg-background text-muted-foreground border border-canvas",
           )}
         >
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="flex-1">
-          <p className="font-medium">{pack.title}</p>
-          <div className="mt-1 flex items-center gap-2 text-xs">
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="space-y-1">
+          <p className="font-serif text-lg leading-tight">{pack.title}</p>
+          <div className="flex items-center gap-2">
             {generated ? (
-              <Badge variant="success" className="gap-1">
-                <Check className="h-3 w-3" aria-hidden />
-                Generated
-              </Badge>
+              <span className="text-[10px] font-mono text-success uppercase tracking-widest font-bold">● Ready</span>
             ) : (
-              <span className="text-muted-foreground">Not generated yet</span>
+              <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">○ Awaiting</span>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="pt-2">
         {generated ? (
-          <>
+          <div className="flex flex-col gap-2">
             <Link
               to={deepHref}
-              className={buttonVariants({ size: "sm", variant: "outline" })}
+              className={cn(buttonVariants({ size: "sm", variant: "success" }), "w-full font-bold uppercase tracking-widest text-[10px]")}
             >
-              View / edit
+              Open File
             </Link>
             <Button
               size="sm"
               variant="ghost"
+              className="w-full text-[9px] uppercase tracking-tighter h-7 opacity-50 hover:opacity-100"
               onClick={onRegenerate}
               disabled={running}
             >
-              {running ? (
-                <>
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                  Regenerating
-                </>
-              ) : (
-                "Regenerate"
-              )}
+              {running ? "Regenerating..." : "Regenerate"}
             </Button>
-          </>
+          </div>
         ) : (
           <Link
             to={deepHref}
-            className={buttonVariants({ size: "sm" })}
+            className={cn(buttonVariants({ size: "sm", variant: "default" }), "w-full font-bold uppercase tracking-widest text-[10px]")}
           >
-            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            <Sparkles className="mr-2 h-3 w-3" />
             Generate
           </Link>
         )}
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="absolute -bottom-6 left-0 text-[10px] text-destructive truncate w-full">{error}</p>}
     </motion.div>
   );
 }

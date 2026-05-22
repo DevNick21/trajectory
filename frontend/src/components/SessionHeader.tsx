@@ -23,48 +23,61 @@ export default function SessionHeader({
   jobUrl,
   backTo,
 }: Props) {
+  const isGo = decision === "GO";
   return (
-    <header className="flex flex-col gap-2">
-      {backTo && (
-        <Link
-          to={backTo.href}
-          className="inline-flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground"
-        >
-          <ArrowLeft className="h-3 w-3" aria-hidden />
-          Back to {backTo.label}
-        </Link>
-      )}
-      <div className="flex flex-wrap items-center gap-3">
+    <header className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          {backTo ? (
+            <Link
+              to={backTo.href}
+              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" aria-hidden />
+              {backTo.label}
+            </Link>
+          ) : (
+            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-primary">
+              Analysis Active
+            </div>
+          )}
+          <h1 className="text-4xl font-serif tracking-tight">
+            {role ?? title}
+          </h1>
+          {company && (
+            <p className="text-lg font-mono text-muted-foreground">
+              @ {company}
+            </p>
+          )}
+        </div>
+
         {decision && (
-          <Badge variant={decision === "GO" ? "success" : "destructive"}>
-            {decision}
+          <div className="flex flex-col items-end gap-1">
+            <Badge variant={isGo ? "success" : "destructive"} className="text-xs px-3 py-1 uppercase font-black">
+              {decision}
+            </Badge>
             {confidencePct !== undefined && confidencePct !== null && (
-              <span className="ml-1 opacity-70">· {confidencePct}%</span>
+              <span className="text-[10px] font-mono opacity-50 uppercase tracking-tighter">
+                {confidencePct}% Confidence
+              </span>
             )}
-          </Badge>
+          </div>
         )}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          {title}
-        </h1>
       </div>
-      <div className="flex flex-col gap-0.5 text-sm text-foreground/70">
-        {(role || company) && (
-          <p>
-            {role ?? "—"}
-            {company && <span className="opacity-70"> · {company}</span>}
-          </p>
-        )}
-        {jobUrl && (
+
+      {jobUrl && (
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/30 border border-canvas group w-fit">
+          <span className="text-[10px] font-mono opacity-40 uppercase">Source</span>
           <a
             href={jobUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-xs hover:underline"
+            className="text-xs font-mono truncate max-w-sm hover:text-primary transition-colors"
           >
             {jobUrl}
           </a>
-        )}
-      </div>
+        </div>
+      )}
     </header>
   );
 }

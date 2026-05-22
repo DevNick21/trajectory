@@ -1,4 +1,5 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Terminal } from "lucide-react";
+import PickyAvatar from "@/components/PickyAvatar";
 
 import type {
   LikelyQuestion,
@@ -39,19 +40,24 @@ export default function QuestionsPreview({
   onGenerate,
 }: Props) {
   return (
-    <Card className="min-h-[28rem]">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle>Interview prep</CardTitle>
+    <Card className="min-h-[28rem] bg-card border-canvas shadow-2xl overflow-hidden relative group">
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/40 via-success/40 to-primary/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 border-b border-canvas bg-secondary/30">
+        <div className="flex items-center gap-2">
+          <Terminal className="h-4 w-4 text-primary" />
+          <CardTitle className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Draft Output</CardTitle>
+        </div>
         {output && (
           <Button
             variant="outline"
             size="sm"
             onClick={onGenerate}
             disabled={generating}
+            className="font-bold uppercase tracking-widest text-[10px]"
           >
             {generating ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                 Regenerating
               </>
             ) : (
@@ -60,7 +66,7 @@ export default function QuestionsPreview({
           </Button>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         {!output && !generating && (
           <Empty onGenerate={onGenerate} error={error} />
         )}
@@ -73,7 +79,7 @@ export default function QuestionsPreview({
           />
         )}
         {output && error && (
-          <p className="mt-4 text-xs text-destructive">{error}</p>
+          <p className="mt-4 text-xs text-destructive font-mono uppercase tracking-widest">ERROR: {error}</p>
         )}
       </CardContent>
     </Card>
@@ -88,22 +94,23 @@ function Empty({
   error: string | null;
 }) {
   return (
-    <div className="flex min-h-[20rem] flex-col items-center justify-center gap-3 text-center">
-      <Sparkles className="h-8 w-8 text-primary" aria-hidden />
-      <div>
-        <p className="text-sm font-medium">No interview prep yet</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Likely questions, ranked by likelihood, with strategy notes
-          tied to your career entries.
+    <div className="flex min-h-[20rem] flex-col items-center justify-center gap-6 text-center py-12">
+      <PickyAvatar state="idle" className="h-20 w-20" />
+      <div className="max-w-xs">
+        <p className="font-serif text-lg mb-2">"Waiting for my orders."</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          I'll predict the exact lines of questioning you'll face and tie them to your strongest career evidence.
         </p>
       </div>
-      <Button onClick={onGenerate}>
-        <Sparkles className="mr-2 h-4 w-4" />
-        Generate questions
+      <Button 
+        onClick={onGenerate}
+        className="font-bold uppercase tracking-widest text-[10px] px-8 h-10"
+      >
+        [ Predict Questions ]
       </Button>
       {error && (
-        <p className="text-xs text-destructive" role="alert">
-          {error}
+        <p className="text-xs text-destructive font-mono mt-4" role="alert">
+          ERROR: {error}
         </p>
       )}
     </div>
@@ -112,11 +119,14 @@ function Empty({
 
 function Generating() {
   return (
-    <div className="flex min-h-[20rem] flex-col items-center justify-center gap-3 text-center">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-      <p className="text-sm text-muted-foreground">
-        Predicting likely questions…
-      </p>
+    <div className="flex min-h-[20rem] flex-col items-center justify-center gap-6 text-center py-12">
+      <PickyAvatar state="thinking" className="h-20 w-20" />
+      <div className="space-y-2">
+        <p className="font-serif text-lg animate-pulse">"Running simulations..."</p>
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+          Analyzing JD requirements against company culture
+        </p>
+      </div>
     </div>
   );
 }
@@ -166,35 +176,44 @@ function QuestionCard({
         type="button"
         onClick={onSelect}
         className={cn(
-          "w-full rounded-md border p-3 text-left transition-colors",
+          "w-full rounded-2xl border border-canvas p-4 text-left transition-all",
           selected
-            ? "border-primary bg-accent ring-1 ring-primary/40"
-            : "hover:bg-muted",
+            ? "bg-primary/10 border-primary shadow-lg shadow-primary/5"
+            : "hover:bg-secondary/50",
         )}
       >
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge
-            variant={q.likelihood === "HIGH" ? "success" : "secondary"}
+            className={cn(
+              "text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5",
+              q.likelihood === "HIGH" ? "bg-success/20 text-success border-success/30" : "bg-secondary text-muted-foreground"
+            )}
+            variant="outline"
           >
             {q.likelihood}
           </Badge>
-          <Badge variant="outline">{BUCKET_LABEL[q.bucket]}</Badge>
+          <Badge variant="outline" className="text-[9px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 border-canvas">
+            {BUCKET_LABEL[q.bucket]}
+          </Badge>
         </div>
-        <p className="text-sm font-medium leading-snug">{q.question}</p>
-        {q.why_likely && (
-          <p className="mt-1 text-xs text-muted-foreground">
-            <span className="font-semibold">Why: </span>
-            {q.why_likely}
-          </p>
-        )}
-        {q.strategy_note && (
-          <p className="mt-2 text-xs leading-relaxed">
-            <span className="font-semibold uppercase text-muted-foreground">
-              Strategy:{" "}
-            </span>
-            {q.strategy_note}
-          </p>
-        )}
+        <p className="font-serif text-lg leading-snug mb-3">{q.question}</p>
+        
+        <div className="space-y-3">
+          {q.why_likely && (
+            <div className="p-2 rounded-lg bg-secondary/30 border border-canvas">
+               <p className="text-[10px] leading-relaxed">
+                 <span className="font-mono font-bold uppercase tracking-widest text-primary mr-2">Signal:</span>
+                 <span className="text-muted-foreground italic">{q.why_likely}</span>
+               </p>
+            </div>
+          )}
+          {q.strategy_note && (
+            <p className="text-xs leading-relaxed">
+              <span className="font-mono font-bold uppercase tracking-widest text-muted-foreground mr-2">Strategy:</span>
+              {q.strategy_note}
+            </p>
+          )}
+        </div>
       </button>
     </li>
   );

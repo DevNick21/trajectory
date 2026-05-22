@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Check, Circle, Loader2 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PHASE_1_AGENTS, labelFor } from "@/lib/constants";
@@ -42,8 +41,7 @@ export default function Phase1Stream({ startedAt, completed }: Props) {
   const activeIndex = firstPendingIndex === -1 ? null : firstPendingIndex;
   const allDone = firstPendingIndex === -1;
 
-  // Tick the active row's elapsed display every 200ms so the spinner
-  // reads as alive. Stops when all agents are done.
+  // Tick the active row's elapsed display every 200ms
   const [, setTick] = useState(0);
   useEffect(() => {
     if (allDone) return;
@@ -52,15 +50,16 @@ export default function Phase1Stream({ startedAt, completed }: Props) {
   }, [allDone]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          {allDone ? "Research complete" : "Running research…"}
+    <Card className="bg-black border-primary/30 font-mono shadow-[0_0_30px_rgba(var(--primary),0.1)]">
+      <CardHeader className="border-b border-primary/20 bg-primary/5 py-3">
+        <CardTitle className="text-xs flex items-center gap-2 text-primary uppercase tracking-[0.2em]">
+          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+          Neural Link: Analysis In Progress
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <motion.ul
-          className="space-y-2"
+      <CardContent className="p-0">
+        <motion.div
+          className="divide-y divide-primary/10"
           variants={listVariants}
           initial="initial"
           animate="animate"
@@ -75,67 +74,60 @@ export default function Phase1Stream({ startedAt, completed }: Props) {
                 ? Date.now() - startedAt
                 : null;
             return (
-              <motion.li
+              <motion.div
                 key={agent}
                 variants={rowVariants}
                 layout
                 className={cn(
-                  "flex items-center justify-between text-sm",
-                  isDone ? "text-foreground" : "text-muted-foreground",
+                  "flex items-center justify-between px-6 py-3 text-[10px] sm:text-xs transition-colors",
+                  isDone ? "bg-primary/5 text-primary" : isActive ? "bg-white/5 text-foreground" : "text-muted-foreground opacity-40",
                 )}
               >
-                <span className="flex items-center gap-2">
-                  <AnimatePresence mode="wait" initial={false}>
-                    {isDone ? (
-                      <motion.span
-                        key="done"
-                        initial={{ scale: 0, rotate: -30, opacity: 0 }}
-                        animate={{ scale: 1, rotate: 0, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 18 }}
-                        className="inline-flex"
-                      >
-                        <Check className="h-4 w-4 text-success" aria-hidden />
-                      </motion.span>
-                    ) : isActive ? (
-                      <motion.span
-                        key="active"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="inline-flex"
-                      >
-                        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                      </motion.span>
-                    ) : (
-                      <motion.span
-                        key="pending"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.5 }}
-                        exit={{ opacity: 0 }}
-                        className="inline-flex"
-                      >
-                        <Circle className="h-4 w-4" aria-hidden />
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  {labelFor(agent)}
-                </span>
-                {elapsedMs !== null && (
-                  <motion.span
-                    className="tabular-nums text-xs"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    {(elapsedMs / 1000).toFixed(1)}s
-                  </motion.span>
-                )}
-              </motion.li>
+                <div className="flex items-center gap-3">
+                  <div className="w-4 flex justify-center">
+                    <AnimatePresence mode="wait" initial={false}>
+                      {isDone ? (
+                        <motion.span
+                          key="done"
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          className="text-success"
+                        >
+                          ●
+                        </motion.span>
+                      ) : isActive ? (
+                        <motion.span
+                          key="active"
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        >
+                          ○
+                        </motion.span>
+                      ) : (
+                        <span>·</span>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  <span className={cn(isActive && "font-bold tracking-tight")}>
+                    {isActive && "> "}
+                    {labelFor(agent).toUpperCase()}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  {isActive && (
+                    <span className="text-[10px] animate-pulse">PROCESSING...</span>
+                  )}
+                  {elapsedMs !== null && (
+                    <span className="tabular-nums opacity-60">
+                      {(elapsedMs / 1000).toFixed(2)}s
+                    </span>
+                  )}
+                </div>
+              </motion.div>
             );
           })}
-        </motion.ul>
+        </motion.div>
       </CardContent>
     </Card>
   );

@@ -38,37 +38,45 @@ export default function ForwardJobForm({ onSubmit, disabled }: Props) {
   return (
     <form
       onSubmit={handleSubmit((values) => onSubmit(values.job_url))}
-      className="space-y-2"
+      className="space-y-4"
     >
       <div className="flex gap-2">
-        <Input
-          type="url"
-          placeholder="https://example.com/jobs/senior-engineer"
-          autoComplete="off"
-          spellCheck={false}
-          disabled={disabled}
-          aria-invalid={Boolean(errors.job_url)}
-          {...register("job_url")}
-        />
+        <div className="relative flex-1 group">
+           <div className="absolute -inset-0.5 bg-primary/20 rounded-lg blur opacity-0 group-focus-within:opacity-100 transition duration-300"></div>
+           <Input
+            type="url"
+            className="relative bg-background border-canvas focus:border-primary/50 font-mono text-xs h-11"
+            placeholder="PASTE THE SUSPECT URL HERE..."
+            autoComplete="off"
+            spellCheck={false}
+            disabled={disabled}
+            aria-invalid={Boolean(errors.job_url)}
+            {...register("job_url")}
+          />
+        </div>
         <motion.div
-          whileTap={{ scale: 0.97 }}
-          transition={{ type: "spring", stiffness: 400, damping: 25 }}
+          whileTap={{ scale: 0.95 }}
+          className="h-11"
         >
-          <Button type="submit" disabled={disabled}>
+          <Button type="submit" disabled={disabled} className="h-full px-8 font-black uppercase tracking-[0.2em] text-xs">
             {disabled ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Checking…
+                SCRUTINIZING
               </>
             ) : (
-              "Check"
+              "JUDGE IT"
             )}
           </Button>
         </motion.div>
       </div>
-      {errors.job_url && (
-        <p className="text-xs text-destructive" role="alert">
-          {errors.job_url.message}
+      {errors.job_url ? (
+        <p className="text-[10px] font-mono text-destructive uppercase tracking-widest px-1" role="alert">
+          ERROR: {errors.job_url.message}
+        </p>
+      ) : (
+        <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest px-1 opacity-50">
+          Awaiting input signal...
         </p>
       )}
     </form>
