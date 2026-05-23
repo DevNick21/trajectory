@@ -120,9 +120,6 @@ CREATE TABLE IF NOT EXISTS managed_session_cache (
     cached_at TEXT NOT NULL,
     PRIMARY KEY (agent_label, key_hash)
 );
-CREATE INDEX IF NOT EXISTS idx_session_cache_label_at
-    ON managed_session_cache(agent_label, cached_at DESC);
-
 CREATE TABLE IF NOT EXISTS jobs (
     -- A persistent Job entity. Each forwarded URL creates or reuses one;
     -- sessions reference job_id so the bot can disambiguate "draft a CV
@@ -395,103 +392,12 @@ async def upsert_user_profile(profile: UserProfile) -> None:
 # ---------------------------------------------------------------------------
 
 
-class EmbeddingStore:
-    """Owns the sentence-transformer model + FAISS index as instance
-    attributes rather than module-level globals. This makes multi-process
-    deployment possible (each process gets its own index) and simplifies
-    hot-reload scenarios. Previously these were module-level globals
-    guarded by threading locks — stable for single-process but a known
-    fragility for any multi-worker setup.
-
-    Lazily initialised on first use; thread-safe via instance lock.
-    """
-
-    def __init__(self) -> None:
-        self._model = None
-        self._index = None
-        self._id_map: list[str] = []
-        self._lock = threading.Lock()
-
-    def _get_model(self):
-        if self._model is None:
-            with self._lock:
-                if self._model is None:
-                    from sentence_transformers import SentenceTransformer
-
-                    self._model = SentenceTransformer(settings.embedding_model_name)
-        return self._model
-
-    def _ensure_index(self):
-        if self._index is not None:
-            return
-
-        with self._lock:
-            if self._index is not None:
-                return
-
-            import faiss
-
-            path = settings.faiss_index_path
-            id_map_path = Path(str(path) + ".ids.json")
-            if path.exists() and id_map_path.exists():
-                self._index = faiss.read_index(str(path))
-                self._id_map = json.loads(id_map_path.read_text())
-            else:
-                self._index = faiss.IndexFlatIP(settings.embedding_dim)
-                self._id_map = []
-
-    def get_index(self):
-        self._ensure_index()
-        return self._index, self._id_map
-
-    def save_sync(self) -> None:
-        import faiss
-
-        self._ensure_index()
-        path = settings.faiss_index_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(self._index, str(path))
-        Path(str(path) + ".ids.json").write_text(json.dumps(self._id_map))
-
-    def compute_embedding(self, text: str):
-        model = self._get_model()
-        return model.encode([text], convert_to_numpy=True, show_progress_bar=False)[0]
-
-    def add_to_index(self, entry_id: str, embedding) -> None:
-        self._ensure_index()
-        import numpy as np
-
-        vec = np.asarray([embedding], dtype=np.float32)
-        self._index.add(vec)
-        self._id_map.append(entry_id)
-
-    def search(self, query_vector, k: int = 5):
-        self._ensure_index()
-        import numpy as np
-
-        if len(self._id_map) == 0:
-            return [], []
-        vec = np.asarray([query_vector], dtype=np.float32)
-        return self._index.search(vec, min(k, len(self._id_map)))
-
-
-# Retain the old module-level API for backwards compat during migration.
-# New code should use ``EmbeddingStore`` instances directly.
-_embedding_store: Optional[EmbeddingStore] = None
-
-_embedding_model = None  # deprecated alias — kept for imports that bypass Storage
+_embedding_model = None
 _embedding_lock = threading.Lock()
 
-_faiss_index = None  # deprecated alias
+_faiss_index = None
 _faiss_id_map: list[str] = []
 _faiss_lock = threading.Lock()
-
-
-def _get_embedding_store() -> EmbeddingStore:
-    global _embedding_store
-    if _embedding_store is None:
-        _embedding_store = EmbeddingStore()
-    return _embedding_store
 
 
 def _get_embedding_model():
@@ -900,13 +806,16 @@ _PRICING_USD_PER_MTOK = {
     "opus":   {"input": 15.0, "output": 75.0},
     "sonnet": {"input":  3.0, "output": 15.0},
     "haiku":  {"input":  0.80, "output":  4.0},
-    # OpenAI (PROCESS Entry 44 — multi-provider CV tailor)
-    # gpt-4o-2024-08-06: $2.50 / $10 per Mtok.
-    "gpt-4o": {"input":  2.50, "output": 10.0},
-    "gpt-5":  {"input":  5.0, "output": 20.0},   # placeholder — verify on launch
-    # Cohere (Command R+ Aug 2024): $2.50 / $10 per Mtok.
-    "command-r-plus": {"input": 2.50, "output": 10.0},
-    "command-r":      {"input": 0.50, "output":  1.50},
+    # DeepSeek (May 2026 — 75% promo active through 2026-05-31)
+    # Post-promo: flash $0.14/$0.28, pro $1.74/$3.48
+    "deepseek-flash": {"input": 0.14, "output": 0.28},
+    "deepseek-pro":   {"input": 0.435, "output": 0.87},   # 75%-off promo
+    # OpenAI
+    "gpt-5-mini":  {"input": 0.75, "output":  4.50},
+    "gpt-5":       {"input": 2.50, "output": 15.00},
+    "gpt-5.5":     {"input": 5.00, "output": 30.00},
+    "gpt-4o":      {"input": 2.50, "output": 10.0},
+    # Cohere — REMOVED (dead code, no integration). See Process Entry 44.
 }
 
 
@@ -919,16 +828,20 @@ def _price_bucket(model: str) -> dict[str, float]:
         return _PRICING_USD_PER_MTOK["sonnet"]
     if "haiku" in m:
         return _PRICING_USD_PER_MTOK["haiku"]
+    # DeepSeek family
+    if "deepseek" in m:
+        if "pro" in m:
+            return _PRICING_USD_PER_MTOK["deepseek-pro"]
+        return _PRICING_USD_PER_MTOK["deepseek-flash"]
     # OpenAI family
+    if "gpt-5.5" in m:
+        return _PRICING_USD_PER_MTOK["gpt-5.5"]
+    if "gpt-5" in m or "gpt5" in m:
+        if "mini" in m:
+            return _PRICING_USD_PER_MTOK["gpt-5-mini"]
+        return _PRICING_USD_PER_MTOK["gpt-5"]
     if "gpt-4o" in m or "gpt4o" in m:
         return _PRICING_USD_PER_MTOK["gpt-4o"]
-    if "gpt-5" in m or "gpt5" in m:
-        return _PRICING_USD_PER_MTOK["gpt-5"]
-    # Cohere family
-    if "command-r-plus" in m or "command-r+" in m:
-        return _PRICING_USD_PER_MTOK["command-r-plus"]
-    if "command-r" in m or "command" in m:
-        return _PRICING_USD_PER_MTOK["command-r"]
     # Unknown — use Sonnet pricing as a conservative default. Better to
     # overestimate than have an unknown-priced call sneak under the
     # credit-budget refusal.
@@ -1174,15 +1087,6 @@ async def get_all_career_entries_for_user(user_id: str) -> list[CareerEntry]:
     return [CareerEntry.model_validate_json(r[0]) for r in rows]
 
 
-async def get_all_career_entries() -> list[CareerEntry]:
-    async with await _connect() as db:
-        async with db.execute(
-            "SELECT payload FROM career_entries ORDER BY created_at"
-        ) as cur:
-            rows = await cur.fetchall()
-    return [CareerEntry.model_validate_json(r[0]) for r in rows]
-
-
 async def rebuild_faiss_index(entries: list[CareerEntry]) -> None:
     """Rebuild the in-memory FAISS index from a list of career entries.
 
@@ -1278,7 +1182,12 @@ class Storage:
         )
 
     async def get_all_career_entries(self) -> list[CareerEntry]:
-        return await get_all_career_entries()
+        async with await _connect() as db:
+            async with db.execute(
+                "SELECT payload FROM career_entries ORDER BY created_at"
+            ) as cur:
+                rows = await cur.fetchall()
+        return [CareerEntry.model_validate_json(r[0]) for r in rows]
 
     async def rebuild_index(self, entries: list[CareerEntry]) -> None:
         await rebuild_faiss_index(entries)

@@ -52,8 +52,11 @@ _EFFORT_LEVELS = {"low", "medium", "high", "xhigh"}
 # Client initialisation (lazy — so import stays cheap)
 # ---------------------------------------------------------------------------
 
+Provider = Literal["anthropic", "deepseek", "openai"]
 
 _anthropic_client = None
+_deepseek_client = None
+_openai_client = None
 
 
 def _get_anthropic_client():
@@ -63,6 +66,60 @@ def _get_anthropic_client():
 
         _anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
     return _anthropic_client
+
+
+def _get_deepseek_client():
+    """DeepSeek via Anthropic-compatible API.
+    
+    Docs: https://api-docs.deepseek.com/guides/anthropic_api
+    Base URL: https://api.deepseek.com/anthropic
+    Supported: tool calls, JSON mode, 1M context.
+    Not supported: prompt caching, adaptive thinking, citations API.
+    """
+    global _deepseek_client
+    if _deepseek_client is None:
+        from anthropic import AsyncAnthropic
+
+        _deepseek_client = AsyncAnthropic(
+            api_key=settings.deepseek_api_key,
+            base_url=settings.deepseek_base_url,
+        )
+    return _deepseek_client
+
+
+def _get_openai_client():
+    """OpenAI via native chat completions API with structured outputs."""
+    global _openai_client
+    if _openai_client is None:
+        from openai import AsyncOpenAI
+
+        _openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+    return _openai_client
+
+
+def _resolve_provider(agent_name: str, model: str) -> tuple[Provider, str]:
+    """Determine provider and model for a given agent call.
+    
+    Priority: 1) agent_model_map override  2) model-id prefix detection
+    3) default to anthropic.
+    """
+    # Check per-agent override map
+    agent_cfg = settings.agent_model_map.get(agent_name)
+    if agent_cfg is not None:
+        override_model, override_provider = agent_cfg
+        return override_provider, override_model
+
+    # Detect from model ID prefix
+    if "deepseek" in model.lower():
+        return "deepseek", model
+    if "gpt-" in model.lower() or model.lower().startswith("o1") or model.lower().startswith("o3"):
+        return "openai", model
+
+    return "anthropic", model
+
+
+def _is_deepseek_model(model: str) -> bool:
+    return "deepseek" in model.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +270,7 @@ async def call_agent(
         raise ValueError(f"Unknown effort level: {effort}")
 
     model = model or settings.opus_model_id
+    provider, model = _resolve_provider(agent_name, model)
 
     await _enforce_credit_budget(priority)
 
@@ -238,13 +296,14 @@ async def call_agent(
             output_tokens,
             cache_read_tokens,
             cache_creation_tokens,
-        ) = await _call_via_messages_api(
+        ) = await _call_via_provider(
             agent_name=agent_name,
             system_prompt=_maybe_wrap_system_for_cache(system_prompt),
             messages=_maybe_wrap_messages_for_cache(messages),
             output_schema=output_schema,
             model=model,
             effort=effort,
+            provider=provider,
         )
 
         await log_llm_cost(
@@ -395,6 +454,37 @@ def _build_messages_request(
     return extra
 
 
+async def _call_via_provider(
+    *,
+    agent_name: str,
+    system_prompt: str | list[dict],
+    messages: list[dict],
+    output_schema: type[BaseModel],
+    model: str,
+    effort: str,
+    provider: Provider = "anthropic",
+) -> tuple[dict, int, int, int, int]:
+    """Dispatch to the correct provider adapter."""
+    if provider == "openai":
+        return await _call_via_openai(
+            agent_name=agent_name,
+            system_prompt=system_prompt,
+            messages=messages,
+            output_schema=output_schema,
+            model=model,
+            effort=effort,
+        )
+    return await _call_via_messages_api(
+        agent_name=agent_name,
+        system_prompt=system_prompt,
+        messages=messages,
+        output_schema=output_schema,
+        model=model,
+        effort=effort,
+        provider=provider,
+    )
+
+
 async def _call_via_messages_api(
     *,
     agent_name: str,
@@ -403,6 +493,7 @@ async def _call_via_messages_api(
     output_schema: type[BaseModel],
     model: str,
     effort: str,
+    provider: Provider = "anthropic",
 ) -> tuple[dict, int, int, int, int]:
     """Returns (parsed-json-dict, input_tokens, output_tokens,
     cache_read_tokens, cache_creation_tokens).
@@ -410,12 +501,21 @@ async def _call_via_messages_api(
     Cache token counts default to 0 when the API response doesn't
     include them (pre-caching SDK versions or caching disabled).
     """
-    client = _get_anthropic_client()
+    is_deepseek = provider == "deepseek"
+    client = _get_deepseek_client() if is_deepseek else _get_anthropic_client()
     tool = _schema_to_tool(output_schema)
 
     request_kwargs = _build_messages_request(
         tool=tool, model=model, effort=effort,
     )
+
+    # DeepSeek: no adaptive thinking, no tool_choice pin, smaller max_tokens.
+    if is_deepseek:
+        request_kwargs.pop("thinking", None)
+        request_kwargs.pop("output_config", None)
+        request_kwargs.pop("tool_choice", None)
+        request_kwargs["max_tokens"] = 4_096
+        request_kwargs["tool_choice"] = {"type": "auto"}
 
     resp = await client.messages.create(
         model=model,
@@ -451,6 +551,94 @@ async def _call_via_messages_api(
         cache_read,
         cache_creation,
     )
+
+
+async def _call_via_openai(
+    *,
+    agent_name: str,
+    system_prompt: str | list[dict],
+    messages: list[dict],
+    output_schema: type[BaseModel],
+    model: str,
+    effort: str,
+) -> tuple[dict, int, int, int, int]:
+    """Call OpenAI via chat completions with native structured output.
+
+    Converts the Anthropic prompt shape to OpenAI's format, then uses
+    `response_format={"type": "json_schema", ...}` for Pydantic-level
+    output enforcement. No tool-call wrapper needed.
+    """
+    client = _get_openai_client()
+    json_schema = output_schema.model_json_schema()
+
+    # Flatten system prompt
+    sys_text = system_prompt if isinstance(system_prompt, str) else _flatten_blocks(system_prompt)
+
+    # Build OpenAI-format messages: system + user messages
+    openai_messages: list[dict] = [{"role": "system", "content": sys_text}]
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            openai_messages.append({"role": role, "content": content})
+        elif isinstance(content, list):
+            openai_messages.append({"role": role, "content": _flatten_blocks(content)})
+
+    resp = await client.chat.completions.create(
+        model=model,
+        messages=openai_messages,
+        response_format={
+            "type": "json_schema",
+            "json_schema": {
+                "name": output_schema.__name__,
+                "strict": True,
+                "schema": json_schema,
+            },
+        },
+        max_tokens=4_096,
+    )
+
+    raw_text = resp.choices[0].message.content or "{}"
+    try:
+        raw = json.loads(raw_text)
+    except json.JSONDecodeError:
+        raise AgentCallFailed(
+            f"Agent {agent_name} OpenAI response was not valid JSON: "
+            f"{raw_text[:200]}"
+        )
+
+    if not isinstance(raw, dict):
+        raise AgentCallFailed(
+            f"Agent {agent_name} OpenAI output was not a JSON object."
+        )
+
+    usage = resp.usage or _zero_usage()
+    return (
+        raw,
+        int(getattr(usage, "prompt_tokens", 0)),
+        int(getattr(usage, "completion_tokens", 0)),
+        0,  # no cache tokens on OpenAI
+        0,
+    )
+
+
+def _flatten_blocks(content: str | list[dict]) -> str:
+    """Convert Anthropic content blocks to a flat string for OpenAI."""
+    if isinstance(content, str):
+        return content
+    texts: list[str] = []
+    for block in content:
+        if isinstance(block, dict):
+            t = block.get("text") or block.get("content") or ""
+            if isinstance(t, str):
+                texts.append(t)
+    return "\n".join(texts) if texts else ""
+
+
+def _zero_usage():
+    """Fallback when the API response doesn't include usage info."""
+    from types import SimpleNamespace
+    return SimpleNamespace(prompt_tokens=0, completion_tokens=0)
 
 
 _WRAPPER_KEYS = frozenset({
@@ -717,54 +905,6 @@ async def call_agent_with_tools(
 
 # ---------------------------------------------------------------------------
 # Streaming (onboarding UX)
-# ---------------------------------------------------------------------------
-
-
-async def stream_agent(
-    agent_name: str,
-    system_prompt: str,
-    user_input: str | list[dict],
-    model: Optional[str] = None,
-    session_id: Optional[str] = None,
-    priority: Priority = "NORMAL",
-) -> AsyncIterator[str]:
-    """Unstructured streaming — used only where UX needs token-by-token output
-    (onboarding follow-ups). Does not enforce structured schema."""
-    await _enforce_credit_budget(priority)
-    model = model or settings.sonnet_model_id
-    client = _get_anthropic_client()
-    input_tokens = output_tokens = 0
-    cache_read_tokens = cache_creation_tokens = 0
-
-    async with client.messages.stream(
-        model=model,
-        max_tokens=1024,
-        system=_maybe_wrap_system_for_cache(system_prompt),
-        messages=_maybe_wrap_messages_for_cache(_build_messages(user_input)),
-    ) as stream:
-        async for text in stream.text_stream:
-            yield text
-        final = await stream.get_final_message()
-        input_tokens = final.usage.input_tokens
-        output_tokens = final.usage.output_tokens
-        cache_read_tokens = int(
-            getattr(final.usage, "cache_read_input_tokens", 0) or 0
-        )
-        cache_creation_tokens = int(
-            getattr(final.usage, "cache_creation_input_tokens", 0) or 0
-        )
-
-    await log_llm_cost(
-        session_id=session_id,
-        agent_name=agent_name,
-        model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cache_read_tokens=cache_read_tokens,
-        cache_creation_tokens=cache_creation_tokens,
-    )
-
-
 # ---------------------------------------------------------------------------
 # Credit budget guard
 # ---------------------------------------------------------------------------
@@ -1311,8 +1451,4 @@ async def call_in_session(agent_name: str, *args, **kwargs):
     return await session(*args, **kwargs)
 
 
-# `count_tokens()` and `cache_control_block()` lived here as forward-
-# looking helpers (PROCESS Entry 43) but never gained a caller. Removed
-# 2026-04-26 in the dead-code sweep. `git log -- src/askpicky/llm.py`
-# recovers them when a real preflight gate or 1hr-cache call site
-# materialises.
+

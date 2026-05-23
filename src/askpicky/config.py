@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +32,16 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     telegram_bot_token: str = ""
     companies_house_api_key: str = ""
+
+    # Multi-provider support (architecture gap #10)
+    # DeepSeek — Anthropic-compatible endpoint at api.deepseek.com/anthropic
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com/anthropic"
+    # Firecrawl — anti-bot page scraping fallback
+    firecrawl_api_key: str = ""
+    firecrawl_base_url: str = "https://api.firecrawl.dev/v2"
+    # OpenAI — GPT-5.4 mini for benchmarking and optional routing
+    openai_api_key: str = ""
 
     # --- feature flags
     # Opt-in Managed Agents path for the company investigator. Default
@@ -93,6 +104,45 @@ class Settings(BaseSettings):
     opus_model_id: str = "claude-opus-4-7"
     sonnet_model_id: str = "claude-sonnet-4-6"
     haiku_model_id: str = "claude-haiku-4-5-20251001"
+    # DeepSeek models (Anthropic-compatible endpoint)
+    deepseek_flash_model_id: str = "deepseek-v4-flash"
+    deepseek_pro_model_id: str = "deepseek-v4-pro"
+    # OpenAI models (for benchmarking and optional routing)
+    openai_mini_model_id: str = "gpt-5.4-mini"
+    openai_pro_model_id: str = "gpt-5.4"
+    # LangGraph orchestrator (opt-in — wraps handle_forward_job)
+    enable_langgraph_orchestrator: bool = False
+
+    # Per-agent model routing. Keys are agent_name strings; overrides
+    # the default (opus_model_id) when set. Use DeepSeek V4 Flash for
+    # low-stakes extraction/routing tasks; keep Anthropic for verdict,
+    # self-audit, and voice-sensitive generators.
+    #
+    # Format: "agent_name": (model_id_str, provider)
+    # provider is "anthropic" or "deepseek". Default: "anthropic".
+    # Example: {"jd_extractor": ("deepseek-v4-flash", "deepseek")}
+    agent_model_map: dict = Field(default_factory=lambda: {
+        # Keep Anthropic for the quality-critical agents
+        "verdict": ("claude-sonnet-4-6", "anthropic"),
+        "self_audit": ("claude-opus-4-7", "anthropic"),
+        "cover_letter": ("claude-haiku-4-5-20251001", "anthropic"),
+        "cv_tailor": ("claude-haiku-4-5-20251001", "anthropic"),
+        "salary_strategist": ("claude-haiku-4-5-20251001", "anthropic"),
+        # DeepSeek V4 Flash for everything else — cheap, fast, structured
+        "intent_router": ("deepseek-v4-flash", "deepseek"),
+        "triage": ("deepseek-v4-flash", "deepseek"),
+        "jd_extractor": ("deepseek-v4-flash", "deepseek"),
+        "company_scraper_summariser": ("deepseek-v4-flash", "deepseek"),
+        "red_flags": ("deepseek-v4-flash", "deepseek"),
+        "ghost_job_jd_scorer": ("deepseek-v4-flash", "deepseek"),
+        "interview_questions": ("deepseek-v4-flash", "deepseek"),
+        "star_polisher": ("deepseek-v4-flash", "deepseek"),
+        "style_extractor": ("deepseek-v4-flash", "deepseek"),
+        "onboarding_parser": ("deepseek-v4-flash", "deepseek"),
+        "cv_parser": ("deepseek-v4-flash", "deepseek"),
+        "draft_reply": ("deepseek-v4-flash", "deepseek"),
+        "content_shield_tier2": ("deepseek-v4-flash", "deepseek"),
+    })
 
     # --- embeddings
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -151,6 +201,16 @@ class Settings(BaseSettings):
                 + ", ".join(missing)
                 + ". Set them in .env or export them before boot. "
                 "Tests can skip this check with ASKPICKY_TEST_MODE=1."
+            )
+        # DeepSeek is the default for most agents — warn if missing
+        if not self.deepseek_api_key:
+            import warnings
+            warnings.warn(
+                "DEEPSEEK_API_KEY is not set — agents routed to DeepSeek "
+                "will fall back to Anthropic (significantly more expensive). "
+                "Set DEEPSEEK_API_KEY in .env to enable DeepSeek V4 Flash.",
+                RuntimeWarning,
+                stacklevel=2,
             )
         return self
 
