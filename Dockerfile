@@ -26,13 +26,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    HF_HOME=/data/huggingface
 
 WORKDIR /app
 
 # Install Python deps first so source edits don't bust the layer cache.
 COPY requirements.txt requirements-dev.txt pyproject.toml /app/
 RUN pip install -r requirements.txt
+
+# Pre-download the embedding model so the first request doesn't pull
+# 80MB from HuggingFace. Cached via HF_HOME on the /data volume so
+# subsequent restarts hit disk, not the network.
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Source last — most-frequently-changing layer.
 COPY src/ /app/src/

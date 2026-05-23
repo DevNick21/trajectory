@@ -132,8 +132,8 @@ async def classify(
             },
             "user_profile": {
                 "user_type": user.user_type,
-                "current_title": user.current_title,
-                "years_experience": user.years_experience,
+                "current_title": getattr(user, "current_title", None),
+                "years_experience": getattr(user, "years_experience", None),
                 "salary_floor": user.salary_floor,
                 "visa_status": user.visa_status if hasattr(user, "visa_status") else None,
                 "urgency": getattr(user, "urgency", "MEDIUM"),

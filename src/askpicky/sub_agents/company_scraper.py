@@ -341,7 +341,7 @@ def _apply_stealth_manual(context) -> None:
     advanced fingerprinting (CloudFlare, DataDome). Install the
     package for full protection.
     """
-    context.add_init_script("""
+    await context.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', { get: () => false });
         Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
         Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });
