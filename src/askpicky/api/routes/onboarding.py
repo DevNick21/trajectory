@@ -238,12 +238,32 @@ async def finalise(
     # --- Career entries --------------------------------------------------
     entries_written = 0
 
-    if req.career_narrative.strip():
+    narrative = req.career_narrative.strip()
+    if not narrative:
+        parts = []
+        if req.name:
+            parts.append(req.name)
+        if req.base_location:
+            parts.append(f"based in {req.base_location}")
+        if req.current_employment:
+            label = {
+                "EMPLOYED": "currently employed",
+                "UNEMPLOYED": "currently between roles",
+                "NOTICE_PERIOD": "currently serving notice",
+            }.get(req.current_employment, "")
+            if label:
+                parts.append(label)
+        if req.salary_floor > 0:
+            parts.append(f"seeking roles from £{req.salary_floor:,}")
+        if parts:
+            narrative = "Career profile: " + ". ".join(parts) + "."
+
+    if narrative:
         await storage.insert_career_entry(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="conversation",
-            raw_text=req.career_narrative.strip(),
+            raw_text=narrative,
             created_at=now,
         ))
         entries_written += 1
