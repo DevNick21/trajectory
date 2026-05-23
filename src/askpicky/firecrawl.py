@@ -1,8 +1,8 @@
 """Firecrawl integration — targeted fallback for anti-bot pages.
 
 Only used when the primary fetch (httpx / Playwright) returns empty or
-blocked on a known-anti-bot host. Firecrawl charges 1 credit per scraped
-page (free tier = 1,000 pages/month, Hobby = 5,000 pages for $16/mo).
+blocked. Firecrawl charges 1 credit per scraped page (free tier = 1,000
+pages/month, Hobby = 5,000 pages for $16/mo).
 
 Docs: https://docs.firecrawl.dev/api-reference/scrape
 """
@@ -26,7 +26,16 @@ _ANTI_BOT_HOSTS: set[str] = {
     "glassdoor.co.uk",
     "indeed.com",
     "linkedin.com",
+    "reed.co.uk",
+    "totaljobs.com",
+    "cv-library.co.uk",
+    "monster.co.uk",
+    "monster.com",
 }
+
+# Minimum character count for a page to be considered "valid" — anything
+# below this is likely a bot challenge, CloudFlare wall, or empty response.
+_MIN_CONTENT_CHARS = 200
 
 # Standard fetch timeout — generous because Firecrawl may proxy through
 # a full headless browser.
@@ -97,3 +106,36 @@ def is_anti_bot_host(url: str) -> bool:
         )
     except Exception:
         return False
+
+
+def is_thin_content(text: Optional[str]) -> bool:
+    """True if the text is empty, too short, or looks like a bot challenge.
+
+    Pages under _MIN_CONTENT_CHARS chars are likely CloudFlare walls,
+    captcha prompts, or empty 403 responses — not usable for verdict/
+    extraction. Firecrawl should be tried as a fallback.
+    """
+    if not text:
+        return True
+    stripped = text.strip()
+    if len(stripped) < _MIN_CONTENT_CHARS:
+        return True
+    # Bot-challenge patterns that slip through Playwright
+    challenge_markers = (
+        "verify you are a human",
+        "are you a robot",
+        "cf-challenge",
+        "cloudflare",
+        "checking your browser",
+        "please enable javascript",
+        "captcha",
+        "ddos-guard",
+        "perimeterx",
+    )
+    lower = stripped.lower()
+    if any(m in lower for m in challenge_markers):
+        # Only flag if the content is thin — a legitimate page that
+        # happens to mention CloudFlare won't trigger this.
+        if len(stripped) < 2000:
+            return True
+    return False

@@ -1,0 +1,181 @@
+{
+  "summary": {
+    "timestamp": "2026-05-23T21:24:30.555278+00:00",
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "by_provider": {
+      "anthropic": {
+        "passed": 5,
+        "failed": 0
+      },
+      "deepseek": {
+        "passed": 5,
+        "failed": 0
+      },
+      "openai": {
+        "passed": 5,
+        "failed": 0
+      }
+    },
+    "by_task": {
+      "intent_router": {
+        "passed": 3,
+        "failed": 0
+      },
+      "jd_extractor": {
+        "passed": 3,
+        "failed": 0
+      },
+      "company_summariser": {
+        "passed": 3,
+        "failed": 0
+      },
+      "triage": {
+        "passed": 3,
+        "failed": 0
+      },
+      "tool_use_extract": {
+        "passed": 3,
+        "failed": 0
+      }
+    }
+  },
+  "results": [
+    {
+      "task": "intent_router",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "jd_extractor",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "company_summariser",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "triage",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "tool_use_extract",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "intent_router",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "jd_extractor",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "company_summariser",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "triage",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "tool_use_extract",
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "intent_router",
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "jd_extractor",
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "company_summariser",
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "triage",
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    },
+    {
+      "task": "tool_use_extract",
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "success": true,
+      "latency_ms": 1,
+      "schema_valid": true,
+      "error": null
+    }
+  ]
+}

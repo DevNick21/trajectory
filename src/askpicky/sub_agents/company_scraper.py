@@ -123,46 +123,66 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
     The JSON-LD extractor needs the original `<script type="application/
     ld+json">` blocks — trafilatura strips them as non-content. This
     function is the fetch half only; text cleaning happens separately.
-    Uses Playwright for dynamic hosts, with Firecrawl as a last-resort
-    fallback for anti-bot-protected pages.
+
+    Strategy: httpx (static) → Playwright (dynamic/JS) → Firecrawl (any
+    failure). Firecrawl is the most robust but costs 1 credit/page, so it
+    only fires when the cheaper paths return empty or thin content.
     """
-    from ..firecrawl import firecrawl_scrape, is_anti_bot_host
+    from ..firecrawl import (
+        firecrawl_scrape,
+        is_anti_bot_host,
+        is_thin_content,
+    )
 
     host = _host(url)
+    is_anti = is_anti_bot_host(url)
+
     try:
-        if host in _DYNAMIC_HOSTS or is_anti_bot_host(url):
-            result = await _fetch_with_playwright(url)
+        # ── Step 1: httpx for static pages ──────────────────────────
+        if host not in _DYNAMIC_HOSTS and not is_anti:
+            result = await _fetch_with_httpx(url)
             if result is not None:
                 return result
-            # Playwright failed — try Firecrawl as fallback for anti-bot hosts
-            if is_anti_bot_host(url):
-                logger.info("Playwright blocked on %s — trying Firecrawl", url)
-                fc_result = await firecrawl_scrape(url)
-                if fc_result is not None:
-                    return fc_result
-            return None
+            # httpx returned None (4xx/5xx) or empty — try Playwright
+            if not is_anti:
+                pw_result = await _fetch_with_playwright(url)
+                if pw_result is not None and not is_thin_content(pw_result):
+                    return pw_result
+                # Playwright returned thin/empty — try Firecrawl
+                if is_thin_content(pw_result):
+                    logger.info(
+                        "Playwright returned thin content (%d chars) for %s — "
+                        "trying Firecrawl",
+                        len(pw_result or ""), url,
+                    )
+                    fc_result = await firecrawl_scrape(url)
+                    if fc_result is not None:
+                        return fc_result
+                return None
 
-        result = await _fetch_with_httpx(url)
-        if result is not None:
+        # ── Step 2: Playwright for dynamic / anti-bot hosts ────────
+        result = await _fetch_with_playwright(url)
+        if result is not None and not is_thin_content(result):
             return result
-        # httpx might get 403 on anti-bot pages
-        if is_anti_bot_host(url):
-            logger.info("httpx blocked on %s — trying Playwright then Firecrawl", url)
-            pw_result = await _fetch_with_playwright(url)
-            if pw_result is not None:
-                return pw_result
+        # Playwright returned None or thin content — try Firecrawl
+        if result is None or is_thin_content(result):
+            logger.info(
+                "Playwright returned %s for %s — trying Firecrawl",
+                "None" if result is None else f"thin content ({len(result)} chars)",
+                url,
+            )
             fc_result = await firecrawl_scrape(url)
             if fc_result is not None:
                 return fc_result
         return None
+
     except Exception as e:
         logger.warning("Failed to fetch %s: %s", url, e)
-        # Last resort: try Firecrawl if this is an anti-bot host
-        if is_anti_bot_host(url):
-            try:
-                return await firecrawl_scrape(url)
-            except Exception as fc_e:
-                logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
+        # Last resort: try Firecrawl for any page
+        try:
+            return await firecrawl_scrape(url)
+        except Exception as fc_e:
+            logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
         return None
 
 
@@ -292,6 +312,17 @@ async def _fetch_with_playwright(url: str) -> Optional[str]:
                 pass
 
             html = await page.content()
+
+            # Reject thin/bot-challenge pages — the Fallback Gate will
+            # route these to Firecrawl instead of feeding garbage to the
+            # JD extractor or company summariser.
+            if len(html) < 500:
+                logger.info(
+                    "Playwright returned thin HTML (%d chars) for %s — "
+                    "treating as failure",
+                    len(html), url,
+                )
+                return None
 
             # Persist cookies for the next visit to this domain
             try:
@@ -816,6 +847,10 @@ def _verify_not_on_careers_page(
 
 
 async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
+    """Fetch candidate company pages in parallel. Firecrawl fallback on
+    sparse/empty results so the verdict has complete company research."""
+    from ..firecrawl import firecrawl_scrape, is_thin_content
+
     results = await asyncio.gather(
         *[_fetch_html(u) for u in urls], return_exceptions=True
     )
@@ -823,6 +858,29 @@ async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
     for url, r in zip(urls, results):
         if isinstance(r, str) and r.strip():
             out.append((url, r))
+        elif isinstance(r, Exception):
+            logger.warning("Candidate fetch failed for %s: %s", url, r)
+            # Try Firecrawl for the failed page
+            try:
+                fc_result = await firecrawl_scrape(url)
+                if fc_result and not is_thin_content(fc_result):
+                    out.append((url, fc_result))
+                    logger.info(
+                        "Firecrawl rescued failed candidate page: %s", url,
+                    )
+            except Exception as fc_e:
+                logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
+        else:
+            # r is empty string or None — try Firecrawl
+            try:
+                fc_result = await firecrawl_scrape(url)
+                if fc_result and not is_thin_content(fc_result):
+                    out.append((url, fc_result))
+                    logger.info(
+                        "Firecrawl rescued empty candidate page: %s", url,
+                    )
+            except Exception as fc_e:
+                logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
     return out
 
 
