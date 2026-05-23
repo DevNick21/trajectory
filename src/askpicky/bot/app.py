@@ -23,10 +23,14 @@ from ..observability import install_correlation_filter
 from ..storage import Storage
 from .handlers import on_message, on_outcome_callback, on_start
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(name)s req=%(request_id)s ses=%(session_id)s — %(message)s",
-    level=logging.INFO,
-)
+# Only configure logging if this is the entrypoint. In Docker / cloud,
+# the process runner (uvicorn, systemd) owns logging configuration.
+import sys as _sys
+if _sys.argv and _sys.argv[0].endswith(("bot.py", "bot", "run_bot")):
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(name)s req=%(request_id)s ses=%(session_id)s — %(message)s",
+        level=logging.INFO,
+    )
 install_correlation_filter()
 log = logging.getLogger(__name__)
 

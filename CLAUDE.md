@@ -156,7 +156,7 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 | File rendering | `python-docx` + `reportlab` |
 | Tests | `pytest` + `pytest-asyncio`; smoke harness in `scripts/smoke_tests/` |
 
-**No LangChain. No LangGraph. No RapidAPI. No Firecrawl. No Playwright Stealth. No OpenAI/Cohere code paths.** Raw Anthropic SDK + the four-adapter dispatch in `llm.py` only. All external data is either direct official APIs (Anthropic, Telegram, Companies House, gov.uk download endpoints) or Playwright/Web Fetch scraping of public pages.
+**No LangChain. No LangGraph. No RapidAPI. No Firecrawl. No OpenAI/Cohere code paths.** Raw Anthropic SDK + the four-adapter dispatch in `llm.py` only. All external data is either direct official APIs (Anthropic, Telegram, Companies House, gov.uk download endpoints) or Playwright/Web Fetch scraping of public pages. Playwright Stealth is used to evade anti-bot detection on session-walled ATSes (Workday, Oracle HCM, Greenhouse) that would otherwise return empty pages.
 
 ---
 

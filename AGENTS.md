@@ -3,52 +3,68 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-05-22 23:30 BST · HEAD `60add03` (Close gap #7: signal weights). Gazette parser live-verified in `f0a5cbf`. New deterministic modules since `9760a0e`: triage (Haiku, gap #4), agency_detection (regex, gap #5), signal_weights (deterministic priors, gap #7). See [HANDOFF.md](./HANDOFF.md) §4 for the architecture-gap closure trail.*
+*Last updated 2026-05-23 — multi-provider routing (DeepSeek V4 Flash for low-stakes tasks), Firecrawl anti-bot fallback, 6-label verdict taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard, OpenAI provider support, LangGraph orchestrator wrapper. See config.py agent_model_map for the per-agent provider→model routing table.*
 
 ## Agent inventory
 
 The **Adapter** column is the `llm.py` dispatcher each agent uses (see CLAUDE.md "Adapter dispatch in `llm.py`"). Picking a different adapter for an existing agent is a substantial change — the post-2026-04-25 migration assigned each.
 
-Updated 2026-05-22 — `intent_router` gained a deterministic tier-0,
-`ghost_job_jd_scorer` is fully deterministic (no LLM), and three
-agent-pairs collapsed: `question_designer + likely_questions ->
-interview_questions`, `cv_parser + career_narrator -> cv_parser`,
-plus salary signals dropped from Phase 1 (kept on-demand only).
+Updated 2026-05-23 — multi-provider routing (DeepSeek V4 Flash for
+low-stakes tasks), Firecrawl anti-bot fallback, 6-label verdict
+taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard.
+See config.py agent_model_map for the per-agent provider→model routing
+table.
+
+Provider routing legend (2026-05-23):
+  🟢 DeepSeek V4 Flash — structured extraction, routing, triage, style
+  🟡 Anthropic Haiku 4.5  — cover letters, CV tailoring, salary, voice
+  🟠 Anthropic Sonnet 4.6 — verdict, managed agents
+  🔴 Anthropic Opus 4.7   — self-audit, prompt auditor (build-time)
 
 | # | Agent | Model | Adapter | Called by | Phase |
 |---|-------|-------|---------|-----------|-------|
-| 1 | Intent Router | **Tier-0 rules + Haiku 4.5 fallback** | `call_structured` (when tier-0 returns None) | Bot handler, every incoming message | Routing |
-| 2 | Company Scraper Summariser | Sonnet 4.6 | `call_structured` | company_scraper.py | Phase 1 |
-| 3 | JD Extractor | **Haiku 4.5** | `call_with_tools` (Web Fetch fallback) | company_scraper.py on JD text | Phase 1 |
-| 4 | Red Flags Detector | Sonnet 4.6 | `call_with_citations` (+ Web Search) | Phase 1 fan-out | Phase 1 |
-| 5 | Ghost Job JD Scorer | **Haiku 4.5** | `call_structured` | ghost_job_detector.py | Phase 1 |
+| 1 | Intent Router | **Tier-0 rules + DeepSeek V4 Flash fallback** | `call_agent` (when tier-0 returns None) | Bot handler, every incoming message | Routing |
+| 2 | Company Scraper Summariser | **DeepSeek V4 Flash** | `call_agent` | company_scraper.py | Phase 1 |
+| 3 | JD Extractor | **DeepSeek V4 Flash** | `call_agent` | company_scraper.py on JD text | Phase 1 |
+| 4 | Red Flags Detector | **DeepSeek V4 Flash** | `call_agent` | Phase 1 fan-out | Phase 1 |
+| 5 | Ghost Job JD Scorer | **Deterministic (no LLM)** | Regex 5-dim scoring | ghost_job_detector.py | Phase 1 |
 | 6 | Gazette insolvency check | **Deterministic (no LLM)** | HTTP + regex against thegazette.co.uk | Phase 1 fan-out | Phase 1 |
-| 7 | Verdict | **Opus 4.7 `xhigh`** | `call_with_citations` | Orchestrator after Phase 1 | Phase 2 |
-| 8 | Interview Questions (design + predict) | **Haiku 4.5** | `call_structured` / `call_with_citations` | `design` post-GO; `predict` user-triggered | Phase 3/4 |
-| 9 | STAR Polisher | Sonnet 4.6 | `call_structured` | After each user answer | Phase 3 |
-| 10 | Writing Style Extractor | Sonnet 4.6 | `call_structured` | Onboarding, once | Onboarding |
-| 11 | Onboarding Parser | Sonnet 4.6 | `call_structured` | End of onboarding flow | Onboarding |
-| 12 | Salary Strategist | **Opus 4.7 `xhigh`** | `call_with_citations` (+ Code Execution + Memory tool) | On-demand only (no longer Phase 1) | Phase 4 |
-| 13 | CV Tailor (agentic) | **Opus 4.7 `xhigh`** | `call_agent_with_tools` (multi-turn FAISS retrieval) | User-triggered | Phase 4 |
-| 14 | Cover Letter Writer | **Opus 4.7 `xhigh`** | `call_with_citations` | User-triggered | Phase 4 |
-| 15 | Draft Reply | Sonnet 4.6 | `call_with_citations` (+ Memory tool) | User-triggered | PA |
-| 16 | Self-Audit | **Haiku 4.5** | `call_structured` | After every Phase 4 generation | Phase 4.5 |
+| 7 | Verdict | **Sonnet 4.6** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
+| 8 | Interview Questions (design + predict) | **DeepSeek V4 Flash** | `call_agent` | `design` post-verdict; `predict` user-triggered | Phase 3/4 |
+| 9 | STAR Polisher | **DeepSeek V4 Flash** | `call_agent` | After each user answer | Phase 3 |
+| 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Onboarding, once | Onboarding |
+| 11 | Onboarding Parser | **DeepSeek V4 Flash** | `call_agent` | End of onboarding flow | Onboarding |
+| 12 | Salary Strategist | **Haiku 4.5** | `call_agent` | On-demand only | Phase 4 |
+| 13 | CV Tailor (agentic) | **Haiku 4.5** | `call_agent` (multi-turn FAISS retrieval) | User-triggered | Phase 4 |
+| 14 | Cover Letter Writer | **Haiku 4.5** | `call_agent` | User-triggered | Phase 4 |
+| 15 | Draft Reply | **DeepSeek V4 Flash** | `call_agent` | User-triggered | PA |
+| 16 | Self-Audit | **Opus 4.7** | `call_agent` | After every Phase 4 generation | Phase 4.5 |
 | 17 | Prompt Auditor | Opus 4.7 `xhigh` | `call_structured` / `call_in_session` (`--empirical`) | Developer, via `scripts/audit_prompt.py` | Build-time only |
-| 18 | Content Shield (Tier 2) | Sonnet 4.6 | `call_structured` | `validators/content_shield.py` on flagged untrusted content | Pre-prompt |
+| 18 | Content Shield (Tier 2) | **DeepSeek V4 Flash** | `call_agent` | `validators/content_shield.py` on flagged untrusted content | Pre-prompt |
 | 19 | Company Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/company_investigator.py`) | Phase 1, when `enable_managed_company_investigator=True` | Phase 1 |
 | 20 | Reviews Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/reviews_investigator.py`) | Phase 1 fan-out, replaces no-op jobspy path | Phase 1 |
 | 21 | Verdict Deep Research (managed) | Opus 4.7 `xhigh` (in session) | `call_in_session` (`managed/verdict_deep_research.py`) | Premium "Real-time hiring intent verification" (ASKPICKY.md §8) | Phase 2 |
 | 22 | Offer Analyst | **Opus 4.7 `xhigh`** | `call_with_citations` (+ Files API) | User-triggered (`analyse_offer` intent) | Phase 4 |
-| 23 | CV Parser (structure + narrative in one call) | **Haiku 4.5** | `call_structured` (tier-0 regex pre-pass + Haiku enrich) | `/api/onboarding/cv_import` + `/cv_enrich` | Onboarding |
+| 23 | CV Parser (structure + narrative in one call) | **DeepSeek V4 Flash** | `call_agent` (tier-0 regex pre-pass + enrich) | `/api/onboarding/cv_import` + `/cv_enrich` | Onboarding |
 | 24 | Entity Resolution Judge | **Haiku 4.5** | `call_structured` | `entity_resolution.judge` on ambiguous CRN matches | Phase 1A.5 |
 
 Cuts since the original inventory:
 
-- ~~Intent Router (Opus xhigh)~~ — deterministic tier-0 + Haiku fallback
+- ~~Intent Router (Opus xhigh)~~ — deterministic tier-0 + DeepSeek Flash fallback
 - ~~Question Designer~~ + ~~Likely Questions Predictor~~ — merged into Interview Questions
-- Ghost Job JD Scorer — downgraded from Opus xhigh → Haiku (2026-05-23). Briefly tried regex (2026-05-22) but missed designer/creative JDs, leadership JDs without bullet lists, and non-English-first sources.
-- ~~Career Narrator~~ — folded into CV Parser's single Haiku call
-- ~~Salary Data agent in Phase 1~~ — kept as a module for the on-demand Salary Strategist, dropped from the verdict pipeline (most JDs don't post a band)
+- Ghost Job JD Scorer — downgraded from Opus xhigh → Haiku → deterministic regex
+- ~~Career Narrator~~ — folded into CV Parser's single call
+- ~~Salary Data agent in Phase 1~~ — kept as module for on-demand Salary Strategist
+
+New since 2026-05-23:
+- Multi-provider routing via `config.py::agent_model_map` — per-agent (provider, model_id) overrides. Supports Anthropic, DeepSeek (via Anthropic-compatible endpoint), and OpenAI (via native chat completions + json_schema).
+- Firecrawl anti-bot fallback in `company_scraper.py` — only fires on Glassdoor/Indeed/LinkedIn when Playwright is blocked. 1 credit/page.
+- 6-label verdict taxonomy (`VerdictLabel`) replacing binary GO/NO_GO: STRONG_GO, GO, TRY_ANYWAY, ASK_FIRST, PASS, BLOCKED.
+- `entropy_norm` (0-1) on Verdict — evidence-spread metric.
+- Benchmark harness at `scripts/benchmarks/run.py` — runs 5 agent-typical tasks against configured providers (anthropic, deepseek, openai); `--mock` for CI, live otherwise. Includes tool-use benchmark case.
+- Benchmark dashboard at `/benchmarks` (frontend) + `/api/benchmarks/latest` (backend). CI workflow at `.github/workflows/benchmarks.yml`.
+- LangGraph orchestrator wrapper at `langgraph_orchestrator.py` — opt-in via `ENABLE_LANGGRAPH_ORCHESTRATOR`. Wraps the forward_job pipeline as a StateGraph with checkpointed state, retry, and structured error handling. Domain logic (scraping, verdict rules, citation validation) remains untouched in the existing modules.
+- OpenAI provider — integrated via native chat completions with `json_schema` structured output. Available for benchmarking and optional agent routing. Cohere removed (dead code, no integration).
 
 ---
 
@@ -297,9 +313,9 @@ RULES:
 
 # 6. Verdict
 
-**Purpose:** Single synchronous call. Most consequential agent. Produces GO/NO_GO with citations.
+**Purpose:** Single synchronous call. Most consequential agent. Produces a VerdictLabel (6-value taxonomy) with citations and entropy_norm.
 
-**Model:** `claude-opus-4-7`, `xhigh`
+**Model:** `claude-sonnet-4-6` (updated 2026-05-23 from Opus 4.7)
 
 ## System prompt
 
