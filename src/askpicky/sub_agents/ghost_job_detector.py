@@ -136,20 +136,40 @@ def _careers_page_signal(cr: CompanyResearch) -> Optional[GhostSignal]:
     )
 
 
+def _jd_fetch_failed(jd: ExtractedJobDescription) -> bool:
+    """True when the JD scraper returned essentially nothing — Oracle HCM,
+    Workday, and other session-walled ATSes can return empty pages."""
+    text = (jd.jd_text_full or "").strip()
+    role = (jd.role_title or "").strip()
+    if not text or len(text) < 100:
+        return True
+    if role in {"<UNKNOWN>", "", "Unknown"} and not jd.required_skills:
+        return True
+    return False
+
+
 def _vague_jd_signal(
-    jd: ExtractedJobDescription, score: GhostJobJDScore, job_url: str
+    jd: ExtractedJobDescription, score: GhostJobJDScore, job_url: str,
+    *,
+    jd_missing: bool = False,
 ) -> Optional[GhostSignal]:
     if score.specificity_score >= 2.5:
         return None
     if not job_url:
         return None
-    severity = "HARD" if score.specificity_score < 1.5 else "SOFT"
+    # When the JD couldn't be fetched at all (Oracle HCM, Workday, etc.),
+    # the ghost signals are artefacts of missing data, not real ghost posts.
+    # Downgrade to SOFT so the detector doesn't auto-NO_GO on fetch failures.
+    severity = "HARD" if score.specificity_score < 1.5 and not jd_missing else "SOFT"
+    evidence = (
+        f"JD specificity score {score.specificity_score:.1f}/5. "
+        f"Vagueness: {'; '.join(score.vagueness_signals[:5]) or 'no concrete specifics'}"
+    )
+    if jd_missing:
+        evidence += " (JD text not retrieved — likely a session-walled ATS)"
     return GhostSignal(
         type="VAGUE_JD",
-        evidence=(
-            f"JD specificity score {score.specificity_score:.1f}/5. "
-            f"Vagueness: {'; '.join(score.vagueness_signals[:5]) or 'no concrete specifics'}"
-        ),
+        evidence=evidence,
         citation=Citation(
             kind="url_snippet",
             url=job_url,
@@ -220,16 +240,42 @@ async def score(
     job_url: str = "",
     session_id: Optional[str] = None,
 ) -> GhostJobAssessment:
-    jd_score = await _score_jd(jd, session_id=session_id)
+    jd_missing = _jd_fetch_failed(jd)
+
+    if jd_missing:
+        jd_score = GhostJobJDScore(
+            named_hiring_manager=0.0,
+            specific_duty_bullets=0.0,
+            specific_tech_stack=0.0,
+            specific_team_context=0.0,
+            specific_success_metrics=0.0,
+            specificity_score=0.0,
+            specificity_signals=[],
+            vagueness_signals=["JD text not retrieved — likely a session-walled ATS"],
+        )
+    else:
+        jd_score = await _score_jd(jd, session_id=session_id)
 
     signals: list[GhostSignal] = []
     for s in (
         _stale_signal(jd, job_url),
         _careers_page_signal(company_research),
-        _vague_jd_signal(jd, jd_score, job_url),
+        _vague_jd_signal(jd, jd_score, job_url, jd_missing=jd_missing),
         _distress_signal(companies_house),
     ):
         if s is not None:
+            # When the JD couldn't be fetched at all (Oracle HCM, Workday,
+            # session-walled ATSes), JD-derived ghost signals are artefacts
+            # of missing data. Downgrade HARD→SOFT so the ghost-job detector
+            # doesn't auto-NO_GO on a fetch failure.
+            # COMPANY_DISTRESS is excluded — Companies House data is
+            # independently sourced and a dissolved company is a real risk
+            # regardless of whether the JD text was retrievable.
+            if jd_missing and s.severity == "HARD" and s.type != "COMPANY_DISTRESS":
+                s = s.model_copy(update={
+                    "severity": "SOFT",
+                    "evidence": f"[JD fetch failed — treating as soft signal] {s.evidence}",
+                })
             signals.append(s)
 
     probability, confidence = _combine(signals)
