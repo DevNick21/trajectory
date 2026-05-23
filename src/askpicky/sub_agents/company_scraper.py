@@ -271,21 +271,206 @@ _CANDIDATE_PATHS = [
 ]
 
 
-def _infer_company_domain(job_url: str, company_name: Optional[str]) -> Optional[str]:
-    """Best-effort: if the JD is hosted on the company's own site, derive the
-    domain. If hosted on LinkedIn/Indeed, we won't have a company domain from
-    the URL — the summariser will run with fewer pages.
+# ATS / job-board URL shapes where the company slug is recoverable.
+# Two patterns dominate:
+#
+#   path[0]   — jobs.ashbyhq.com/{slug}/{id},
+#               boards.greenhouse.io/{slug}/jobs/{id},
+#               jobs.lever.co/{slug}/{id},
+#               apply.workable.com/{slug}/j/{id}
+#   subdomain — {slug}.recruitee.com, {slug}.bamboohr.com,
+#               {slug}.pinpointhq.com, {slug}.wd1.myworkdayjobs.com
+#
+# The slug typically maps to the company's own brand domain. Extracting
+# it lets the scraper reach the company's actual pages where Companies
+# Act 2006 §82 mandates the CRN disclosure to be published. Without
+# this, the scraper for an Ashby-hosted JD only sees Ashby's footer —
+# which doesn't carry the employer's CRN — and the resolver falls
+# through to lossy name-fuzzy-matching.
+def _ats_slug_from_path(parsed) -> Optional[str]:
+    parts = [p for p in (parsed.path or "").split("/") if p]
+    return parts[0].lower() if parts else None
+
+
+def _ats_slug_from_subdomain(parsed) -> Optional[str]:
+    host = (parsed.hostname or "").lower()
+    sub = host.split(".", 1)[0] if "." in host else ""
+    # Workday's pattern is {slug}.wd1.myworkdayjobs.com — slug is the
+    # leftmost label, not "wd1".
+    if sub and sub not in {"www", "jobs", "careers", "apply", "boards"}:
+        return sub
+    return None
+
+
+_ATS_SLUG_PATH_HOSTS = {
+    "jobs.ashbyhq.com",
+    "ashbyhq.com",
+    "boards.greenhouse.io",
+    "jobs.lever.co",
+    "apply.workable.com",
+}
+
+_ATS_SLUG_SUBDOMAIN_SUFFIXES = (
+    ".myworkdayjobs.com",
+    ".bamboohr.com",
+    ".pinpointhq.com",
+    ".recruitee.com",
+    ".workable.com",
+    ".jobs.lever.co",
+)
+
+
+def _extract_ats_slug(job_url: str) -> Optional[str]:
+    """Pull the company slug from a dynamic-host JD URL.
+
+    Returns None when the host isn't a recognised ATS shape (e.g.
+    LinkedIn / Indeed list jobs by ID with no company anchor — fall
+    through to other inference).
+    """
+    parsed = urlparse(job_url)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return None
+    if host in _ATS_SLUG_PATH_HOSTS:
+        return _ats_slug_from_path(parsed)
+    for suffix in _ATS_SLUG_SUBDOMAIN_SUFFIXES:
+        if host.endswith(suffix):
+            return _ats_slug_from_subdomain(parsed)
+    return None
+
+
+def _candidate_brand_domains(slug: str) -> list[str]:
+    """Candidate domain variants for a company slug, priority-ordered.
+
+    `.com` first (most UK companies use it even when UK-only), `.co.uk`
+    second. Hyphen-stripped variants cover ATS slugs like "foo-bar"
+    where the brand domain is "foobar.com".
+    """
+    s = slug.strip().lower()
+    if not s:
+        return []
+    seeds = {s}
+    if "-" in s:
+        seeds.add(s.replace("-", ""))
+    out: list[str] = []
+    # Shortest seed first — the hyphen-stripped form is usually the
+    # real brand domain, the dashed form is usually only the ATS slug.
+    for seed in sorted(seeds, key=lambda x: (len(x), x)):
+        out.append(f"{seed}.com")
+        out.append(f"{seed}.co.uk")
+    return out
+
+
+async def _domain_is_live(domain: str) -> bool:
+    """HEAD-probe a candidate domain. True on any 2xx/3xx within ~3s;
+    False on DNS failure, timeout, or 4xx/5xx.
+
+    Cheap upfront filter so we don't waste the 25-path scrape budget
+    on candidate domains that don't actually resolve or 404 their root.
+    """
+    url = f"https://{domain}"
+    try:
+        async with httpx.AsyncClient(
+            timeout=3.0,
+            follow_redirects=True,
+            headers={"User-Agent": _USER_AGENT},
+        ) as client:
+            resp = await client.head(url)
+        if 200 <= resp.status_code < 400:
+            return True
+        # Some hosts 405 on HEAD. Range-limited GET before giving up.
+        if resp.status_code in {405, 501}:
+            async with httpx.AsyncClient(
+                timeout=3.0,
+                follow_redirects=True,
+                headers={
+                    "User-Agent": _USER_AGENT,
+                    "Range": "bytes=0-1023",
+                },
+            ) as client:
+                resp = await client.get(url)
+            return 200 <= resp.status_code < 400
+    except Exception:
+        return False
+    return False
+
+
+async def _pick_company_domain(slug: Optional[str]) -> Optional[str]:
+    """Probe candidate brand domains derived from `slug`. Returns the
+    first one that resolves + responds; None when nothing usable.
+    """
+    if not slug:
+        return None
+    for cand in _candidate_brand_domains(slug):
+        if await _domain_is_live(cand):
+            return cand
+    return None
+
+
+async def _infer_company_domain(
+    job_url: str, company_name: Optional[str] = None,
+) -> Optional[str]:
+    """Derive the company's own brand domain from the JD URL.
+
+    Three layers in priority order:
+
+      1. **Own-site JD** — JD hosted on the company's own domain.
+         `tldextract` straight from the URL.
+      2. **ATS-hosted JD** — JD on Ashby / Greenhouse / Lever / Workday
+         / etc. Extract the company slug from path or subdomain, then
+         HEAD-probe `{slug}.com` / `{slug}.co.uk`. Without this layer
+         the scraper for an Ashby JD only sees Ashby pages and can
+         never reach the legally-required CRN disclosure on the
+         employer's own site (the loveholidays-class miss).
+      3. **Company name fallback** — when the URL gave us nothing
+         (e.g. LinkedIn / Indeed) but the JD extractor surfaced a
+         clean single-token company name, try it as a slug.
+
+    Layers 2 + 3 cost an HTTP HEAD per candidate (≤4 probes total,
+    each capped at 3s). Returns None when nothing resolves.
     """
     host = _host(job_url)
     if not host:
         return None
-    if host in _DYNAMIC_HOSTS:
-        # We don't know the company domain from the URL alone at this layer.
-        return None
-    parts = tldextract.extract(job_url)
-    if not parts.domain:
-        return None
-    return f"{parts.domain}.{parts.suffix}" if parts.suffix else parts.domain
+
+    # Layer 1 — own-site JD.
+    on_known_dynamic_host = (
+        host in _DYNAMIC_HOSTS
+        or host in _ATS_SLUG_PATH_HOSTS
+        or any(host.endswith(s) for s in _ATS_SLUG_SUBDOMAIN_SUFFIXES)
+    )
+    if not on_known_dynamic_host:
+        parts = tldextract.extract(job_url)
+        if parts.domain:
+            return (
+                f"{parts.domain}.{parts.suffix}"
+                if parts.suffix else parts.domain
+            )
+
+    # Layer 2 — ATS slug → candidate domain probe.
+    slug = _extract_ats_slug(job_url)
+    if slug:
+        picked = await _pick_company_domain(slug)
+        if picked:
+            logger.info(
+                "Inferred company domain %r from ATS slug %r (host=%s)",
+                picked, slug, host,
+            )
+            return picked
+
+    # Layer 3 — company-name fallback.
+    if company_name:
+        cleaned = re.sub(r"[^a-z0-9]", "", company_name.lower())
+        if cleaned and len(cleaned) >= 3:
+            picked = await _pick_company_domain(cleaned)
+            if picked:
+                logger.info(
+                    "Inferred company domain %r from company_name %r",
+                    picked, company_name,
+                )
+                return picked
+
+    return None
 
 
 def _candidate_urls(company_domain: str) -> list[str]:
@@ -375,9 +560,10 @@ async def run(
         except Exception as exc:
             logger.warning("on_jd_extracted callback raised: %s", exc)
 
-    company_domain = _infer_company_domain(
-        job_url, company_name=extracted_jd.role_title
-    )
+    # `company_name` isn't on ExtractedJobDescription (only role_title is)
+    # so we pass None here — Layer 1 (own-site) + Layer 2 (ATS slug) do
+    # the actual work. Layer 3 (name fallback) is moot at this stage.
+    company_domain = await _infer_company_domain(job_url)
 
     scraped_pages: list[ScrapedPage] = [
         ScrapedPage(
