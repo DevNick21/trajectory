@@ -7,12 +7,11 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import Gauge from "@/components/ui/Gauge";
 import { cn } from "@/lib/utils";
+import type { VerdictLabel } from "@/lib/types";
+import { isPositiveVerdict, isBlockingVerdict, formatVerdictLabel, getVerdictTone } from "@/lib/verdict";
 
-// Loose typing for the verdict payload — research_bundle/verdict
-// pass through as raw dicts in the API contract; the dashboard reads
-// only the fields it renders.
 interface VerdictData {
-  decision?: "GO" | "NO_GO";
+  decision?: VerdictLabel;
   headline?: string;
   confidence_pct?: number;
   hard_blockers?: Array<{ type?: string; detail?: string }>;
@@ -31,8 +30,10 @@ interface Props {
 }
 
 export default function VerdictCard({ verdict, bundle, sessionId }: Props) {
-  const decision = verdict.decision ?? "NO_GO";
-  const isGo = decision === "GO";
+  const decision = verdict.decision ?? "PASS";
+  const isGo = isPositiveVerdict(decision);
+  const isBlocked = isBlockingVerdict(decision);
+  const displayLabel = formatVerdictLabel(decision);
   const role = bundle?.extracted_jd?.role_title;
   const company = bundle?.company_research?.company_name;
   const blockers = verdict.hard_blockers ?? [];
@@ -41,7 +42,7 @@ export default function VerdictCard({ verdict, bundle, sessionId }: Props) {
   return (
     <Card className={cn(
       "relative overflow-hidden border-2 transition-all duration-500",
-      isGo ? "border-success/30 shadow-2xl shadow-success/10" : "border-destructive/30 shadow-2xl shadow-destructive/10"
+      isGo ? "border-success/30 shadow-2xl shadow-success/10" : isBlocked ? "border-destructive/30 shadow-2xl shadow-destructive/10" : "border-canvas shadow-2xl"
     )}>
       {/* Dramatic Stamp Overlay */}
       <motion.div
@@ -49,27 +50,27 @@ export default function VerdictCard({ verdict, bundle, sessionId }: Props) {
         animate={{ scale: 1, opacity: 0.15, rotate: -15 }}
         className={cn(
           "absolute -right-8 -top-8 text-[8rem] font-black uppercase pointer-events-none select-none",
-          isGo ? "text-success" : "text-destructive"
+          isGo ? "text-success" : isBlocked ? "text-destructive" : "text-muted-foreground"
         )}
       >
-        {decision}
+        {displayLabel}
       </motion.div>
 
       <CardHeader className="relative z-10">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              {isGo ? (
-                <ShieldCheck className="h-8 w-8 text-success" />
-              ) : (
+              {isBlocked ? (
                 <ShieldAlert className="h-8 w-8 text-destructive" />
+              ) : (
+                <ShieldCheck className="h-8 w-8 text-success" />
               )}
               <div className="space-y-0.5">
-                <Badge variant={isGo ? "success" : "destructive"} className="uppercase tracking-widest text-[10px] px-2 py-0">
-                  {isGo ? "Approved Case" : "Risk Detected"}
+                <Badge variant={getVerdictTone(decision)} className="uppercase tracking-widest text-[10px] px-2 py-0">
+                  {displayLabel}
                 </Badge>
                 <h3 className="font-serif text-2xl tracking-tight">
-                  {isGo ? "Go for it." : "Picky says no."}
+                  {isGo ? "Go for it." : isBlocked ? "Picky says no." : "Picky says check."}
                 </h3>
               </div>
             </div>

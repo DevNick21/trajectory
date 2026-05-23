@@ -130,6 +130,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     verdict = Verdict(
         decision="GO",
         confidence_pct=80,
+        entropy_norm=0.15,
         headline="Apply - sponsor + salary clear.",
         reasoning=[
             ReasoningPoint(

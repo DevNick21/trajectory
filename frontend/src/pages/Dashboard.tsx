@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ApiError, getProfile, listSessions } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
 import type { ForwardJobEvent, SessionListResponse, VerdictPayload } from "@/lib/types";
+import { isPositiveVerdict, isBlockingVerdict } from "@/lib/verdict";
 import ForwardJobForm from "@/components/ForwardJobForm";
 import NotificationBanner from "@/components/NotificationBanner";
 import Phase1Stream, { type AgentTiming } from "@/components/Phase1Stream";
@@ -115,11 +116,12 @@ export default function Dashboard() {
   }, [setPosition]);
 
   useEffect(() => {
+    const label = stream.verdict?.decision;
     const pickyState =
       stream.status === "running"
         ? "thinking"
         : stream.status === "complete"
-          ? (stream.verdict?.decision === "GO" ? "go" : "no_go")
+          ? (label && isPositiveVerdict(label) ? "go" : label && isBlockingVerdict(label) ? "no_go" : "scrutinizing")
           : stream.status === "error"
             ? "error"
             : "idle";
@@ -142,13 +144,21 @@ export default function Dashboard() {
           dispatch({ kind: "event", event });
           if (event.type === "verdict") {
             const decision = (event.data?.decision as string | undefined) ?? "?";
-            if (decision === "GO") {
+            if (isPositiveVerdict(decision)) {
               toast.success("Picky says: apply", {
                 description: "Worth your time. Open it to see why.",
               });
-            } else if (decision === "NO_GO") {
-              toast.warning("Picky says: skip it", {
+            } else if (decision === "ASK_FIRST") {
+              toast("Picky says: ask first", {
+                description: "Verify a critical detail before applying.",
+              });
+            } else if (isBlockingVerdict(decision)) {
+              toast.warning("Picky says: blocked", {
                 description: "Hard blockers found. Open it to see which.",
+              });
+            } else {
+              toast("Picky says: pass", {
+                description: "Not worth the time right now. Open to see why.",
               });
             }
           }

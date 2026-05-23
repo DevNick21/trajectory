@@ -241,16 +241,16 @@ async def _body() -> tuple[list[str], list[str], float]:
                     "soc branch should have run for visa_holder."
                 )
 
-            # ── Assert: Rule 2 flip fired ───────────────────────────────
-            if verdict.decision != "NO_GO":
+            # ── Assert: blocker guard fired ──────────────────────────────
+            if verdict.decision != "BLOCKED":
                 failures.append(
-                    f"Rule 2 guard didn't flip GO+hard_blocker — "
+                    f"Guard didn't downgrade positive+hard_blocker — "
                     f"decision={verdict.decision!r} "
                     f"hard_blockers={[b.type for b in verdict.hard_blockers]}"
                 )
             else:
                 messages.append(
-                    "Rule 2 guard flipped GO+hard_blocker to NO_GO as expected"
+                    "Guard downgraded positive+hard_blocker to BLOCKED as expected"
                 )
 
             blocker_types = {b.type for b in verdict.hard_blockers}
@@ -265,11 +265,13 @@ async def _body() -> tuple[list[str], list[str], float]:
                 )
 
             # ── Assert: confidence was downgraded by the guard ──────────
-            # _enforce_no_go_with_blockers caps confidence at 60 on flip.
-            if verdict.decision == "NO_GO" and verdict.confidence_pct > 60:
+            # _enforce_label_blocker_consistency caps confidence at 40
+            # for fatal blockers (NOT_ON_SPONSOR_REGISTER is fatal).
+            if verdict.confidence_pct > 40:
                 failures.append(
-                    f"flipped verdict still has confidence_pct="
-                    f"{verdict.confidence_pct} > 60 — guard didn't downgrade."
+                    f"downgraded verdict still has confidence_pct="
+                    f"{verdict.confidence_pct} > 40 — "
+                    "guard didn't downgrade for fatal blocker."
                 )
         finally:
             company_scraper.run = originals["company_scraper.run"]

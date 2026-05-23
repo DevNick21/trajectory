@@ -84,18 +84,18 @@ async def _body() -> tuple[list[str], list[str], float]:
     )
     messages.append(f"headline: {verdict.headline}")
 
-    if verdict.decision not in {"GO", "NO_GO"}:
-        failures.append(f"decision={verdict.decision!r} not in GO/NO_GO")
+    if verdict.decision not in {"STRONG_GO", "GO", "TRY_ANYWAY", "ASK_FIRST", "PASS", "BLOCKED"}:
+        failures.append(f"decision={verdict.decision!r} not a valid VerdictLabel")
     if not (0 <= verdict.confidence_pct <= 100):
         failures.append(f"confidence_pct={verdict.confidence_pct} out of range")
     if len(verdict.headline.split()) > 12:
         failures.append(f"headline exceeds 12 words: {verdict.headline!r}")
     if len(verdict.reasoning) < 3:
         failures.append(f"reasoning has {len(verdict.reasoning)} < 3 points")
-    if verdict.decision == "GO" and verdict.hard_blockers:
+    if verdict.decision in {"STRONG_GO", "GO"} and verdict.hard_blockers:
         failures.append(
-            f"GO with {len(verdict.hard_blockers)} hard_blocker(s) — "
-            "CLAUDE.md Rule 2 violation"
+            f"{verdict.decision} with {len(verdict.hard_blockers)} hard_blocker(s) — "
+            "inconsistent positive label + blockers"
         )
     for i, r in enumerate(verdict.reasoning):
         if r.citation is None:

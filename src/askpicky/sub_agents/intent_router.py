@@ -19,7 +19,7 @@ from typing import Optional
 from ..config import settings
 from ..llm import call_agent
 from ..prompts import load_prompt
-from ..schemas import IntentRouterOutput, Session
+from ..schemas import IntentRouterOutput, Session, is_blocking_verdict
 
 SYSTEM_PROMPT = load_prompt("intent_router")
 
@@ -148,11 +148,12 @@ def _tier0_classify(
                 }:
                     if last_session and last_session.job_url:
                         job_url_ref = last_session.job_url
-                        # Verdict NO_GO blocks Phase 4 generators per
-                        # AGENTS.md §1 rule 5.
+                        # Only BLOCKED verdicts stop Phase 4 generators.
+                        # ASK_FIRST/PASS let the user produce a pack if
+                        # they want to try anyway.
                         if (
                             last_session.verdict
-                            and last_session.verdict.decision == "NO_GO"
+                            and is_blocking_verdict(last_session.verdict.decision)
                         ):
                             blocked = True
                     else:
@@ -222,7 +223,7 @@ async def route(
         context_lines.extend(f"  {m}" for m in cleaned_recent)
     if last_session:
         verdict_status = (
-            last_session.verdict.decision if last_session.verdict else "NO_GO"
+            last_session.verdict.decision if last_session.verdict else "none"
         )
         context_lines.append(
             f"LAST SESSION: job_url={last_session.job_url}, "

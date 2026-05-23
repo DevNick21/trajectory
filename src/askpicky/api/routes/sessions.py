@@ -122,7 +122,7 @@ def _summarise(session: Session) -> SessionSummary:
         decision_attr = getattr(session.verdict, "decision", None)
         if decision_attr is None and isinstance(session.verdict, dict):
             decision_attr = session.verdict.get("decision")
-        if decision_attr in ("GO", "NO_GO"):
+        if decision_attr:  # any non-empty verdict label string
             verdict_decision = decision_attr
 
     return SessionSummary(

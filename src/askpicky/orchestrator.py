@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -39,8 +38,10 @@ from .schemas import (
     UserProfile,
     Verdict,
     WritingStyleProfile,
+    is_blocking_verdict,
+    is_positive_verdict,
 )
-from .storage import Storage
+from .storage import STAR_BOOST_KINDS, Storage
 from .validators.citations import build_context
 from .validators.content_shield import (
     ContentIntegrityRejected,
@@ -154,12 +155,13 @@ async def handle_forward_job(
             triage_result.reasoning_brief,
         )
         verdict = Verdict(
-            decision="NO_GO",
+            decision="PASS",
             confidence_pct=95,
+            entropy_norm=0.0,
             headline="Skip this one — " + triage_result.reasoning_brief[:80],
             reasoning=[
                 ReasoningPoint(
-                    point=triage_result.reasoning_brief,
+                    claim=triage_result.reasoning_brief,
                     citation=Citation(
                         kind="gov_data",
                         data_field="triage_classification",
@@ -167,18 +169,7 @@ async def handle_forward_job(
                     ),
                 )
             ],
-            hard_blockers=[
-                HardBlocker(
-                    type="DEAL_BREAKER_TRIGGERED",
-                    detail="Triage classified this as DEFINITE_PASS: "
-                    + triage_result.reasoning_brief,
-                    citation=Citation(
-                        kind="gov_data",
-                        data_field="triage_classification",
-                        data_value="DEFINITE_PASS",
-                    ),
-                )
-            ],
+            hard_blockers=[],
             stretch_concerns=[],
             motivation_fit=MotivationFitReport(
                 motivation_evaluations=[],
@@ -549,6 +540,24 @@ async def handle_forward_job(
     # ── Phase 2: Verdict ───────────────────────────────────────────────────
     log.info("Phase 2: verdict")
 
+    # Quality gate — deterministic pre-verdict pass (runs in <1ms, no LLM).
+    # Assesses which Phase 1 signals are reliable and which should be
+    # downgraded to advisory. The verdict only reasons about what the gate
+    # says is reliable. Same pattern as social media firehose filters.
+    quality_gate_result = None
+    try:
+        from .quality_gate import assess as assess_quality
+
+        quality_gate_result = assess_quality(bundle, user)
+        log.info(
+            "Quality gate: %d gated, %d upgraded, %d notes",
+            len(quality_gate_result.gated),
+            len(quality_gate_result.upgrades),
+            len(quality_gate_result.notes),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        log.warning("Quality gate failed (non-fatal): %s", exc)
+
     # CLAUDE.md Rule 10: every piece of scraped content must go through
     # the Content Shield before reaching a high-stakes agent. The verdict
     # agent is the highest-stakes call in the pipeline — Tier 2 runs when
@@ -599,6 +608,7 @@ async def handle_forward_job(
         retrieved_entries=retrieved,
         session_id=session.session_id,
         prior_outcomes_text=prior_outcomes_text,
+        quality_gate=quality_gate_result,
     )
 
     await storage.save_verdict(session.session_id, verdict)
@@ -843,10 +853,10 @@ async def _shield_bundle(
 def _build_shielded_fallback_verdict(
     bundle: ResearchBundle, verdict: ContentShieldVerdict
 ) -> Verdict:
-    """Minimal NO_GO verdict produced when the Content Shield rejects the
+    """Minimal BLOCKED verdict produced when the Content Shield rejects the
     research bundle. AGENTS.md §18 specifies "minimal verdict with
     'content integrity concern' as a stretch concern" — modelled here as
-    a NO_GO with a single stretch concern + one reasoning point.
+    a BLOCKED with a single stretch concern + one reasoning point.
     """
     role = bundle.extracted_jd.role_title or "this role"
     citation = Citation(
@@ -855,8 +865,9 @@ def _build_shielded_fallback_verdict(
         data_value=verdict.recommended_action,
     )
     return Verdict(
-        decision="NO_GO",
+        decision="BLOCKED",
         confidence_pct=40,
+        entropy_norm=0.0,
         headline="Don't apply — page content failed integrity check.",
         reasoning=[
             ReasoningPoint(
@@ -1009,9 +1020,6 @@ async def handle_draft_cv(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} {' '.join((jd.required_skills or [])[:5])}"
-    # STAR boost: prefer validated star_polish + qa_answer narratives
-    # over raw cv_bullet / project_note. See storage.STAR_BOOST_KINDS.
-    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
         user_id=user.user_id, query=query, k=12,
         kind_weights=STAR_BOOST_KINDS,
@@ -1070,7 +1078,6 @@ async def handle_draft_cover_letter(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} cover letter"
-    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
         user_id=user.user_id, query=query, k=10,
         kind_weights=STAR_BOOST_KINDS,
@@ -1153,7 +1160,6 @@ async def handle_predict_questions(
 
     jd = bundle.extracted_jd
     query = f"{jd.role_title} interview"
-    from .storage import STAR_BOOST_KINDS
     retrieved = await storage.retrieve_relevant_entries(
         user_id=user.user_id, query=query, k=10,
         kind_weights=STAR_BOOST_KINDS,
@@ -1346,7 +1352,6 @@ async def handle_draft_reply(
         raise ContentIntegrityRejected(shield_verdict, "recruiter_email")
 
     style_profile = await _get_style_profile(user, storage) or _fallback_style(user.user_id)
-    from .storage import STAR_BOOST_KINDS
     relevant = await storage.retrieve_relevant_entries(
         user_id=user.user_id, query=cleaned_msg[:200], k=5,
         kind_weights=STAR_BOOST_KINDS,
@@ -1479,7 +1484,7 @@ async def handle_compare_verdicts(
     storage: Storage,
     limit: int = 10,
 ) -> "CompareVerdictsOutput":
-    """Rank the user's recent GO sessions by composite score.
+    """Rank the user's recent apply-worthy sessions by composite score.
 
     Deterministic — no LLM call. The composite balances three signals:
       - verdict confidence (the verdict's own self-rated certainty)
@@ -1488,8 +1493,8 @@ async def handle_compare_verdicts(
       - signal density (verdicts with more reasoning points + fewer
         stretch concerns are more substantive)
 
-    Architecture gap #6. Surfaces in the bot as "which of these 5 GOs
-    should I actually spend my finite hours on first?"
+    Filters to positive labels (STRONG_GO, GO, TRY_ANYWAY) only —
+    avoids ranking sessions the user should pass on.
     """
     from datetime import datetime, timezone
 
@@ -1500,7 +1505,7 @@ async def handle_compare_verdicts(
 
     ranked: list[RankedSession] = []
     for s in sessions:
-        if not s.verdict or s.verdict.decision != "GO":
+        if not s.verdict or not is_positive_verdict(s.verdict.decision):
             continue
 
         # Composite score in [0, 100].
@@ -1547,8 +1552,8 @@ async def handle_compare_verdicts(
         # uniformly across rows.
         if freshness < 0.5:
             rationale = (
-                f"GO but the verdict is {age_days} days old — re-forward "
-                f"before applying if you want fresh sponsor / CH data."
+                f"{s.verdict.decision} but the verdict is {age_days} days old — "
+                f"re-forward before applying if you want fresh sponsor / CH data."
             )
         elif confidence >= 85 and freshness >= 0.8:
             rationale = (
@@ -1557,14 +1562,14 @@ async def handle_compare_verdicts(
             )
         elif confidence >= 70:
             rationale = (
-                f"Solid GO at {s.verdict.confidence_pct}% with "
+                f"Solid {s.verdict.decision} at {s.verdict.confidence_pct}% with "
                 f"{stretch_count} concern(s); {age_days} day(s) old."
             )
         else:
             rationale = (
-                f"GO at {s.verdict.confidence_pct}% with "
+                f"Worth considering at {s.verdict.confidence_pct}% with "
                 f"{stretch_count} stretch concern(s), "
-                f"{age_days} day(s) old. Worth a second look."
+                f"{age_days} day(s) old."
             )
 
         ranked.append(
@@ -1686,7 +1691,7 @@ async def compute_job_search_context(
     )
     rejections = sum(
         1 for s in recent_sessions
-        if s.verdict and s.verdict.decision == "NO_GO"
+        if s.verdict and is_blocking_verdict(s.verdict.decision)
     )
 
     if months_until_expiry is not None and months_until_expiry < 3:

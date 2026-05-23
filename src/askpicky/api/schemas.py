@@ -78,7 +78,7 @@ class SessionSummary(BaseModel):
     job_url: Optional[str] = None
     intent: str
     created_at: datetime
-    verdict: Optional[Literal["GO", "NO_GO"]] = None
+    verdict: Optional[str] = None  # VerdictLabel string — see trajector/schemas.py
     role_title: Optional[str] = None
     company_name: Optional[str] = None
 

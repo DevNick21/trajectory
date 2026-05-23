@@ -2,10 +2,11 @@
 
 System prompt verbatim from AGENTS.md §6.
 
-Post-generation validation (CLAUDE.md Rule 2 + AGENTS.md §6):
+Post-generation validation:
   1. Every reasoning_point.citation resolves against the research bundle,
      gov data, or career store.
-  2. If decision == "GO" but any hard_blocker is present, flip to NO_GO
+  2. If decision is in {STRONG_GO, GO} but any hard_blocker is present,
+     downgrade to TRY_ANYWAY or BLOCKED (depending on blocker type)
      and log the inconsistency.
   3. headline <= 12 words (enforced by the Pydantic validator).
   4. At least 3 reasoning points.
@@ -17,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import settings
 from ..llm import call_agent
@@ -26,12 +27,14 @@ from ..schemas import (
     CareerEntry,
     Citation,
     HardBlocker,
+    HardBlockerType,
     MotivationFitReport,
     ReasoningPoint,
     ResearchBundle,
     StretchConcern,
     UserProfile,
     Verdict,
+    normalize_verdict_decision,
 )
 from ..validators.citations import (
     ValidationContext,
@@ -123,6 +126,7 @@ def _build_user_input(
     retrieved_entries: list[CareerEntry],
     prior_outcomes_text: Optional[str] = None,
     user_challenge_text: Optional[str] = None,
+    quality_gate: Optional[Any] = None,
 ) -> str:
     from ..signal_weights import get_signal_weights
 
@@ -145,6 +149,11 @@ def _build_user_input(
     # prompt's CHALLENGE HANDLING section can reason about it.
     if user_challenge_text:
         payload["user_challenge"] = user_challenge_text
+    # Quality gate — deterministic pre-pass that declares which signals
+    # are reliable. Gated groups → treat as advisory (stretch concerns,
+    # not hard blockers). Only ungated groups can fire hard-blocker rules.
+    if quality_gate is not None:
+        payload["quality_gate"] = quality_gate.to_user_input()
     return json.dumps(payload, default=str, indent=2)
 
 
@@ -153,20 +162,53 @@ def _build_user_input(
 # ---------------------------------------------------------------------------
 
 
-def _enforce_no_go_with_blockers(v: Verdict) -> Verdict:
-    """CLAUDE.md Rule 2: a GO verdict with any hard blocker is a programmatic
-    error. Flip to NO_GO and log.
+def _enforce_label_blocker_consistency(v: Verdict) -> Verdict:
+    """Post-generation guard: a positive label (STRONG_GO / GO) with any
+    hard blocker is a model inconsistency. Downgrade the label based on
+    blocker severity:
+    
+    - Fatal blockers (dissolution, gazette insolvency, SOC ineligible)
+      → BLOCKED.
+    - Negotiable blockers (sponsor not listed, agency posting, salary
+      below threshold) → TRY_ANYWAY if the evidence is otherwise positive,
+      otherwise ASK_FIRST.
+    - Confidence is capped accordingly.
     """
-    if v.decision == "GO" and v.hard_blockers:
+    if not v.hard_blockers:
+        return v
+
+    # Positive labels with blockers are invalid.
+    if v.decision in {"STRONG_GO", "GO"}:
+        fatal_blocker_types: set[HardBlockerType] = {
+            "COMPANIES_HOUSE_DISSOLVED",
+            "COMPANIES_HOUSE_NO_FILINGS",
+            "GAZETTE_INSOLVENCY_NOTICE",
+            "DEAL_BREAKER_TRIGGERED",
+            "SOC_INELIGIBLE",
+            "NOT_ON_SPONSOR_REGISTER",
+            "SPONSOR_B_RATED",
+            "SPONSOR_SUSPENDED",
+            "SALARY_BELOW_SOC_THRESHOLD",
+        }
+        has_fatal = any(
+            b.type in fatal_blocker_types for b in v.hard_blockers
+        )
+        new_label = "BLOCKED" if has_fatal else "TRY_ANYWAY"
+        new_confidence = min(v.confidence_pct, 40) if has_fatal else min(v.confidence_pct, 55)
+
         logger.error(
-            "Verdict returned GO despite %d hard blocker(s): %s — flipping to NO_GO.",
+            "Verdict returned %s despite %d hard blocker(s): %s — "
+            "downgrading to %s (has_fatal=%s).",
+            v.decision,
             len(v.hard_blockers),
             [b.type for b in v.hard_blockers],
+            new_label,
+            has_fatal,
         )
         return v.model_copy(
             update={
-                "decision": "NO_GO",
-                "confidence_pct": min(v.confidence_pct, 60),
+                "decision": new_label,
+                "confidence_pct": new_confidence,
             }
         )
     return v
@@ -181,18 +223,18 @@ def _make_post_validate(ctx: ValidationContext):
                 f"verdict.reasoning has {len(v.reasoning)} points; "
                 "at least 3 required."
             )
-        # CLAUDE.md Rule 2: a GO verdict with any hard blocker is an error.
+        # A positive label (STRONG_GO / GO) with any hard blocker is an error.
         # Reject here so call_agent retries with feedback rather than
-        # forcing us to flip post-hoc (the flip is still applied by
-        # _enforce_no_go_with_blockers as a belt-and-braces guard in case
-        # all retries return the same inconsistent decision).
-        if v.decision == "GO" and v.hard_blockers:
+        # forcing us to downgrade post-hoc (the downgrade is still applied
+        # by _enforce_label_blocker_consistency as a belt-and-braces guard).
+        if v.decision in {"STRONG_GO", "GO"} and v.hard_blockers:
             blocker_types = [b.type for b in v.hard_blockers]
             failures.append(
-                "Verdict.decision is GO but hard_blockers is non-empty "
-                f"({blocker_types}); a GO with any hard blocker is not "
-                "permitted. Either remove the blocker (if it does not apply) "
-                "or switch decision to NO_GO."
+                f"Verdict.decision is {v.decision} but hard_blockers is "
+                f"non-empty ({blocker_types}); a positive label with any "
+                "hard blocker is not permitted. Either remove the blocker "
+                "(if it does not apply) or switch decision to TRY_ANYWAY, "
+                "ASK_FIRST, or BLOCKED depending on blocker severity."
             )
         return failures
 
@@ -226,6 +268,7 @@ def _mock_verdict(user: UserProfile, bundle: ResearchBundle) -> Verdict:
     return Verdict(
         decision="GO",
         confidence_pct=72,
+        entropy_norm=0.15,
         headline="Apply - fixture verdict, no real Opus call.",
         reasoning=[
             ReasoningPoint(
@@ -265,13 +308,14 @@ async def generate(
     session_id: Optional[str] = None,
     prior_outcomes_text: Optional[str] = None,
     user_challenge_text: Optional[str] = None,
+    quality_gate: Optional[Any] = None,
 ) -> Verdict:
     if _mock_enabled():
         logger.warning(
             "SMOKE_TEST_MOCK=1 — returning fixture verdict without calling "
             "the Anthropic API. Unset the env var to exercise real Opus."
         )
-        return _enforce_no_go_with_blockers(_mock_verdict(user, research_bundle))
+        return _enforce_label_blocker_consistency(_mock_verdict(user, research_bundle))
 
     ctx = await build_context(
         research_bundle=research_bundle,
@@ -283,6 +327,7 @@ async def generate(
         research_bundle, user, retrieved_entries,
         prior_outcomes_text=prior_outcomes_text,
         user_challenge_text=user_challenge_text,
+        quality_gate=quality_gate,
     )
 
     system_prompt = SYSTEM_PROMPT
@@ -305,4 +350,4 @@ async def generate(
         post_validate=_make_post_validate(ctx),
     )
 
-    return _enforce_no_go_with_blockers(verdict)
+    return _enforce_label_blocker_consistency(verdict)

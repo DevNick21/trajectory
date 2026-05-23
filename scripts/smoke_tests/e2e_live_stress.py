@@ -202,8 +202,8 @@ def _scenarios(base_bundle):
     # ── 4 NOT_ON_SPONSOR_REGISTER ────────────────────────────────────
     for i in range(4):
         scenarios.append((
-            f"no_go_not_listed_{i + 1}",
-            "NO_GO", "NOT_ON_SPONSOR_REGISTER", "visa_holder",
+            f"blocked_not_listed_{i + 1}",
+            "BLOCKED", "NOT_ON_SPONSOR_REGISTER", "visa_holder",
             _bundle_with(base_bundle, {"sponsor_status": not_listed}),
             [],
         ))
@@ -211,8 +211,8 @@ def _scenarios(base_bundle):
     # ── 2 SPONSOR_B_RATED ────────────────────────────────────────────
     for i in range(2):
         scenarios.append((
-            f"no_go_b_rated_{i + 1}",
-            "NO_GO", "SPONSOR_B_RATED", "visa_holder",
+            f"blocked_b_rated_{i + 1}",
+            "BLOCKED", "SPONSOR_B_RATED", "visa_holder",
             _bundle_with(base_bundle, {"sponsor_status": b_rated}),
             [],
         ))
@@ -220,8 +220,8 @@ def _scenarios(base_bundle):
     # ── 2 SPONSOR_SUSPENDED ──────────────────────────────────────────
     for i in range(2):
         scenarios.append((
-            f"no_go_suspended_{i + 1}",
-            "NO_GO", "SPONSOR_SUSPENDED", "visa_holder",
+            f"blocked_suspended_{i + 1}",
+            "BLOCKED", "SPONSOR_SUSPENDED", "visa_holder",
             _bundle_with(base_bundle, {"sponsor_status": suspended}),
             [],
         ))
@@ -229,8 +229,8 @@ def _scenarios(base_bundle):
     # ── 2 SALARY_BELOW_SOC_THRESHOLD ─────────────────────────────────
     for i in range(2):
         scenarios.append((
-            f"no_go_salary_below_soc_{i + 1}",
-            "NO_GO", "SALARY_BELOW_SOC_THRESHOLD", "visa_holder",
+            f"blocked_salary_below_soc_{i + 1}",
+            "BLOCKED", "SALARY_BELOW_SOC_THRESHOLD", "visa_holder",
             _bundle_with(base_bundle, {
                 "soc_check": soc_below,
                 "extracted_jd.salary_band": {
@@ -243,8 +243,8 @@ def _scenarios(base_bundle):
     # ── 2 LIKELY_GHOST_JOB ───────────────────────────────────────────
     for i in range(2):
         scenarios.append((
-            f"no_go_ghost_{i + 1}",
-            "NO_GO", "LIKELY_GHOST_JOB", "uk_resident",
+            f"blocked_ghost_{i + 1}",
+            "BLOCKED", "LIKELY_GHOST_JOB", "uk_resident",
             _bundle_with(base_bundle, {"ghost_job": ghost}),
             [],
         ))
@@ -252,8 +252,8 @@ def _scenarios(base_bundle):
     # ── 2 DEAL_BREAKER_TRIGGERED ─────────────────────────────────────
     # Add a deal-breaker to the user that the JD obviously triggers.
     scenarios.append((
-        "no_go_deal_breaker_1",
-        "NO_GO", "DEAL_BREAKER_TRIGGERED", "uk_resident",
+        "blocked_deal_breaker_1",
+        "BLOCKED", "DEAL_BREAKER_TRIGGERED", "uk_resident",
         _bundle_with(base_bundle, {
             "extracted_jd.role_title": "Software Engineer (5-day office)",
             "extracted_jd.remote_policy": "onsite",
@@ -261,8 +261,8 @@ def _scenarios(base_bundle):
         ["five-day-in-office mandate", "onsite-only roles"],
     ))
     scenarios.append((
-        "no_go_deal_breaker_2",
-        "NO_GO", "DEAL_BREAKER_TRIGGERED", "uk_resident",
+        "blocked_deal_breaker_2",
+        "BLOCKED", "DEAL_BREAKER_TRIGGERED", "uk_resident",
         _bundle_with(base_bundle, {
             "extracted_jd.role_title": "Java Maintenance Engineer",
         }),
@@ -299,7 +299,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     by_outcome: dict[str, dict[str, int]] = {
         "GO": {"pass": 0, "fail": 0},
-        "NO_GO": {"pass": 0, "fail": 0},
+        "BLOCKED": {"pass": 0, "fail": 0},
     }
 
     try:
@@ -334,10 +334,10 @@ async def _body() -> tuple[list[str], list[str], float]:
                     f"decision={verdict.decision} expected {expected_decision}"
                 )
 
-            # Rule 2: GO must never carry hard blockers
-            if verdict.decision == "GO" and verdict.hard_blockers:
+            # Positive labels (STRONG_GO/GO) must never carry hard blockers
+            if verdict.decision in {"STRONG_GO", "GO"} and verdict.hard_blockers:
                 scenario_failures.append(
-                    f"Rule 2 violation: GO with "
+                    f"inconsistent: {verdict.decision} with "
                     f"{len(verdict.hard_blockers)} hard_blocker(s)"
                 )
 

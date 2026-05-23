@@ -87,7 +87,7 @@ export interface GhostJobSignal {
 }
 
 export interface GhostJobData {
-  probability: "LIKELY_GHOST" | "POSSIBLE_GHOST" | "UNLIKELY";
+  probability: "LIKELY_GHOST" | "POSSIBLE_GHOST" | "LIKELY_REAL";
   confidence: "HIGH" | "MEDIUM" | "LOW";
   specificity_score: number;
   age_days: number | null;
@@ -132,10 +132,20 @@ export interface StretchConcern {
   citation: Citation;
 }
 
+// Verdict label taxonomy — matches backend VerdictLabel Literal
+export type VerdictLabel =
+  | "STRONG_GO"
+  | "GO"
+  | "TRY_ANYWAY"
+  | "ASK_FIRST"
+  | "PASS"
+  | "BLOCKED";
+
 export interface VerdictPayload {
-  decision: "GO" | "NO_GO";
+  decision: VerdictLabel;
   headline: string;
   confidence_pct: number;
+  entropy_norm: number;
   reasoning: VerdictReasoningPoint[];
   hard_blockers: HardBlocker[];
   stretch_concerns: StretchConcern[];
@@ -151,7 +161,7 @@ export interface SessionSummary {
   job_url: string | null;
   intent: string;
   created_at: string;
-  verdict: "GO" | "NO_GO" | null;
+  verdict: VerdictLabel | null;
   role_title: string | null;
   company_name: string | null;
 }
@@ -456,7 +466,7 @@ export type QueueBatchEvent =
       type: "completed";
       id: string;
       session_id: string;
-      verdict_decision: "GO" | "NO_GO";
+      verdict_decision: VerdictLabel;
       verdict_headline: string;
       role_title: string | null;
       company_name: string | null;
@@ -546,4 +556,32 @@ export interface ApiErrorBody {
         code?: "profile_not_found" | "session_not_found" | "precondition_failed" | "file_not_found" | "invalid_filename";
         message?: string;
       };
+}
+
+// ---------------------------------------------------------------------------
+// Benchmark dashboard
+// ---------------------------------------------------------------------------
+
+export interface BenchmarkResultItem {
+  task: string;
+  provider: string;
+  model: string;
+  success: boolean;
+  latency_ms: number;
+  schema_valid: boolean;
+  error?: string | null;
+}
+
+export interface BenchmarkSummary {
+  timestamp: string;
+  total: number;
+  passed: number;
+  failed: number;
+  by_provider: Record<string, { passed: number; failed: number }>;
+  by_task: Record<string, { passed: number; failed: number }>;
+}
+
+export interface BenchmarkReport {
+  summary: BenchmarkSummary;
+  results: BenchmarkResultItem[];
 }

@@ -855,9 +855,67 @@ class TriageResult(BaseModel):
     obvious_signals: list[str] = Field(default_factory=list)
 
 
+# Finite recommendation taxonomy replacing the old binary GO / NO_GO.
+# Each label maps to a candidate-agnostic next-action category.
+# ── Positive (apply-worthy) ──
+#   STRONG_GO  – clear fit, no hard blockers, high confidence
+#   GO         – solid fit, worth applying
+#   TRY_ANYWAY – mixed fit, some concerns, worth a shot
+# ── Neutral ──
+#   ASK_FIRST  – critical unknown; verify with recruiter before applying
+#   PASS       – not worth the time right now; no hard blocker
+# ── Negative ──
+#   BLOCKED    – hard-blocked by fatal signal; do not apply
+VerdictLabel = Literal[
+    "STRONG_GO",
+    "GO",
+    "TRY_ANYWAY",
+    "ASK_FIRST",
+    "PASS",
+    "BLOCKED",
+]
+
+
+# Subsets for routing / UI colour mapping.
+_POSITIVE_LABELS: set[str] = {"STRONG_GO", "GO", "TRY_ANYWAY"}
+_BLOCKING_LABELS: set[str] = {"BLOCKED"}
+
+
+def is_positive_verdict(decision: str) -> bool:
+    """True when the label recommends applying (STRONG_GO / GO / TRY_ANYWAY)."""
+    return decision in _POSITIVE_LABELS
+
+
+def is_blocking_verdict(decision: str) -> bool:
+    """True when the label is a hard stop (BLOCKED)."""
+    return decision in _BLOCKING_LABELS
+
+
+def normalize_verdict_decision(raw: Optional[str]) -> str:
+    """Map legacy GO/NO_GO values (or None) to the new taxonomy.
+    
+    GO   → GO   (keep as positive default)
+    NO_GO→ PASS (soft-negative; old NO_GO without blockers evidence)
+    None → PASS (no verdict yet)
+    Any new label → pass through unchanged.
+    """
+    if raw is None:
+        return "PASS"
+    if raw == "GO":
+        return "GO"
+    if raw == "NO_GO":
+        return "PASS"
+    return raw
+
+
+
 class Verdict(BaseModel):
-    decision: Literal["GO", "NO_GO"]
+    decision: VerdictLabel
     confidence_pct: int = Field(ge=0, le=100)
+    # Normalized entropy of the evidence mix (0-1).
+    # 0 = one signal pillar dominates → high certainty.
+    # 1 = evenly spread across pillars → mixed / uncertain.
+    entropy_norm: float = Field(ge=0, le=1, default=1.0)
     headline: str  # <= 12 words
     reasoning: list[ReasoningPoint]
     hard_blockers: list[HardBlocker]
@@ -891,7 +949,7 @@ class RankedSession(BaseModel):
     job_id: Optional[str] = None
     role_title: str
     company_name: str
-    decision: Literal["GO", "NO_GO"]
+    decision: VerdictLabel
     confidence_pct: int
     score: float  # composite — see compare_verdicts for the recipe
     headline: str
@@ -952,19 +1010,6 @@ class STARPolish(BaseModel):
 # ---------------------------------------------------------------------------
 # Onboarding
 # ---------------------------------------------------------------------------
-
-
-class OnboardingTranscript(BaseModel):
-    user_id: str
-    topic_answers: dict
-    writing_samples: list[str]
-
-
-class OnboardingResult(BaseModel):
-    profile: UserProfile
-    career_entries: list[CareerEntry]
-    writing_style_profile: WritingStyleProfile
-    ambiguities_flagged: list[str]
 
 
 # ---------------------------------------------------------------------------

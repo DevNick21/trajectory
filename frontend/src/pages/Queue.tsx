@@ -5,8 +5,9 @@ import { Loader2, Play, Trash2 } from "lucide-react";
 
 import { addToQueue, listQueue, removeFromQueue } from "@/lib/api";
 import { streamQueueBatch } from "@/lib/sse";
-import type { QueueBatchEvent, QueueItem } from "@/lib/types";
+import type { QueueBatchEvent, QueueItem, VerdictLabel } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { getVerdictTone, formatVerdictLabel } from "@/lib/verdict";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,7 +32,7 @@ type LiveStatus = "idle" | "started" | "completed" | "failed";
 
 interface LiveEntry {
   status: LiveStatus;
-  verdict?: "GO" | "NO_GO";
+  verdict?: VerdictLabel;
   headline?: string;
   session_id?: string;
   role_title?: string | null;
@@ -294,8 +295,8 @@ function QueueRow({ item, live, onRemove, isRemoving }: RowProps) {
 
       <div className="flex shrink-0 items-center gap-2">
         {verdict && (
-          <Badge variant={verdict === "GO" ? "success" : "destructive"}>
-            {verdict}
+          <Badge variant={getVerdictTone(verdict)}>
+            {formatVerdictLabel(verdict)}
           </Badge>
         )}
         {sessionId && (

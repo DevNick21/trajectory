@@ -6,6 +6,7 @@ import { listSessions } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getVerdictTone, formatVerdictLabel } from "@/lib/verdict";
 
 interface Props {
   enabled?: boolean;
@@ -80,9 +81,9 @@ export default function SessionList({ enabled = true }: Props) {
                 </Link>
                 {s.verdict && (
                   <Badge
-                    variant={s.verdict === "GO" ? "success" : "destructive"}
+                    variant={getVerdictTone(s.verdict)}
                   >
-                    {s.verdict}
+                    {formatVerdictLabel(s.verdict)}
                   </Badge>
                 )}
               </motion.li>

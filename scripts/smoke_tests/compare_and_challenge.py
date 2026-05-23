@@ -64,6 +64,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         return Verdict(
             decision="GO",
             confidence_pct=conf,
+            entropy_norm=0.15,
             headline=f"GO at {conf}% — strong fit",
             reasoning=[
                 ReasoningPoint(
@@ -102,12 +103,12 @@ async def _body() -> tuple[list[str], list[str], float]:
     # A: high confidence, fresh (1d), dense → best score
     # B: medium confidence, mid age (10d), moderate density
     # C: high confidence but very old (25d) → freshness penalty
-    # D: NO_GO — should be excluded from ranking entirely
+    # D: BLOCKED — should be excluded from ranking entirely
     test_sessions = [
         ("A", 90, 5, 1, now - timedelta(days=1), "GO"),
         ("B", 70, 4, 2, now - timedelta(days=10), "GO"),
         ("C", 85, 4, 1, now - timedelta(days=25), "GO"),
-        ("D", 95, 5, 0, now - timedelta(hours=2), "NO_GO"),
+        ("D", 95, 5, 0, now - timedelta(hours=2), "BLOCKED"),
     ]
     ids: dict[str, str] = {}
     for label, conf, reasoning_n, stretch_n, created_at, decision in test_sessions:
@@ -115,8 +116,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         ids[label] = sid
         # Synthesize a verdict + phase1 payload
         v = _mk_verdict(conf, reasoning_n, stretch_n)
-        if decision == "NO_GO":
-            v = v.model_copy(update={"decision": "NO_GO"})
+        if decision != "GO":
+            v = v.model_copy(update={"decision": decision})
         s = Session(
             session_id=sid,
             user_id=user.user_id,

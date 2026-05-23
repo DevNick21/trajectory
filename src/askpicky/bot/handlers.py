@@ -30,7 +30,7 @@ from ..orchestrator import (
 )
 from ..ratelimit import RateLimiter
 from ..validators.content_shield import ContentIntegrityRejected
-from ..schemas import Session
+from ..schemas import Session, is_blocking_verdict, is_positive_verdict
 from ..storage import Storage
 from .formatting import (
     format_cover_letter,
@@ -222,7 +222,10 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             for chunk in format_verdict(last_session.verdict):
                 await update.message.reply_html(chunk)
         else:
-            await update.message.reply_text("Last verdict was NO_GO — I won't generate a pack for that role.")
+            await update.message.reply_text(
+                f"Last verdict was {last_session.verdict.decision} — "
+                "I won't generate a pack for that role."
+            )
         return
 
     if routed.confidence == "LOW" and routed.intent != "chitchat":
@@ -426,7 +429,7 @@ async def _handle_forward_job(
         for chunk in format_verdict(verdict):
             await update.message.reply_html(chunk)
 
-        if verdict.decision == "GO":
+        if not is_blocking_verdict(verdict.decision):
             await update.message.reply_text(
                 "What do you want next?\n"
                 "• CV tailored to this role\n"

@@ -227,13 +227,14 @@ async def _body() -> tuple[list[str], list[str], float]:
             )
 
             # ── Assert: verdict shape ───────────────────────────────────
-            if verdict.decision not in {"GO", "NO_GO"}:
+            valid_labels = {"STRONG_GO", "GO", "TRY_ANYWAY", "ASK_FIRST", "PASS", "BLOCKED"}
+            if verdict.decision not in valid_labels:
                 failures.append(
-                    f"verdict.decision={verdict.decision!r} not in GO/NO_GO"
+                    f"verdict.decision={verdict.decision!r} not a valid VerdictLabel"
                 )
-            if verdict.decision == "GO" and verdict.hard_blockers:
+            if verdict.decision in {"STRONG_GO", "GO"} and verdict.hard_blockers:
                 failures.append(
-                    "Rule 2 violation: GO with hard_blockers escaped the guard."
+                    "Inconsistent: positive label with hard_blockers escaped the guard."
                 )
             messages.append(
                 f"verdict: decision={verdict.decision} "

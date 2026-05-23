@@ -109,10 +109,20 @@ def format_phase1_progress(
 
 
 def format_verdict(v: Verdict) -> list[str]:
-    emoji = "✅" if v.decision == "GO" else "🚫"
+    label = v.decision
+    if label in ("STRONG_GO", "GO"):
+        emoji = "✅"
+    elif label == "TRY_ANYWAY":
+        emoji = "👍"
+    elif label == "ASK_FIRST":
+        emoji = "❓"
+    elif label == "PASS":
+        emoji = "⏭️"
+    else:  # BLOCKED
+        emoji = "🚫"
     lines = [
         f"{emoji} <b>{_esc(v.headline)}</b>",
-        f"Confidence: {v.confidence_pct}%",
+        f"Recommendation: {label.replace('_', ' ').title()}  ·  Confidence: {v.confidence_pct}%",
         "",
     ]
 
