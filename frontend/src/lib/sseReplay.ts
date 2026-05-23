@@ -25,13 +25,14 @@ interface CannedEvent {
 const CAPITAL_ON_TAP_GO: CannedEvent[] = [
   { delayMs:   500, event: { type: "agent_complete", agent: "phase_1_jd_extractor" } },
   { delayMs:  1100, event: { type: "agent_complete", agent: "phase_1_company_scraper_summariser" } },
+  { delayMs:  1350, event: { type: "agent_complete", agent: "phase_0_triage" } },
   { delayMs:  1500, event: { type: "agent_complete", agent: "companies_house" } },
   { delayMs:  2400, event: { type: "agent_complete", agent: "sponsor_register" } },
   { delayMs:  3000, event: { type: "agent_complete", agent: "soc_check" } },
-  { delayMs:  4600, event: { type: "agent_complete", agent: "salary_data" } },
-  { delayMs:  7100, event: { type: "agent_complete", agent: "reviews" } },
-  { delayMs:  8400, event: { type: "agent_complete", agent: "phase_1_ghost_job_jd_scorer" } },
-  { delayMs:  9300, event: { type: "agent_complete", agent: "phase_1_red_flags" } },
+  { delayMs:  3800, event: { type: "agent_complete", agent: "gazette_check" } },
+  { delayMs:  4600, event: { type: "agent_complete", agent: "reviews" } },
+  { delayMs:  7100, event: { type: "agent_complete", agent: "phase_1_ghost_job_jd_scorer" } },
+  { delayMs:  8400, event: { type: "agent_complete", agent: "phase_1_red_flags" } },
   {
     delayMs: 10800,
     event: {

@@ -79,7 +79,6 @@ def _fast_fail_classify(jd_text: str, user: UserProfile) -> Optional[TriageResul
     """Deterministic tier-0: catch obvious DEFINITE_PASS cases before the
     Haiku call. Zero cost, zero latency. Returns None when the case
     isn't obvious — caller proceeds to the Haiku classifier."""
-    jd_lower = jd_text.lower()
 
     # Empty or near-empty JD
     if len(jd_text.strip()) < 60:
@@ -125,10 +124,7 @@ async def classify(
                 "role_title": jd.role_title,
                 "seniority_signal": jd.seniority_signal,
                 "soc_code_guess": jd.soc_code_guess,
-                "salary_band": {
-                    "min": jd.salary_band_min,
-                    "max": jd.salary_band_max,
-                } if jd.salary_band_min is not None else None,
+                "salary_band": jd.salary_band,
                 "required_years_experience": jd.required_years_experience,
                 "required_skills": jd.required_skills,
                 "specificity_signals": jd.specificity_signals[:5],

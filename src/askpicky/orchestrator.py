@@ -58,12 +58,14 @@ PHASE_1_AGENTS: list[str] = [
     # Phase 1A (serial)
     "phase_1_jd_extractor",
     "phase_1_company_scraper_summariser",
-    "companies_house",
+    # Phase 0 — triage (runs after JD + company scrape, before 1C)
+    "phase_0_triage",
     # Phase 1C (parallel — ordered by typical completion latency so the
     # visual ticking on the surface matches the order checkmarks
     # actually appear: parquet lookups fastest, then the scraper, then
     # the Opus xhigh agents, with red_flags last because it waits on
     # reviews).
+    "companies_house",
     "sponsor_register",
     "soc_check",
     "gazette_check",

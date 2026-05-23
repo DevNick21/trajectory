@@ -4,11 +4,12 @@
 // "first agent in PHASE_1_AGENTS not yet in completed[]".
 
 export const PHASE_1_AGENTS = [
-  // Phase 1A (serial)
+  // Phase 1A (serial — actual execution order)
   "phase_1_jd_extractor",
   "phase_1_company_scraper_summariser",
-  "companies_house",
+  "phase_0_triage",
   // Phase 1C (parallel — ordered by typical completion latency)
+  "companies_house",
   "sponsor_register",
   "soc_check",
   "gazette_check",
@@ -22,6 +23,7 @@ export type Phase1AgentName = (typeof PHASE_1_AGENTS)[number];
 // Friendly labels for the dashboard. Internal agent IDs are clear to
 // engineers; users want short, descriptive lines.
 export const PHASE_1_AGENT_LABELS: Record<string, string> = {
+  phase_0_triage: "Intent triage",
   phase_1_jd_extractor: "Job description parser",
   phase_1_company_scraper_summariser: "Company researcher",
   companies_house: "Companies House (status, director churn, charges, PSC)",
