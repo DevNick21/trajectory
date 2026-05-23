@@ -166,6 +166,22 @@ def _is_shell_candidate(hit: dict) -> tuple[bool, str]:
     return False, ""
 
 
+def _status_quality(status: str) -> int:
+    """Map CH status to a sort-preference score. Higher = better.
+
+    Active entities sort above everything; dissolved/liquidated/receivership
+    sort to the bottom regardless of string-match score. This is the
+    principled fix for the loveholidays-class misfire — a dissolved shell
+    can never outrank an active entity.
+    """
+    s = (status or "").lower()
+    if s == "active":
+        return 3
+    if s in {"dissolved", "liquidation", "receivership"}:
+        return 1
+    return 2  # active_conversion, other, unknown
+
+
 def _score_ch_hits(
     raw_name: str, hits: list[dict],
 ) -> list[tuple[float, dict]]:
@@ -174,6 +190,12 @@ def _score_ch_hits(
     Shell candidates (dissolved + freshly-incorporated brand squats)
     are dropped before scoring — these are the loveholidays-style
     misfires the resolver MUST refuse to anchor.
+
+    Sort key is (status_quality, score) — active entities always sort
+    above dissolved ones, regardless of string similarity. This is the
+    principled fix; the old pure-string-score approach let a freshly
+    dissolved "LOVE HOLIDAYS LTD" outrank the real "WE LOVE HOLIDAYS
+    LIMITED" (active since 2011) on a 4-point name-similarity edge.
     """
     scored: list[tuple[float, dict]] = []
     for hit in hits:
@@ -188,6 +210,14 @@ def _score_ch_hits(
             )
             continue
         combined, _ = ensemble_score(raw_name, candidate)
+
+        # Composite sort key: status quality dominates, score tie-breaks.
+        # A dissolved entity with score 100 still sorts below an active
+        # entity with score 0 — the user is looking for the employer that
+        # pays salaries, not the best-named empty shell.
+        quality = _status_quality(hit.get("company_status") or "")
+        combined = quality * 100.0 + combined
+
         scored.append((combined, hit))
     scored.sort(key=lambda x: x[0], reverse=True)
     return scored

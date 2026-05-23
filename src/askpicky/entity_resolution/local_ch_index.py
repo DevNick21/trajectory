@@ -204,16 +204,19 @@ class LocalCHHit:
     company_number: str
     company_name: str
     company_status: Optional[str]
+    incorporation_date: Optional[str]  # YYYY-MM-DD from the parquet
     score: float
     matched_alias: str  # which alias variant matched (canonical or a previous name)
 
     def as_search_item(self) -> dict:
         """Render as the legacy /search/companies item shape."""
-        return {
+        item: dict = {
             "company_number": self.company_number,
             "title": self.company_name,
             "company_status": (self.company_status or "").lower() or None,
+            "date_of_creation": self.incorporation_date,
         }
+        return item
 
 
 def search_by_name(
@@ -239,6 +242,7 @@ def search_by_name(
     company_names = df["CompanyName"]
     company_numbers = df["CompanyNumber"]
     statuses = df["CompanyStatus"] if "CompanyStatus" in df.columns else None
+    inc_dates = df["IncorporationDate"] if "IncorporationDate" in df.columns else None
 
     # Score each blocked alias against the query, then keep the best
     # score per row. Previous-name matches surface here because we
@@ -261,12 +265,22 @@ def search_by_name(
             continue
         crn = str(company_numbers.iloc[row_idx])
         status = str(statuses.iloc[row_idx]) if statuses is not None else None
+        inc_date: Optional[str] = None
+        if inc_dates is not None:
+            raw_date = inc_dates.iloc[row_idx]
+            if hasattr(raw_date, "strftime"):
+                formatted = raw_date.strftime("%Y-%m-%d")
+                if formatted != "NaT":
+                    inc_date = formatted
+            elif isinstance(raw_date, str) and raw_date.strip():
+                inc_date = raw_date.strip()[:10]
         existing = best_by_row.get(row_idx)
         if existing is None or combined > existing.score:
             best_by_row[row_idx] = LocalCHHit(
                 company_number=crn,
                 company_name=canonical,
                 company_status=status,
+                incorporation_date=inc_date,
                 score=combined,
                 matched_alias=alias_text,
             )
