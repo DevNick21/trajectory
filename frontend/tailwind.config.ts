@@ -85,6 +85,15 @@ const config: Config = {
           "monospace",
         ],
       },
+      keyframes: {
+        scan: {
+          "0%": { transform: "translateY(-100%)" },
+          "100%": { transform: "translateY(200%)" },
+        },
+      },
+      animation: {
+        scan: "scan 2s linear infinite",
+      },
     },
   },
   plugins: [],

@@ -13,7 +13,7 @@
 // the caller's onEvent gets a typed value when the message line is
 // valid JSON.
 
-import type { ForwardJobEvent, FullPrepEvent, QueueBatchEvent } from "./types";
+import type { ForwardJobEvent, QueueBatchEvent } from "./types";
 import { isReplayActive, replayForwardJob } from "./sseReplay";
 
 interface PostSSEOptions {
@@ -101,18 +101,6 @@ export const streamForwardJob = (jobUrl: string, opts: ForwardJobOptions) => {
     { signal: opts.signal, onError: opts.onError },
   );
 };
-
-export interface FullPrepOptions extends PostSSEOptions {
-  onEvent: (event: FullPrepEvent) => void;
-}
-
-export const streamFullPrep = (sessionId: string, opts: FullPrepOptions) =>
-  postSSE<FullPrepEvent>(
-    `/api/sessions/${encodeURIComponent(sessionId)}/full_prep`,
-    {},
-    opts.onEvent,
-    { signal: opts.signal, onError: opts.onError },
-  );
 
 export interface QueueBatchOptions extends PostSSEOptions {
   onEvent: (event: QueueBatchEvent) => void;

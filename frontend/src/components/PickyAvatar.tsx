@@ -46,7 +46,11 @@ export default function PickyAvatar({ state = "idle", className }: Props) {
   };
 
   return (
-    <div className={cn("relative flex items-center justify-center", className)}>
+    <motion.div 
+      layoutId="picky-avatar"
+      className={cn("relative flex items-center justify-center", className)}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+    >
       <motion.svg
         viewBox="0 0 100 100"
         className="w-full h-full drop-shadow-2xl"

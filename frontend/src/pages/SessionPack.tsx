@@ -115,6 +115,7 @@ export default function SessionPack() {
         role={role}
         company={company}
         jobUrl={s.job_url}
+        sessionId={s.id}
         backTo={{ label: "session", href: `/sessions/${s.id}` }}
       />
 

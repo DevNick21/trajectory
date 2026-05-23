@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { PickyState } from "./PickyAvatar";
+import { AnimatePresence } from "motion/react";
 
 type MascotPosition = "sidebar" | "dashboard" | "onboarding" | "verdict";
 
@@ -46,13 +47,15 @@ export function MascotSlot({
 }) {
   const { position: currentPos, state } = useMascot();
 
-  if (currentPos !== position) return null;
-
   return (
     <div className={className}>
-      <React.Suspense fallback={null}>
-        <PickyAvatarLazy state={state} size={size} />
-      </React.Suspense>
+      <AnimatePresence mode="popLayout">
+        {currentPos === position && (
+          <React.Suspense fallback={null}>
+            <PickyAvatarLazy state={state} size={size} />
+          </React.Suspense>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
