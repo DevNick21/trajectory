@@ -3,16 +3,16 @@
 > **Verify roles before you apply.**
 > UK-first, visa-aware, agent-powered job search assistant. Forward a job URL, get a cited verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
 
-AGPL-3.0 · Python 3.11+ · Anthropic SDK + first-party Citations · No auto-apply, ever.
+AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro, Anthropic, OpenAI) · No auto-apply, ever.
 
-*Last updated 2026-05-22 23:30 BST · HEAD `60add03` (Close gap #7: explicit per-pillar signal weights as verdict priors). All 9 architecture gaps from the 2026-05-17 review now closed — see [HANDOFF.md](./HANDOFF.md) §4.*
+*Last updated 2026-05-24 — full DeepSeek routing, 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator, benchmark harness + CI dashboard.*
 
 ---
 
 ## What it does
 
 **Forward a job → cited verdict.**
-A mix of deterministic + LLM checks run in parallel against the JD, the company, and live UK government data (Companies House profile + officers + charges + PSC, The Gazette insolvency notices, Sponsor Register, SOC, ASHE). Picky combines them into a GO / NO_GO decision and explains exactly why — every load-bearing claim cites a verbatim source.
+A mix of deterministic + LLM checks run in parallel against the JD, the company, and live UK government data (Companies House, The Gazette insolvency notices, Sponsor Register, SOC, ASHE). Picky combines them into a 6-label verdict (STRONG_GO, GO, TRY_ANYWAY, ASK_FIRST, PASS, BLOCKED) with an entropy-based evidence-spread score — every claim cites a verbatim source.
 
 **Visa-aware out of the box.**
 Sponsor Register (with fuzzy-match + Splink rescoring), SOC threshold and new-entrant rule, Appendix Skilled Occupations eligibility, Companies House signals. The visa wedge is built in, not bolted on.
@@ -37,7 +37,7 @@ One-tap outcome reporting in Telegram feeds the data network. The more users rep
 | **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Wizard onboarding, dashboard with live Phase 1 SSE streaming, per-session detail pages with citations + pack generators + downloadable files. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
 
-Both share one FastAPI orchestrator, one 9-agent Phase 1 pipeline (with 7 Anthropic Managed Agents sessions wired in for sandboxed multi-step work), and one SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/askpicky/progress/`) streams progress over Telegram edits or SSE without duplicating business logic.
+Both share one FastAPI orchestrator, one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for verdict and voice-sensitive generators), and one SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/askpicky/progress/`) streams progress over Telegram edits or SSE without duplicating business logic.
 
 ---
 
@@ -99,7 +99,7 @@ pip install -r requirements.txt
 # Fetch UK gov data (Sponsor Register, ASHE, SOC codes, Appendix Skilled Occupations)
 python scripts/fetch_gov_data.py
 
-# Copy .env.example to .env, fill ANTHROPIC_API_KEY + TELEGRAM_BOT_TOKEN + DEMO_USER_ID
+# Copy .env.example to .env, fill ANTHROPIC_API_KEY + DEEPSEEK_API_KEY + TELEGRAM_BOT_TOKEN + DEMO_USER_ID
 cp .env.example .env
 
 # Web frontend
@@ -135,8 +135,7 @@ The cheap suite is the regression net every change has to hold. Each LLM-backed 
 - AI-content detection (adversarial, unwinnable)
 - Identity verification (different problem)
 - Employer-facing ATS (different sales motion)
-- LangChain / LangGraph / RapidAPI / Firecrawl (raw Anthropic SDK only)
-- Postgres or Redis (SQLite is enough through the first 100 users)
+- Postgres or Redis (SQLite + FAISS is enough for current scale)
 
 ---
 

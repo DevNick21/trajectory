@@ -122,25 +122,26 @@ class Settings(BaseSettings):
     # provider is "anthropic" or "deepseek". Default: "anthropic".
     # Example: {"jd_extractor": ("deepseek-v4-flash", "deepseek")}
     agent_model_map: dict = Field(default_factory=lambda: {
-        # Everything on DeepSeek V4 Pro — cutover for Anthropic outage / cost
+        # DeepSeek V4 Pro — quality-critical agents (reasoning, voice, citations)
         "verdict": ("deepseek-v4-pro", "deepseek"),
         "self_audit": ("deepseek-v4-pro", "deepseek"),
         "cover_letter": ("deepseek-v4-pro", "deepseek"),
         "cv_tailor": ("deepseek-v4-pro", "deepseek"),
         "salary_strategist": ("deepseek-v4-pro", "deepseek"),
-        "intent_router": ("deepseek-v4-pro", "deepseek"),
-        "triage": ("deepseek-v4-pro", "deepseek"),
-        "jd_extractor": ("deepseek-v4-pro", "deepseek"),
-        "company_scraper_summariser": ("deepseek-v4-pro", "deepseek"),
-        "red_flags": ("deepseek-v4-pro", "deepseek"),
-        "ghost_job_jd_scorer": ("deepseek-v4-pro", "deepseek"),
-        "interview_questions": ("deepseek-v4-pro", "deepseek"),
-        "star_polisher": ("deepseek-v4-pro", "deepseek"),
-        "style_extractor": ("deepseek-v4-pro", "deepseek"),
-        "onboarding_parser": ("deepseek-v4-pro", "deepseek"),
-        "cv_parser": ("deepseek-v4-pro", "deepseek"),
-        "draft_reply": ("deepseek-v4-pro", "deepseek"),
-        "content_shield_tier2": ("deepseek-v4-pro", "deepseek"),
+        # DeepSeek V4 Flash — low-stakes extraction/routing ($0.14/$0.28 per Mtok)
+        "intent_router": ("deepseek-v4-flash", "deepseek"),
+        "triage": ("deepseek-v4-flash", "deepseek"),
+        "jd_extractor": ("deepseek-v4-flash", "deepseek"),
+        "company_scraper_summariser": ("deepseek-v4-flash", "deepseek"),
+        "red_flags": ("deepseek-v4-flash", "deepseek"),
+        "ghost_job_jd_scorer": ("deepseek-v4-flash", "deepseek"),
+        "interview_questions": ("deepseek-v4-flash", "deepseek"),
+        "star_polisher": ("deepseek-v4-flash", "deepseek"),
+        "style_extractor": ("deepseek-v4-flash", "deepseek"),
+        "onboarding_parser": ("deepseek-v4-flash", "deepseek"),
+        "cv_parser": ("deepseek-v4-flash", "deepseek"),
+        "draft_reply": ("deepseek-v4-flash", "deepseek"),
+        "content_shield_tier2": ("deepseek-v4-flash", "deepseek"),
     })
 
     # --- embeddings

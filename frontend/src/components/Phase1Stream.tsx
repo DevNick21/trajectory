@@ -80,7 +80,7 @@ export default function Phase1Stream({ startedAt, completed }: Props) {
                 layout
                 className={cn(
                   "flex items-center justify-between px-6 py-3 text-[10px] sm:text-xs transition-colors",
-                  isDone ? "bg-primary/5 text-primary" : isActive ? "bg-white/5 text-foreground" : "text-muted-foreground opacity-40",
+                  isDone ? "bg-primary/5 text-primary" : isActive ? "bg-white/5 text-foreground" : "text-muted-foreground opacity-70",
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -119,7 +119,7 @@ export default function Phase1Stream({ startedAt, completed }: Props) {
                     <span className="text-[10px] animate-pulse">PROCESSING...</span>
                   )}
                   {elapsedMs !== null && (
-                    <span className="tabular-nums opacity-60">
+                    <span className="tabular-nums opacity-80">
                       {(elapsedMs / 1000).toFixed(2)}s
                     </span>
                   )}

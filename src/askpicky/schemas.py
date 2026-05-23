@@ -518,7 +518,7 @@ class CompaniesHouseSnapshot(BaseModel):
     # Pre-failure distress signals (added 2026-05-22). Director churn
     # and a sudden flurry of debt charges or PSC changes show up in
     # CH WEEKS before headlines about layoffs or restructuring. None
-    # of these are auto-NO_GO on their own — the verdict treats them
+    # of these are stretch concerns on their own — the verdict treats them
     # as stretch concerns that compound with other distress signals.
     recent_director_resignations_6mo: int = 0
     recent_director_appointments_6mo: int = 0
@@ -752,7 +752,7 @@ HardBlockerType = Literal[
 StretchConcernType = Literal[
     "POSSIBLE_GHOST_JOB",
     "COMPANIES_HOUSE_DISTRESS",
-    # Pre-failure distress signals from CH that don't auto-NO_GO on
+    # Pre-failure distress signals from CH that don't auto-block on
     # their own but compound when stacked. Surfaced separately so the
     # verdict's reasoning can name what's behind the downgraded
     # confidence.
@@ -889,23 +889,6 @@ def is_positive_verdict(decision: str) -> bool:
 def is_blocking_verdict(decision: str) -> bool:
     """True when the label is a hard stop (BLOCKED)."""
     return decision in _BLOCKING_LABELS
-
-
-def normalize_verdict_decision(raw: Optional[str]) -> str:
-    """Map legacy GO/NO_GO values (or None) to the new taxonomy.
-    
-    GO   → GO   (keep as positive default)
-    NO_GO→ PASS (soft-negative; old NO_GO without blockers evidence)
-    None → PASS (no verdict yet)
-    Any new label → pass through unchanged.
-    """
-    if raw is None:
-        return "PASS"
-    if raw == "GO":
-        return "GO"
-    if raw == "NO_GO":
-        return "PASS"
-    return raw
 
 
 

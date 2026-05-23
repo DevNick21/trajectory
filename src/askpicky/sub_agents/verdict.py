@@ -34,7 +34,6 @@ from ..schemas import (
     StretchConcern,
     UserProfile,
     Verdict,
-    normalize_verdict_decision,
 )
 from ..validators.citations import (
     ValidationContext,

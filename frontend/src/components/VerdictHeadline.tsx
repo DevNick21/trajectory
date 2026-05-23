@@ -74,7 +74,7 @@ export default function VerdictHeadline({ verdict }: Props) {
               </Badge>
               {verdict.confidence_pct !== undefined && (
                 <div className="flex items-center gap-1.5 px-2 py-0.5 rounded border border-canvas bg-background/50">
-                  <Fingerprint className="h-3 w-3 text-primary opacity-50" />
+                  <Fingerprint className="h-3 w-3 text-primary" />
                   <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest font-bold">
                     {verdict.confidence_pct}% Confidence
                   </span>

@@ -346,7 +346,7 @@ your confidence, not your decision:
 - If the user has zero prior outcomes, note that: "This is our
   first check together — treat the confidence as advisory."
 
-- NEVER change the GO/NO_GO decision based on outcomes. Outcomes
+- NEVER change the decision label based on outcomes. Outcomes
   calibrate confidence only. A dissolved company is still a NO_GO
   even if the user has ignored 10 of them.
 
