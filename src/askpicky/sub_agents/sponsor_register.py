@@ -597,6 +597,36 @@ class _Match:
     breakdown: dict[str, float]
 
 
+def _rating_quality(rating: str) -> int:
+    """Map a sponsor-rating string to a sort-preference score. Higher = better.
+
+    A-rated (including provisional/expansion) sorts above NOT_LISTED
+    (unknown), which sorts above B_RATED, which sorts above SUSPENDED.
+    This is the principled fix for the entity-resolution gap #2:
+    a suspended exact-name-match must never outrank an A-rated fuzzy-match.
+    The user's question is "can this employer sponsor me?", not "is the
+    name a perfect string match?".
+    """
+    r = (rating or "").lower()
+    # A-rated — the gold standard. Skilled Worker + GBM + Expansion workers.
+    if "(a" in r and "rating" in r:
+        return 4
+    # Provisional / Expansion Worker (provisional A-rating)
+    if "provisional" in r or "expansion" in r:
+        return 4
+    # No listing at all — genuinely missing from the register
+    if not r:
+        return 2
+    # B-rated — on the register but with restrictions
+    if "(b" in r:
+        return 1
+    # Suspended — on the register but licence is inactive
+    if "suspend" in r:
+        return 0
+    # Everything else (worker routes only, etc.) — unclear rating
+    return 2
+
+
 def _topk_matches(
     company_name: str, threshold: float, top_k: int
 ) -> list[_Match]:
@@ -639,7 +669,13 @@ def _topk_matches(
                     m.score = splink_scores[m.row_idx]
 
     surviving: list[_Match] = []
-    for m in sorted(best_per_row.values(), key=lambda x: -x.score):
+    for m in sorted(
+        best_per_row.values(),
+        key=lambda x: (
+            -_rating_quality(str(idx.df.iloc[x.row_idx][idx.rating_col]) if idx.rating_col else ""),
+            -x.score,
+        ),
+    ):
         register_name = str(idx.df.iloc[m.row_idx][idx.name_col])
         if _discriminator_blocks_match(company_name, register_name):
             continue
@@ -814,24 +850,59 @@ async def lookup(
     """Match a company against the Sponsor Register.
 
     `identity` (optional `CompanyIdentity`) lets the unified resolver
-    pass in a higher-quality canonical name + the legal/trading
-    aliases it found via Companies House. When provided, we run the
-    fuzzy match against the canonical CH name first (more reliable
-    than the JD's casual rendering) and fall back to the raw input.
+    pass in a higher-quality canonical name + the full alias set
+    (legal names, trading names, previous company names) from Companies
+    House. When provided, we try EVERY name the resolver found and
+    keep the best A-rated match across all of them — this is the
+    principled fix for architecture gap #2.
+
+    Without `identity`, falls back to the single raw `company_name`.
     """
+    # Gather every name the resolver knows about. Running the fuzzy
+    # match against all of them catches the case where the trading
+    # name is unlicensed but a previous legal name IS on the register.
+    names_to_try: list[str] = [company_name]
     if identity is not None:
-        # Prefer the resolver's canonical name — typically the official
-        # CH-registered name — then fall back to raw input. Take the
-        # better of the two matches.
         canonical = getattr(identity, "canonical_name", None)
-        if canonical and canonical != company_name:
-            primary = await asyncio.to_thread(_lookup_sync, canonical)
-            backup = await asyncio.to_thread(_lookup_sync, company_name)
-            # Pick the one with a definite status; tie-break by
-            # matched_name presence then score.
-            if primary.matched_name and not backup.matched_name:
-                return primary
-            if backup.matched_name and not primary.matched_name:
-                return backup
-            return primary
+        if canonical and canonical not in names_to_try and canonical != company_name:
+            names_to_try.append(canonical)
+        for attr in ("aliases", "trading_names", "previous_company_names"):
+            extras = getattr(identity, attr, None) or []
+            for n in extras:
+                if isinstance(n, str) and n.strip() and n.strip() not in names_to_try:
+                    names_to_try.append(n.strip())
+
+    if len(names_to_try) == 1:
+        return await asyncio.to_thread(_lookup_sync, company_name)
+
+    # Run all names in parallel, pick the best A-rated match.
+    # rating_quality encodes: A-rated=4 > unknown/NOT_LISTED=2 >
+    # B_RATED=1 > SUSPENDED=0. Tie-break by matched_name presence.
+    loop = asyncio.get_running_loop()
+    results = await asyncio.gather(
+        *(loop.run_in_executor(None, _lookup_sync, n) for n in names_to_try),
+        return_exceptions=True,
+    )
+
+    best: Optional[SponsorStatus] = None
+    best_q = -1
+    for r in results:
+        if isinstance(r, BaseException):
+            continue
+        if not isinstance(r, SponsorStatus):
+            continue
+        q = _rating_quality(r.rating or "")
+        if r.matched_name and q > best_q:
+            best = r
+            best_q = q
+        elif r.matched_name and q == best_q and best is None:
+            best = r
+
+    if best is not None:
+        return best
+    # All name searches failed — return the first non-exception result
+    # (all should be NOT_LISTED), or the raw-company-name fallback.
+    for r in results:
+        if isinstance(r, SponsorStatus):
+            return r
     return await asyncio.to_thread(_lookup_sync, company_name)
