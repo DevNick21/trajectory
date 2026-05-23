@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
+import { Loader2 } from "lucide-react";
 import PickyAvatar from "@/components/PickyAvatar";
 
 import { ApiError, finaliseOnboarding } from "@/lib/api";
@@ -32,6 +33,7 @@ export default function Onboarding() {
   const { answers, update, reset } = useOnboardingDraft();
   const [stepIndex, setStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [processingStep, setProcessingStep] = useState(0);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -53,8 +55,19 @@ export default function Onboarding() {
       return;
     }
     setIsSubmitting(true);
+    setProcessingStep(0);
+    
+    // Brief step-through for UX pacing — the actual work is the API call
+    setProcessingStep(1);
+    await new Promise(r => setTimeout(r, 300));
+    setProcessingStep(2);
+    await new Promise(r => setTimeout(r, 300));
+
     try {
       await finaliseOnboarding(result.payload);
+      setProcessingStep(3);
+      await new Promise(r => setTimeout(r, 300));
+      setProcessingStep(4);
       clearOnboardingDraft();
       reset();
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
@@ -67,8 +80,8 @@ export default function Onboarding() {
             ? err.message
             : "Calibration failed.";
       setSubmitError(message);
-    } finally {
       setIsSubmitting(false);
+      setProcessingStep(0);
     }
   };
 
@@ -134,7 +147,7 @@ export default function Onboarding() {
                   {StageComponent ? (
                     <StageComponent answers={answers} update={update} />
                   ) : (
-                    <ReviewPanel />
+                    <ReviewPanel processingStep={processingStep} isSubmitting={isSubmitting} />
                   )}
                 </CardContent>
               </Card>
@@ -166,9 +179,17 @@ export default function Onboarding() {
               <Button 
                 onClick={handleFinalise} 
                 disabled={isSubmitting}
-                className="font-bold uppercase tracking-[0.2em] px-8 h-12"
+                className={cn(
+                  "font-bold uppercase tracking-[0.2em] px-8 h-12 transition-all",
+                  isSubmitting && "opacity-50"
+                )}
               >
-                {isSubmitting ? "Processing..." : "Commit Profile"}
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Calibrating...
+                  </span>
+                ) : "Commit Profile"}
               </Button>
             ) : (
               <Button 
@@ -189,7 +210,14 @@ export default function Onboarding() {
 // Review — last step before submit
 // ---------------------------------------------------------------------------
 
-function ReviewPanel() {
+function ReviewPanel({ processingStep, isSubmitting }: { processingStep: number, isSubmitting: boolean }) {
+  const steps = [
+    { label: "Sponsor Register Audit", key: 1 },
+    { label: "Salary Percentile Link", key: 2 },
+    { label: "Voice Style Profiler", key: 3 },
+    { label: "Profile Commit", key: 4 },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -199,24 +227,52 @@ function ReviewPanel() {
         </p>
       </div>
       
-      <div className="grid grid-cols-1 gap-4 font-mono text-[10px] uppercase tracking-widest opacity-60">
-        <div className="p-4 rounded-xl border border-canvas flex justify-between">
-          <span>Sponsor Register Audit</span>
-          <span className="text-success">READY</span>
-        </div>
-        <div className="p-4 rounded-xl border border-canvas flex justify-between">
-          <span>Salary Percentile Link</span>
-          <span className="text-success">READY</span>
-        </div>
-        <div className="p-4 rounded-xl border border-canvas flex justify-between">
-          <span>Voice Style Profiler</span>
-          <span className="text-success">READY</span>
-        </div>
+      <div className="grid grid-cols-1 gap-4 font-mono text-[10px] uppercase tracking-widest">
+        {steps.map((step) => {
+          const isActive = processingStep === step.key;
+          const isDone = processingStep > step.key;
+
+          return (
+            <div 
+              key={step.key} 
+              className={cn(
+                "p-4 rounded-xl border transition-all duration-500 flex justify-between items-center",
+                isDone ? "border-success/30 bg-success/5" : 
+                isActive ? "border-primary bg-primary/5 shadow-lg shadow-primary/5" : 
+                "border-canvas opacity-40"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                {isActive && <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
+                <span>{step.label}</span>
+              </div>
+              
+              <span className={cn(
+                "font-bold",
+                isDone ? "text-success" : 
+                isActive ? "text-primary animate-pulse" : 
+                "text-muted-foreground"
+              )}>
+                {isDone ? "OK" : isActive ? "PROCESSING..." : "PENDING"}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="p-4 rounded-xl bg-secondary/30 border border-canvas italic text-sm text-muted-foreground">
-        "I'm ready when you are. Just hit that button and let's get to work. There are a lot of bad jobs out there, and someone needs to find them before you do."
-      </div>
+      {!isSubmitting ? (
+        <div className="p-4 rounded-xl bg-secondary/30 border border-canvas italic text-sm text-muted-foreground">
+          "I'm ready when you are. Just hit that button and let's get to work. There are a lot of bad jobs out there, and someone needs to find them before you do."
+        </div>
+      ) : (
+        <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 font-mono text-[10px] space-y-1">
+          <p className="text-primary animate-pulse">{">"} INITIALIZING NEURAL UPLOAD...</p>
+          {processingStep >= 1 && <p className="text-muted-foreground">{">"} SYNCING UK GOVERNMENT SPONSOR DATA [DONE]</p>}
+          {processingStep >= 2 && <p className="text-muted-foreground">{">"} CALCULATING ASHE REGIONAL PERCENTILES [DONE]</p>}
+          {processingStep >= 3 && <p className="text-muted-foreground">{">"} EXTRACTING LINGUISTIC PATTERNS [DONE]</p>}
+          {processingStep >= 4 && <p className="text-success font-bold">{">"} PROFILE COMMITTED TO GLOBAL ARCHIVE.</p>}
+        </div>
+      )}
     </div>
   );
 }

@@ -279,7 +279,7 @@ export function StageVisa({ answers, update }: StageProps) {
               onChange={(e) =>
                 update({ visa_route: e.target.value as OnboardingAnswers["visa_route"] })
               }
-              className="mt-1 h-10 w-full rounded-md border border-input bg-white text-card-foreground px-3 text-sm font-sans"
+              className="mt-1 h-10 w-full rounded-md border border-input bg-white text-gray-900 px-3 text-sm font-sans"
             >
               <option value="">Select…</option>
               {VISA_ROUTES.map((r) => (
@@ -501,10 +501,14 @@ export function StageDealBreakers({ answers, update }: StageProps) {
 export function StageCareer({ answers, update }: StageProps) {
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold">Career so far (optional)</h2>
+      <h2 className="text-lg font-semibold">Career so far</h2>
       <p className="text-sm text-muted-foreground">
-        A paragraph in your own voice. Feeds the retrievable career
-        store — generators pull from it when drafting CVs.
+        A paragraph in your own voice describing your career trajectory.
+        This feeds the retrievable career store — generators pull from it
+        when drafting CVs, cover letters, and interview answers.{" "}
+        <strong className="text-foreground">Strongly recommended</strong> —
+        it's the difference between a generic pack and one that sounds
+        like you.
       </p>
       <Textarea
         rows={8}
