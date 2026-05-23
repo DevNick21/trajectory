@@ -1,11 +1,11 @@
-import PickyAvatar, { type PickyState } from "@/components/PickyAvatar";
-import { useReducer, useRef } from "react";
+import { MascotSlot, useMascot } from "@/components/MascotContext";
+import { useEffect, useReducer, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ApiError, getProfile, listSessions } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
-import type { ForwardJobEvent, SessionListResponse } from "@/lib/types";
+import type { ForwardJobEvent, SessionListResponse, VerdictPayload } from "@/lib/types";
 import ForwardJobForm from "@/components/ForwardJobForm";
 import NotificationBanner from "@/components/NotificationBanner";
 import Phase1Stream, { type AgentTiming } from "@/components/Phase1Stream";
@@ -31,7 +31,7 @@ interface StreamState {
   jobUrl: string | null;
   startedAt: number | null;
   completed: Record<string, AgentTiming>;
-  verdict: Record<string, unknown> | null;
+  verdict: VerdictPayload | null;
   errorMessage: string | null;
 }
 
@@ -107,14 +107,24 @@ export default function Dashboard() {
   const [stream, dispatch] = useReducer(reducer, initial);
   const lastSessionIdRef = useRef<string | null>(null);
 
-  const pickyState: PickyState =
-    stream.status === "running"
-      ? "thinking"
-      : stream.status === "complete"
-        ? (stream.verdict?.decision === "GO" ? "go" : "no_go")
-        : stream.status === "error"
-          ? "error"
-          : "idle";
+  const { setState, setPosition } = useMascot();
+
+  useEffect(() => {
+    setPosition("dashboard");
+    return () => setPosition("sidebar");
+  }, [setPosition]);
+
+  useEffect(() => {
+    const pickyState =
+      stream.status === "running"
+        ? "thinking"
+        : stream.status === "complete"
+          ? (stream.verdict?.decision === "GO" ? "go" : "no_go")
+          : stream.status === "error"
+            ? "error"
+            : "idle";
+    setState(pickyState as any);
+  }, [stream.status, stream.verdict?.decision, setState]);
 
   const profileError = profile.error as ApiError | undefined;
   const profileMissing =
@@ -159,6 +169,11 @@ export default function Dashboard() {
       });
       toast.error("Research failed", { description: message });
     } finally {
+      // Invalidate all session queries so the sidebar, session list,
+      // and any other observers pick up the new verdict immediately.
+      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      // Also explicitly fetch the refreshed session list so the
+      // VerdictCard gets the latest session ID for its linkage.
       const refreshed = await queryClient.fetchQuery<SessionListResponse>({
         queryKey: ["sessions"],
         queryFn: () => listSessions(),
@@ -204,7 +219,7 @@ export default function Dashboard() {
           {(stream.status === "running" || stream.status === "complete") && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex flex-col items-center justify-center py-8 bg-card/50 rounded-3xl border border-canvas backdrop-blur-sm">
-                <PickyAvatar state={pickyState} className="h-32 w-32 rounded-[2rem]" />
+                <MascotSlot position="dashboard" className="h-32 w-32" size="lg" />
                 <div className="mt-6 text-center">
                   <h2 className="font-serif text-xl mb-1">
                     {stream.status === "running" ? "Picky is scrutinizing..." : "The Verdict is In."}

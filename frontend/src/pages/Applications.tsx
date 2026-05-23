@@ -90,6 +90,7 @@ function ApplicationRow({ record }: { record: ApplicationRecord }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["applications"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["sessions"] });
       toast.success("Updated.");
     },
     onError: () => toast.error("Update failed — try again."),

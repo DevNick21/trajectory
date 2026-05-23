@@ -12,7 +12,7 @@ export default function SidebarStatus() {
   const sessions = useQuery({
     queryKey: ["sessions", "sidebar-status"],
     queryFn: () => listSessions(50),
-    staleTime: 30_000,
+    staleTime: 5_000,
   });
 
   let body = "Picky is ready. Forward a role to get started.";
