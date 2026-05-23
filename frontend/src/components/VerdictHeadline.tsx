@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import CitationLink from "@/components/CitationLink";
 import { cn } from "@/lib/utils";
-import { getVerdictTone, getVerdictEmoji, formatVerdictLabel, isBlockingVerdict, isPositiveVerdict } from "@/lib/verdict";
+import { getVerdictTone, formatVerdictLabel, isBlockingVerdict } from "@/lib/verdict";
 
 interface Props {
   verdict: VerdictPayload | null;
@@ -36,7 +36,6 @@ export default function VerdictHeadline({ verdict }: Props) {
   const label = verdict.decision;
   const tone = getVerdictTone(label);
   const isBlocked = isBlockingVerdict(label);
-  const isPositive = isPositiveVerdict(label);
 
   return (
     <motion.div

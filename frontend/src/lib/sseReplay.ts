@@ -40,6 +40,7 @@ const CAPITAL_ON_TAP_GO: CannedEvent[] = [
       data: {
         decision: "GO",
         confidence_pct: 88,
+        entropy_norm: 0.15,
         headline: "Strong fit — sponsor A-rated, salary clears the threshold",
         reasoning: [
           {

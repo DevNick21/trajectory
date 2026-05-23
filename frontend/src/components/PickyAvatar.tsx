@@ -92,18 +92,18 @@ export default function PickyAvatar({ state = "idle", className }: Props) {
           <motion.path
             variants={earVariants}
             d="M35,35 L30,15 L45,25 Z"
-            fill="var(--primary)"
+            fill="#e46119" // Rust/Orange
           />
           <motion.path
             variants={earVariants}
             d="M65,35 L70,15 L55,25 Z"
-            fill="var(--primary)"
+            fill="#e46119" // Rust/Orange
           />
 
           {/* Face Base */}
           <path
             d="M30,35 L70,35 L75,55 L50,75 L25,55 Z"
-            fill="var(--primary)"
+            fill="#f97316" // Orange-500
           />
           
           {/* White Snout Accent */}
@@ -196,6 +196,6 @@ export default function PickyAvatar({ state = "idle", className }: Props) {
           SIGNAL LOST
         </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

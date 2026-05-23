@@ -20,12 +20,14 @@ Every agent in `sub_agents/` goes through `call_agent`. The wrapper:
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 
 import json
 import logging
 import time
 from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Optional, TypeVar
 
+from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
 from .config import settings
@@ -70,7 +72,7 @@ def _get_anthropic_client():
 
 def _get_deepseek_client():
     """DeepSeek via Anthropic-compatible API.
-    
+
     Docs: https://api-docs.deepseek.com/guides/anthropic_api
     Base URL: https://api.deepseek.com/anthropic
     Supported: tool calls, JSON mode, 1M context.
@@ -99,7 +101,7 @@ def _get_openai_client():
 
 def _resolve_provider(agent_name: str, model: str) -> tuple[Provider, str]:
     """Determine provider and model for a given agent call.
-    
+
     Priority: 1) agent_model_map override  2) model-id prefix detection
     3) default to anthropic.
     """
@@ -519,9 +521,9 @@ async def _call_via_messages_api(
 
     resp = await client.messages.create(
         model=model,
-        system=system_prompt,
-        messages=messages,
-        tools=[tool],
+        system=system_prompt,  # type: ignore[arg-type]
+        messages=messages,  # type: ignore[arg-type]
+        tools=[tool],  # type: ignore[arg-type]
         **request_kwargs,
     )
 
@@ -572,7 +574,8 @@ async def _call_via_openai(
     json_schema = output_schema.model_json_schema()
 
     # Flatten system prompt
-    sys_text = system_prompt if isinstance(system_prompt, str) else _flatten_blocks(system_prompt)
+    sys_text = system_prompt if isinstance(
+        system_prompt, str) else _flatten_blocks(system_prompt)
 
     # Build OpenAI-format messages: system + user messages
     openai_messages: list[dict] = [{"role": "system", "content": sys_text}]
@@ -582,7 +585,8 @@ async def _call_via_openai(
         if isinstance(content, str):
             openai_messages.append({"role": role, "content": content})
         elif isinstance(content, list):
-            openai_messages.append({"role": role, "content": _flatten_blocks(content)})
+            openai_messages.append(
+                {"role": role, "content": _flatten_blocks(content)})
 
     resp = await client.chat.completions.create(
         model=model,
@@ -778,17 +782,19 @@ async def call_agent_with_tools(
         wrapped_messages = _maybe_wrap_messages_for_cache(messages)
         resp = await client.messages.create(
             model=model,
-            system=cached_system,
-            messages=wrapped_messages,
-            tools=all_tools,
+            system=cached_system,  # type: ignore[arg-type]
+            messages=wrapped_messages,  # type: ignore[arg-type]
+            tools=all_tools,  # type: ignore[arg-type]
             **request_kwargs,
         )
 
         usage = resp.usage
         total_input += int(getattr(usage, "input_tokens", 0))
         total_output += int(getattr(usage, "output_tokens", 0))
-        total_cache_read += int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        total_cache_creation += int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        total_cache_read += int(getattr(usage,
+                                "cache_read_input_tokens", 0) or 0)
+        total_cache_creation += int(getattr(usage,
+                                    "cache_creation_input_tokens", 0) or 0)
 
         # Append the assistant response to the message list verbatim — we
         # need both text/thinking blocks AND tool_use blocks because the
@@ -823,7 +829,8 @@ async def call_agent_with_tools(
         messages.append({"role": "assistant", "content": assistant_blocks})
 
         # Find every tool_use in this turn — there can be multiple.
-        tool_uses = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
+        tool_uses = [b for b in resp.content if getattr(
+            b, "type", None) == "tool_use"]
 
         # If the model emitted the final tool, we're done.
         final_call = next(
@@ -932,9 +939,6 @@ async def _enforce_credit_budget(priority: Priority) -> None:
 # `call_agent` stays as a backwards-compat alias of `call_structured` so
 # existing call sites keep working through the migration.
 # ===========================================================================
-
-
-from dataclasses import dataclass
 
 
 # --- (1) call_structured ---------------------------------------------------
@@ -1110,7 +1114,8 @@ async def call_with_citations(
     client = _get_anthropic_client()
     call_start = time.perf_counter()
 
-    doc_blocks = _build_citation_documents(documents, cache_documents=cache_documents)
+    doc_blocks = _build_citation_documents(
+        documents, cache_documents=cache_documents)
 
     is_opus47 = _is_opus_47(model)
     request_kwargs: dict[str, Any] = {}
@@ -1179,7 +1184,8 @@ async def call_with_citations(
                     cit_dicts.append(dict(c))
                 else:
                     cit_dicts.append(
-                        {k: getattr(c, k) for k in dir(c) if not k.startswith("_")}
+                        {k: getattr(c, k)
+                         for k in dir(c) if not k.startswith("_")}
                     )
             text_blocks.append({"text": text, "citations": cit_dicts})
             raw_citations.extend(cit_dicts)
@@ -1189,7 +1195,8 @@ async def call_with_citations(
         input_tokens = int(usage.input_tokens)
         output_tokens = int(usage.output_tokens)
         cache_read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-        cache_creation = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+        cache_creation = int(
+            getattr(usage, "cache_creation_input_tokens", 0) or 0)
         total_input += input_tokens
         total_output += output_tokens
         total_cache_read += cache_read
@@ -1344,8 +1351,10 @@ async def call_with_tools(
             usage = resp.usage
             agg_input += int(usage.input_tokens)
             agg_output += int(usage.output_tokens)
-            agg_cache_read += int(getattr(usage, "cache_read_input_tokens", 0) or 0)
-            agg_cache_creation += int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+            agg_cache_read += int(getattr(usage,
+                                  "cache_read_input_tokens", 0) or 0)
+            agg_cache_creation += int(getattr(usage,
+                                      "cache_creation_input_tokens", 0) or 0)
 
             emit = next(
                 (b for b in resp.content
@@ -1449,6 +1458,3 @@ async def call_in_session(agent_name: str, *args, **kwargs):
             f"Available: {sorted(sessions)}"
         )
     return await session(*args, **kwargs)
-
-
-

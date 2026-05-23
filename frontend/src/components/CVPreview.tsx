@@ -3,6 +3,7 @@ import { Loader2, Terminal } from "lucide-react";
 import PickyAvatar from "@/components/PickyAvatar";
 
 import type { CVOutput, Citation } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
