@@ -81,7 +81,7 @@ export default function VerdictHeadline({ verdict }: Props) {
                 </div>
               )}
             </div>
-            <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-[0.3em] opacity-50">Opus-4.7-Forensic-Engine</span>
+            <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-[0.3em] opacity-80">Opus-4.7-Forensic-Engine</span>
           </motion.div>
           {verdict.headline && (
             <motion.h2
@@ -158,8 +158,8 @@ function ReasonGroup({
   const titleClass = cn(
     "flex items-center gap-2 text-[10px] font-mono font-bold uppercase tracking-[0.2em] mb-3",
     tone === "destructive" && "text-destructive",
-    tone === "warning" && "text-amber-600",
-    tone === "default" && "text-primary/70",
+    tone === "warning" && "text-warning",
+    tone === "default" && "text-primary",
   );
 
   return (
@@ -175,14 +175,14 @@ function ReasonGroup({
             className={cn(
               "rounded-xl border p-4 transition-all relative group/item",
               tone === "destructive" && "border-destructive/30 bg-destructive/5 shadow-[inset_0_0_15px_rgba(220,38,38,0.03)]",
-              tone === "warning" && "border-amber-500/30 bg-amber-50/20 shadow-[inset_0_0_15px_rgba(245,158,11,0.03)]",
+              tone === "warning" && "border-warning/30 bg-warning/5 shadow-[inset_0_0_15px_rgba(var(--warning),0.03)]",
               tone === "default" && "border-canvas bg-secondary/5 hover:bg-secondary/10",
             )}
           >
             <div className={cn(
               "absolute left-0 top-0 bottom-0 w-1 transition-colors",
               tone === "destructive" && "bg-destructive/20 group-hover/item:bg-destructive/50",
-              tone === "warning" && "bg-amber-500/20 group-hover/item:bg-amber-500/50",
+              tone === "warning" && "bg-warning/20 group-hover/item:bg-warning/50",
               tone === "default" && "bg-primary/10 group-hover/item:bg-primary/30",
             )} />
             

@@ -50,7 +50,7 @@ function Section({
           </div>
           <div className="flex flex-col">
             <span className="font-serif text-lg tracking-tight leading-none mb-1">{title}</span>
-            <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest opacity-0 group-open:opacity-100 transition-opacity">Detailed Analysis Active</span>
+            <span className="text-[9px] font-mono text-muted-foreground uppercase tracking-widest group-open:opacity-100 transition-opacity">Detailed Analysis Active</span>
           </div>
           {badge && (
             <span className="text-[10px] font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded uppercase font-bold tracking-tighter border border-primary/20 ml-2">

@@ -44,7 +44,7 @@ export default function SidebarStatus() {
       <div className="flex items-center justify-between mb-3 relative z-10">
         <div className="flex items-center gap-2">
            <Activity className={cn("h-3 w-3 text-primary", isLoading && "animate-pulse")} />
-           <span className="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-primary/70">{statusText}</span>
+           <span className="text-[9px] font-mono font-bold uppercase tracking-[0.2em] text-primary">{statusText}</span>
         </div>
         <div className="flex gap-1">
            {[...Array(3)].map((_, i) => (
@@ -70,7 +70,7 @@ export default function SidebarStatus() {
           </div>
         )}
 
-        <p className="text-[10px] text-muted-foreground font-mono leading-tight uppercase tracking-tight opacity-70">
+        <p className="text-[10px] text-muted-foreground font-mono leading-tight uppercase tracking-tight">
           {isLoading ? "Synchronizing history..." : stats.total === 0 ? "Awaiting first target URL." : `Lab-ID: PIKY-${stats.total.toString().padStart(4, '0')}`}
         </p>
       </div>
@@ -81,7 +81,7 @@ export default function SidebarStatus() {
 function StatBox({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-secondary/20 rounded border border-canvas p-1.5 flex flex-col gap-0.5">
-      <span className="text-[7px] font-mono font-bold uppercase tracking-widest text-muted-foreground opacity-60">{label}</span>
+      <span className="text-[7px] font-mono font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
       <span className="text-xs font-mono font-bold text-foreground tabular-nums">{value.toString().padStart(2, '0')}</span>
     </div>
   );

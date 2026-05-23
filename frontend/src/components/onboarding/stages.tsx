@@ -119,7 +119,7 @@ export function StageCVUpload({ answers, update }: StageProps) {
       <label
         className={
           "flex cursor-pointer flex-col items-center justify-center " +
-          "rounded-md border-2 border-dashed border-input bg-white " +
+          "rounded-md border-2 border-dashed border-input bg-background " +
           "px-6 py-10 text-center text-card-foreground transition " +
           "hover:border-primary"
         }
@@ -279,7 +279,7 @@ export function StageVisa({ answers, update }: StageProps) {
               onChange={(e) =>
                 update({ visa_route: e.target.value as OnboardingAnswers["visa_route"] })
               }
-              className="mt-1 h-10 w-full rounded-md border border-input bg-white text-gray-900 px-3 text-sm font-sans"
+              className="mt-1 h-10 w-full rounded-md border border-input bg-background text-foreground px-3 text-sm font-sans"
             >
               <option value="">Select…</option>
               {VISA_ROUTES.map((r) => (
@@ -386,7 +386,7 @@ export function StageWorkContext({ answers, update }: StageProps) {
                 .value as OnboardingAnswers["current_employment"],
             })
           }
-          className="mt-1 h-10 w-full rounded-md border border-input bg-white text-card-foreground px-3 text-sm font-sans"
+          className="mt-1 h-10 w-full rounded-md border border-input bg-background text-foreground px-3 text-sm font-sans"
         >
           <option value="">Select…</option>
           <option value="EMPLOYED">Employed</option>

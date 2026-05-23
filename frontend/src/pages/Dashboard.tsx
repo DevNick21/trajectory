@@ -117,9 +117,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const label = stream.verdict?.decision;
+    const completedCount = Object.keys(stream.completed).length;
     const pickyState =
       stream.status === "running"
-        ? "thinking"
+        ? (completedCount >= 4 ? "scrutinizing" : "thinking")
         : stream.status === "complete"
           ? (label && isPositiveVerdict(label) ? "go" : label && isBlockingVerdict(label) ? "no_go" : "scrutinizing")
           : stream.status === "error"
