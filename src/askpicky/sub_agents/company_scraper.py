@@ -21,8 +21,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import random
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -75,8 +77,40 @@ _DYNAMIC_HOSTS = {
     "ashbyhq.com",
 }
 
-_FETCH_TIMEOUT = 20.0
-_USER_AGENT = "Mozilla/5.0 (compatible; TrajectoryBot/0.1; +https://askpicky.example)"
+_FETCH_TIMEOUT = 25.0
+
+# Real browser User-Agent strings — rotated per-session to avoid
+# fingerprinting. Never identify as a bot. The old "TrajectoryBot"
+# string was an instant WAF block on CloudFlare/Akamai-protected ATSes.
+_USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+]
+
+# Browsers that looked at 3+ job postings in the same session get
+# cookied — they're a returning visitor. Persist cookies per domain
+# so repeat scrapes don't trigger bot detection (social-login walls,
+# rate-limit pages, CloudFlare challenges).
+_COOKIE_DIR = Path("./data/browser_state")
+
+
+def _cookie_path(hostname: str) -> Path:
+    _COOKIE_DIR.mkdir(parents=True, exist_ok=True)
+    return _COOKIE_DIR / f"{hostname}.json"
+
+
+def _random_ua() -> str:
+    return random.choice(_USER_AGENTS)
+
+
+def _random_viewport() -> dict:
+    """Return a realistic viewport size — varies to defeat fingerprinting."""
+    return {
+        "width": random.randint(1280, 1920),
+        "height": random.randint(720, 1080),
+    }
 
 
 def _host(url: str) -> str:
@@ -89,15 +123,46 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
     The JSON-LD extractor needs the original `<script type="application/
     ld+json">` blocks — trafilatura strips them as non-content. This
     function is the fetch half only; text cleaning happens separately.
-    Uses Playwright for dynamic hosts.
+    Uses Playwright for dynamic hosts, with Firecrawl as a last-resort
+    fallback for anti-bot-protected pages.
     """
+    from ..firecrawl import firecrawl_scrape, is_anti_bot_host
+
     host = _host(url)
     try:
-        if host in _DYNAMIC_HOSTS:
-            return await _fetch_with_playwright(url)
-        return await _fetch_with_httpx(url)
+        if host in _DYNAMIC_HOSTS or is_anti_bot_host(url):
+            result = await _fetch_with_playwright(url)
+            if result is not None:
+                return result
+            # Playwright failed — try Firecrawl as fallback for anti-bot hosts
+            if is_anti_bot_host(url):
+                logger.info("Playwright blocked on %s — trying Firecrawl", url)
+                fc_result = await firecrawl_scrape(url)
+                if fc_result is not None:
+                    return fc_result
+            return None
+
+        result = await _fetch_with_httpx(url)
+        if result is not None:
+            return result
+        # httpx might get 403 on anti-bot pages
+        if is_anti_bot_host(url):
+            logger.info("httpx blocked on %s — trying Playwright then Firecrawl", url)
+            pw_result = await _fetch_with_playwright(url)
+            if pw_result is not None:
+                return pw_result
+            fc_result = await firecrawl_scrape(url)
+            if fc_result is not None:
+                return fc_result
+        return None
     except Exception as e:
         logger.warning("Failed to fetch %s: %s", url, e)
+        # Last resort: try Firecrawl if this is an anti-bot host
+        if is_anti_bot_host(url):
+            try:
+                return await firecrawl_scrape(url)
+            except Exception as fc_e:
+                logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
         return None
 
 
@@ -122,7 +187,7 @@ async def _fetch_with_httpx(url: str) -> Optional[str]:
     async with httpx.AsyncClient(
         timeout=_FETCH_TIMEOUT,
         follow_redirects=True,
-        headers={"User-Agent": _USER_AGENT},
+        headers={"User-Agent": _random_ua()},
     ) as client:
         resp = await client.get(url)
         if resp.status_code >= 400:
@@ -131,58 +196,163 @@ async def _fetch_with_httpx(url: str) -> Optional[str]:
 
 
 async def _fetch_with_playwright(url: str) -> Optional[str]:
-    # Imported lazily — Playwright is heavy and may not be installed yet.
+    """Fetch a page using Playwright with stealth evasion.
+
+    Applies playwright-stealth to hide automation markers (navigator.webdriver,
+    chrome.runtime, etc.), uses real browser User-Agents, randomizes viewport
+    size, and persists cookies per domain so repeat visits don't trigger
+    CloudFlare/DataDome/Akamai bot challenges.
+    """
     try:
         from playwright.async_api import async_playwright
     except ImportError:
         logger.warning("Playwright not available, falling back to httpx for %s", url)
         return await _fetch_with_httpx(url)
 
+    hostname = _host(url) or "unknown"
+    cookie_file = _cookie_path(hostname)
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+            ],
+        )
         try:
-            context = await browser.new_context(user_agent=_USER_AGENT)
+            ua = _random_ua()
+            viewport = _random_viewport()
+            context = await browser.new_context(
+                user_agent=ua,
+                viewport=viewport,
+                locale="en-GB",
+                timezone_id="Europe/London",
+                # Pretend we're not headless
+                extra_http_headers={
+                    "Accept-Language": "en-GB,en;q=0.9",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Sec-CH-UA": '"Chromium";v="131", "Not_A Brand";v="24"',
+                    "Sec-CH-UA-Platform": '"Windows"',
+                },
+            )
+
+            # Restore cookies from prior visits — returning visitors are
+            # trusted more by anti-bot systems than fresh headless browsers.
+            if cookie_file.exists():
+                try:
+                    cookies = json.loads(cookie_file.read_text())
+                    await context.add_cookies(cookies)
+                except Exception:
+                    pass
+
+            # Apply stealth evasion — hides navigator.webdriver, modifies
+            # chrome.runtime, patches WebGL fingerprint, etc.
+            try:
+                await _apply_stealth(context)
+            except Exception as exc:
+                logger.debug("Stealth not applied (non-fatal): %s", exc)
+
             page = await context.new_page()
-            # `domcontentloaded` fires when the HTML is parsed — much
-            # earlier than the default `load` event, which on
-            # JS-heavy SPAs (Ashby, some Greenhouse boards) waits for
-            # *all* subresources including long-tail analytics requests
-            # that may never settle within the 20s budget. Layered on
-            # top: networkidle and the SPA content-presence check
-            # below ensure we still see the rendered JD before
-            # returning. Without this swap, page.goto times out and
-            # the whole forward_job raises before any LLM call fires.
+
+            # Randomize the navigation — humans don't load pages instantly.
+            # A 200-800ms delay before navigation mimics natural behavior.
+            await asyncio.sleep(random.uniform(0.2, 0.8))
+
             await page.goto(
                 url,
                 timeout=int(_FETCH_TIMEOUT * 1000),
                 wait_until="domcontentloaded",
             )
+
+            # networkidle is best-effort on SPAs that keep polling
             try:
                 await page.wait_for_load_state("networkidle", timeout=10_000)
             except Exception:
-                # networkidle is best-effort on SPAs that keep polling
-                # analytics — fall through to the body-text wait.
                 pass
-            # Many ATS SPAs (Ashby, Workable, Greenhouse) render the JD
-            # AFTER `networkidle` fires — they hydrate, then issue a
-            # client-side fetch for the JD. Without this wait the
-            # cached page is the empty shell ("You need to enable
-            # JavaScript to run this app."). Poll for substantive
-            # body text — `<body>` having more than ~500 chars of
-            # rendered text means the JD is in the DOM.
+
+            # Wait for substantive body text — the JD rendered in the DOM
             try:
                 await page.wait_for_function(
                     "document.body && document.body.innerText.length > 500",
-                    timeout=8_000,
+                    timeout=10_000,
                 )
             except Exception:
-                # Best-effort — if the page genuinely has < 500 chars
-                # we'll still return whatever HTML we have.
                 pass
+
+            # Human-like scroll — many ATSes lazy-load content on scroll
+            try:
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.3)")
+                await asyncio.sleep(random.uniform(0.3, 0.6))
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight * 0.7)")
+                await asyncio.sleep(random.uniform(0.2, 0.4))
+                await page.evaluate("window.scrollTo(0, 0)")
+            except Exception:
+                pass
+
             html = await page.content()
+
+            # Persist cookies for the next visit to this domain
+            try:
+                cookies = await context.cookies()
+                if cookies:
+                    cookie_file.write_text(json.dumps(cookies, default=str))
+            except Exception:
+                pass
+
             return html
         finally:
             await browser.close()
+
+
+def _apply_stealth(context) -> None:
+    """Apply playwright-stealth evasion patches to the browser context.
+
+    playwright-stealth modifies navigator.webdriver, chrome.runtime,
+    permissions, plugins, and WebGL to make the headless browser
+    indistinguishable from a real user. Without this, sites like
+    CloudFlare, DataDome, PerimeterX, and Akamai block the page
+    before any content loads.
+    """
+    try:
+        from playwright_stealth import StealthConfig, stealth_sync
+        config = StealthConfig(
+            navigator_languages=False,
+            navigator_plugins=False,
+            webgl_vendor="Intel Inc.",
+            webgl_renderer="ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        )
+        stealth_sync(context, config=config)
+        logger.debug("Playwright stealth applied to browser context")
+    except ImportError:
+        logger.debug(
+            "playwright-stealth not installed — falling back to manual evasion. "
+            "Install with: pip install playwright-stealth"
+        )
+        _apply_stealth_manual(context)
+
+
+def _apply_stealth_manual(context) -> None:
+    """Basic evasion when playwright-stealth isn't available.
+
+    Hides navigator.webdriver and adds minimal Chrome automation
+    property overrides. Better than nothing but won't defeat
+    advanced fingerprinting (CloudFlare, DataDome). Install the
+    package for full protection.
+    """
+    context.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-GB', 'en'] });
+        window.chrome = { runtime: {} };
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+            parameters.name === 'notifications'
+                ? Promise.resolve({ state: Notification.permission })
+                : originalQuery(parameters)
+        );
+    """)
 
 
 def _html_to_text(html: str) -> str:
