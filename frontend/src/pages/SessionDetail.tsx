@@ -17,33 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface VerdictPayload {
-  decision?: "GO" | "NO_GO";
-  headline?: string;
-  confidence_pct?: number;
-  reasoning?: Array<{
-    claim?: string;
-    supporting_evidence?: string;
-    citation?: import("@/lib/types").Citation;
-  }>;
-  hard_blockers?: Array<{
-    type?: string;
-    detail?: string;
-    citation?: import("@/lib/types").Citation;
-  }>;
-  stretch_concerns?: Array<{
-    type?: string;
-    detail?: string;
-    citation?: import("@/lib/types").Citation;
-  }>;
-}
-
-interface BundlePayload {
-  extracted_jd?: { role_title?: string };
-  company_research?: { company_name?: string };
-  // Other fields read by VerdictEvidence — see its BundleData typing.
-}
-
 export default function SessionDetail() {
   const { id = "" } = useParams();
   const session = useQuery({
@@ -93,8 +66,8 @@ export default function SessionDetail() {
   }
 
   const s = session.data;
-  const verdict = s.verdict as VerdictPayload | null;
-  const bundle = s.research_bundle as BundlePayload | null;
+  const verdict = s.verdict;
+  const bundle = s.research_bundle;
   const role = bundle?.extracted_jd?.role_title ?? null;
   const company = bundle?.company_research?.company_name ?? null;
 

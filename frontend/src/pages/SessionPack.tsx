@@ -22,26 +22,6 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface VerdictPayload {
-  decision?: "GO" | "NO_GO";
-  confidence_pct?: number;
-}
-
-interface BundlePayload {
-  extracted_jd?: {
-    role_title?: string;
-    location?: string;
-    remote_policy?: string;
-    seniority_signal?: string;
-    salary_band?: { min_gbp?: number; max_gbp?: number; period?: string } | null;
-    required_skills?: string[];
-  };
-  company_research?: {
-    company_name?: string;
-    company_domain?: string | null;
-  };
-}
-
 const ROUTE_TO_GENERATOR: Record<string, PackGeneratorName> = {
   cv: "cv",
   "cover-letter": "cover_letter",
@@ -116,8 +96,8 @@ export default function SessionPack() {
   }
 
   const s = session.data;
-  const verdict = s.verdict as VerdictPayload | null;
-  const bundle = s.research_bundle as BundlePayload | null;
+  const verdict = s.verdict;
+  const bundle = s.research_bundle;
   const role = bundle?.extracted_jd?.role_title ?? null;
   const company = bundle?.company_research?.company_name ?? null;
 

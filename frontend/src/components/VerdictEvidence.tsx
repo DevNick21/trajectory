@@ -1,68 +1,3 @@
-// Loose typing — research_bundle + verdict pass through as raw dicts.
-// Each section reads what it needs and tolerates missing fields.
-
-interface ReasoningPoint {
-  claim?: string;
-  supporting_evidence?: string;
-}
-
-interface BundleData {
-  extracted_jd?: {
-    role_title?: string;
-    location?: string;
-    remote_policy?: string;
-    seniority_signal?: string;
-    soc_code_guess?: string;
-    salary_band?: { min_gbp?: number; max_gbp?: number; period?: string } | null;
-    required_skills?: string[];
-    posted_date?: string | null;
-  };
-  company_research?: {
-    company_name?: string;
-    company_domain?: string | null;
-    careers_page_url?: string | null;
-    not_on_careers_page?: boolean;
-    culture_claims?: Array<{ claim?: string; url?: string }>;
-  };
-  companies_house?: {
-    status?: string;
-    company_name_official?: string;
-    accounts_overdue?: boolean;
-    confirmation_statement_overdue?: boolean;
-  } | null;
-  sponsor_status?: {
-    status?: string;
-    matched_name?: string | null;
-    rating?: string | null;
-  } | null;
-  soc_check?: {
-    soc_code?: string;
-    soc_title?: string;
-    going_rate_gbp?: number | null;
-    offered_salary_gbp?: number | null;
-    below_threshold?: boolean;
-  } | null;
-  ghost_job?: {
-    probability?: string;
-    confidence?: string;
-    age_days?: number | null;
-    signals?: Array<{ type?: string; evidence?: string }>;
-  };
-  red_flags?: { flags?: Array<{ type?: string; summary?: string }> };
-  salary_signals?: {
-    sources_consulted?: string[];
-  };
-}
-
-interface VerdictData {
-  reasoning?: ReasoningPoint[];
-}
-
-interface Props {
-  bundle: BundleData | null;
-  verdict: VerdictData | null;
-}
-
 import {
   Search,
   Building2,
@@ -77,6 +12,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import Gauge from "@/components/ui/Gauge";
+import type { ResearchBundle, VerdictPayload } from "@/lib/types";
+
+interface Props {
+  bundle: ResearchBundle | null;
+  verdict: VerdictPayload | null;
+}
 
 function Section({
   title,

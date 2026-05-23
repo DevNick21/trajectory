@@ -26,6 +26,123 @@ export interface UserProfile {
 }
 
 // ---------------------------------------------------------------------------
+// Research Bundle & Verdict (Forensic Lab Data)
+// ---------------------------------------------------------------------------
+
+export interface JDData {
+  role_title?: string;
+  location?: string;
+  remote_policy?: string;
+  seniority_signal?: string;
+  soc_code_guess?: string;
+  salary_band?: { min_gbp?: number; max_gbp?: number; period?: string } | null;
+  required_skills?: string[];
+  posted_date?: string | null;
+  specificity_signals?: string[];
+  vagueness_signals?: string[];
+}
+
+export interface CompanyResearchData {
+  company_name?: string;
+  company_domain?: string | null;
+  careers_page_url?: string | null;
+  not_on_careers_page?: boolean;
+  culture_claims?: Array<{ claim?: string; url?: string }>;
+  tech_stack_signals?: string[];
+  team_size_signals?: string[];
+  recent_activity_signals?: string[];
+  posted_salary_bands?: string[];
+  explicit_policies?: string[];
+}
+
+export interface CompaniesHouseData {
+  status?: string;
+  company_name_official?: string;
+  accounts_overdue?: boolean;
+  confirmation_statement_overdue?: boolean;
+  filing_history_summary?: string;
+}
+
+export interface SponsorStatusData {
+  status: "NOT_LISTED" | "A_RATED" | "B_RATED" | "SUSPENDED";
+  matched_name?: string | null;
+  rating?: string | null;
+  city?: string | null;
+  county?: string | null;
+  route?: string | null;
+}
+
+export interface SOCCheckData {
+  soc_code: string;
+  soc_title: string;
+  going_rate_gbp: number | null;
+  offered_salary_gbp: number | null;
+  below_threshold: boolean;
+  shortfall_gbp: number;
+}
+
+export interface GhostJobSignal {
+  type: string;
+  evidence: string;
+}
+
+export interface GhostJobData {
+  probability: "LIKELY_GHOST" | "POSSIBLE_GHOST" | "UNLIKELY";
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  specificity_score: number;
+  age_days: number | null;
+  signals: GhostJobSignal[];
+}
+
+export interface RedFlag {
+  type: string;
+  summary: string;
+  severity: "HARD" | "SOFT";
+  citation?: Citation;
+}
+
+export interface ResearchBundle {
+  extracted_jd?: JDData;
+  company_research?: CompanyResearchData;
+  companies_house?: CompaniesHouseData | null;
+  sponsor_status?: SponsorStatusData | null;
+  soc_check?: SOCCheckData | null;
+  ghost_job?: GhostJobData;
+  red_flags?: { flags: RedFlag[] };
+  salary_signals?: {
+    sources_consulted: string[];
+  };
+}
+
+export interface VerdictReasoningPoint {
+  claim: string;
+  supporting_evidence?: string;
+  citation?: Citation;
+}
+
+export interface HardBlocker {
+  type: string;
+  detail: string;
+  citation: Citation;
+}
+
+export interface StretchConcern {
+  type: string;
+  detail: string;
+  citation: Citation;
+}
+
+export interface VerdictPayload {
+  decision: "GO" | "NO_GO";
+  headline: string;
+  confidence_pct: number;
+  reasoning: VerdictReasoningPoint[];
+  hard_blockers: HardBlocker[];
+  stretch_concerns: StretchConcern[];
+  audit_metadata?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
 
@@ -64,8 +181,8 @@ export interface SessionDetailResponse {
   job_url: string | null;
   intent: string;
   created_at: string;
-  research_bundle: Record<string, unknown> | null;
-  verdict: Record<string, unknown> | null;
+  research_bundle: ResearchBundle | null;
+  verdict: VerdictPayload | null;
   generated_files: GeneratedFile[];
   cost_summary: CostSummary;
 }
@@ -291,7 +408,7 @@ export interface OnboardingFinaliseResponse {
 // POST /api/sessions/forward_job
 export type ForwardJobEvent =
   | { type: "agent_complete"; agent: string }
-  | { type: "verdict"; data: Record<string, unknown> }
+  | { type: "verdict"; data: VerdictPayload }
   | { type: "error"; data: { message: string } }
   | { type: "done" };
 
