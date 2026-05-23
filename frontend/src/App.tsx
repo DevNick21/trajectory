@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
 import OnboardingGate from "@/components/OnboardingGate";
 import Applications from "@/pages/Applications";
+import Benchmarks from "@/pages/Benchmarks";
 import Dashboard from "@/pages/Dashboard";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
@@ -53,6 +54,9 @@ export default function App() {
           <NavLink to="/offer" className={navLink}>
             Offer
           </NavLink>
+          <NavLink to="/benchmarks" className={navLink}>
+            Benchmarks
+          </NavLink>
           <div className="pt-4 mt-4 border-t border-canvas">
             <NavLink to="/onboarding" className={navLink}>
               User Profile
@@ -80,6 +84,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/applications" element={<Applications />} />
+              <Route path="/benchmarks" element={<Benchmarks />} />
               <Route path="/queue" element={<Queue />} />
               <Route path="/offer" element={<Offer />} />
               <Route path="/sessions/:id" element={<SessionDetail />} />

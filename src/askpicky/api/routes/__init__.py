@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .applications import router as applications_router
+from .benchmarks import router as benchmarks_router
 from .career import router as career_router
 from .chat import router as chat_router
 from .files import router as files_router
@@ -40,5 +41,6 @@ api_router.include_router(chat_router, prefix="/api")
 api_router.include_router(outcomes_router, prefix="/api")
 api_router.include_router(notifications_router, prefix="/api")
 api_router.include_router(applications_router, prefix="/api")
+api_router.include_router(benchmarks_router)
 
 __all__ = ["api_router"]

@@ -5,6 +5,7 @@
 import type {
   ApplicationListResponse,
   ApplicationStatus,
+  BenchmarkReport,
   CareerEntriesResponse,
   CareerEntryKind,
   NotificationListResponse,
@@ -62,20 +63,6 @@ async function request<T>(
   }
   return (await resp.json()) as T;
 }
-
-// ---------------------------------------------------------------------------
-// Health
-// ---------------------------------------------------------------------------
-
-export interface HealthResponse {
-  status: string;
-  service: string;
-  version: string;
-  storage_initialised: boolean;
-  demo_user_id_configured: boolean;
-}
-
-export const getHealth = () => request<HealthResponse>("/health");
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -306,14 +293,6 @@ export const importCV = async (file: File): Promise<CVImportResponse> => {
 };
 
 // ---------------------------------------------------------------------------
-// File download URL (no fetch — the browser navigates to it directly)
-// ---------------------------------------------------------------------------
-
-export const fileUrl = (sessionId: string, filename: string) =>
-  `/api/files/${encodeURIComponent(sessionId)}/${encodeURIComponent(filename)}`;
-
-
-// ---------------------------------------------------------------------------
 // Notifications + application tracker (cross-surface)
 // ---------------------------------------------------------------------------
 
@@ -356,3 +335,6 @@ export const recordOutcome = (
     method: "POST",
     body: JSON.stringify({ outcome, notes }),
   });
+
+export const fetchLatestBenchmarks = (): Promise<BenchmarkReport> =>
+  request("/api/benchmarks/latest");
