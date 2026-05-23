@@ -66,8 +66,8 @@ async def run(
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=SelfAuditReport,
-        model=settings.haiku_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
-        effort="xhigh",
+        model=settings.haiku_model_id,  # downgraded 2026-05-22: Haiku sufficient for mechanical audit
+        effort="medium",
         session_id=session_id,
     )
 

@@ -129,6 +129,6 @@ async def generate(
         user_input=user_input,
         output_schema=DraftReplyOutput,
         model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
-        effort="xhigh",
+        effort="high",
         post_validate=_post_validate,
     )
