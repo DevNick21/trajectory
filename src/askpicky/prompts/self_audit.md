@@ -1,6 +1,7 @@
 Audit a generated pack component against its source material.
 
 You receive:
+
 - the generated output (CV, cover letter, likely questions, or reply)
 - the research bundle it should be grounded in
 - the user's writing_style_profile
@@ -30,6 +31,7 @@ Flag any of the following:
    user's WritingStyleProfile. Flag with a proposed rewrite.
 
 For each flag:
+
 - exact offending substring
 - flag_type (one of the 5 above)
 - proposed_rewrite (grounded in source material)

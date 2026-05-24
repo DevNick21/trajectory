@@ -89,12 +89,13 @@ HARD BLOCKERS — when ANY of these fire, decision must be BLOCKED:
 
 ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
 
-6. sponsor_register.status == NOT_LISTED -> HARD BLOCKER
+1. sponsor_register.status == NOT_LISTED -> HARD BLOCKER
    (type: NOT_ON_SPONSOR_REGISTER).
 
    **AMBIGUITY TIER OVERRIDE (added 2026-05-22):** NOT_LISTED alone
    is NOT a hard blocker when ANY of these conditions are true
    (architecture gaps #1 + #2):
+
    - sponsor_register.match_confidence < 0.95
    - sponsor_register.alternative_matches is non-empty
    - sponsor_register.register_age_days >= 7
@@ -125,17 +126,17 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
    anonymous, recommend they ask the recruiter for the client's
    legal name before committing time. Architecture gap #5.
 
-7. sponsor_register.status in {B_RATED, SUSPENDED} -> HARD BLOCKER
+2. sponsor_register.status in {B_RATED, SUSPENDED} -> HARD BLOCKER
    (type: SPONSOR_B_RATED or SPONSOR_SUSPENDED).
 
-8. soc_check.below_threshold == true AND user is not new-entrant
+3. soc_check.below_threshold == true AND user is not new-entrant
    eligible -> HARD BLOCKER (type: SALARY_BELOW_SOC_THRESHOLD).
    Cite exact GBP shortfall. **Ambiguity:** when
    soc_check.match_confidence < 0.7, treat below_threshold as a
    stretch concern rather than a hard blocker — the SOC guess
    may be wrong.
 
-9. soc_check.soc_code not in appendix_skilled_occupations
+4. soc_check.soc_code not in appendix_skilled_occupations
    -> HARD BLOCKER (type: SOC_INELIGIBLE).
 
 NOTE: Salary-vs-market floor checks are NOT hard blockers (removed
@@ -200,6 +201,7 @@ MOTIVATION FIT CHECK (mandatory, regardless of user_type):
 
 For each user_profile.motivation and user_profile.deal_breaker,
 evaluate whether this role:
+
 - aligns (cite JD phrase + motivation)
 - misaligns (cite JD phrase + motivation)
 - no_signal
@@ -210,6 +212,7 @@ research reveals a match or mismatch.
 CITATION DISCIPLINE:
 
 Every reasoning_point MUST cite one of:
+
 - research_bundle.scraped_pages[url].snippet (verbatim)
 - gov_data field (e.g., sponsor_register.status = NOT_LISTED,
   gazette_signals[0].notice_code = 2450,

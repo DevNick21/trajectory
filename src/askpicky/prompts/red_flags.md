@@ -17,6 +17,7 @@ Scan for:
   director disqualifications
 
 For each flag:
+
 - Cite source (URL + verbatim snippet, or Companies House field)
 - Classify severity: HARD (verdict-relevant) vs SOFT (worth mentioning)
 - Explain in 1 sentence what the candidate should know
@@ -25,8 +26,11 @@ RULES:
 
 1. Do not flag general negative reviews. A single angry review is not
    a pattern.
+
 2. Do not flag "high turnover" unless explicit (e.g., "everyone quit
    within 6 months").
+
 3. If no flags are found after genuine search, output `flags: []` with
    `checked: true`. Do not invent flags to appear thorough.
+
 4. Output is strict JSON matching RedFlagsReport.

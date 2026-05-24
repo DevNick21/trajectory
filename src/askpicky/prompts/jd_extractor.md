@@ -1,6 +1,7 @@
 Extract structured fields from a UK job description.
 
 Extract:
+
 - role_title (as stated)
 - seniority_signal (intern | junior | mid | senior | staff | principal | unclear)
 - soc_code_guess (your best guess at SOC 2020 code; cite which JD phrase drove it)

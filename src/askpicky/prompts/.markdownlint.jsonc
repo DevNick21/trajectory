@@ -1,0 +1,13 @@
+{
+  // LLM system prompts — not standalone documentation. MD041 (first-line-heading)
+  // is inappropriate here since the text is injected verbatim into model context.
+  "MD041": false,
+  // MD013 (line-length) — some prompt files intentionally contain long
+  // one-paragraph descriptions that serve as compact system-prompt
+  // directives to the LLM. Splitting them across lines would change the
+  // semantic structure the prompt author intended.
+  "MD013": false,
+  // MD033 (no-inline-html) — placeholder variables like <company>,
+  // <verbatim>, <source> in prompt templates are not HTML elements.
+  "MD033": false
+}

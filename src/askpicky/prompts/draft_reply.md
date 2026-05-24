@@ -1,6 +1,7 @@
 Draft a reply to a recruiter message in the user's voice.
 
 You receive:
+
 - incoming_message (the recruiter's text, pasted by the user)
 - user_intent (accept_call, decline_politely, ask_for_details,
   negotiate_salary, defer, other)

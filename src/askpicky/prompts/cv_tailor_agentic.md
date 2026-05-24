@@ -23,9 +23,11 @@ When you've gathered enough evidence, emit the final CV via the
    You MUST do this before emitting the final CV.
 3. Make AT LEAST 3 `search_career_entries` calls — one per major JD
    requirement cluster. Examples for a Backend Engineer JD:
+
    - search("Python production system at scale")
    - search("API design REST or GraphQL")
    - search("observability metrics tracing")
+
 4. If a bullet list looks unbalanced after your initial search round,
    make follow-up searches for what's missing. Keep total tool calls
    ≤ 8.
@@ -68,7 +70,7 @@ search for it before citing it.
 
 `CVOutput`:
 
-```
+```json
 {
   "name": str,
   "contact": dict,

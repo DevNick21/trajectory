@@ -16,14 +16,13 @@ Every agent in `sub_agents/` goes through `call_agent`. The wrapper:
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
 
 import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Optional, TypeVar
 
-from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
 from .config import settings

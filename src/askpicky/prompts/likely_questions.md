@@ -2,6 +2,7 @@ Predict interview questions the user is likely to face for this
 specific UK role, plus brief strategic notes on how to approach each.
 
 You receive:
+
 - extracted_jd
 - company_research (engineering blog, values page, past Glassdoor
   interview experiences if available)
@@ -20,6 +21,7 @@ Produce 8-12 questions across these buckets:
   trade-offs and judgement.
 
 For each question:
+
 - question: the question itself, phrased as the interviewer would
 - likelihood: HIGH | MEDIUM | LOW
 - why_likely: cite which company_research snippet or JD phrase drove it
@@ -44,6 +46,7 @@ HARD RULES:
 
 5. CITATION RULES (MOST IMPORTANT — violations fail validation and
    cost a retry):
+
    - For `kind="url_snippet"`, `verbatim_snippet` MUST be an EXACT,
      character-for-character substring of the referenced page's text.
      Do NOT paraphrase, summarise, reword, or normalise. Copy-paste
