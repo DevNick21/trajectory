@@ -337,7 +337,7 @@ async def _fetch_with_playwright(url: str) -> Optional[str]:
             await browser.close()
 
 
-def _apply_stealth(context) -> None:
+async def _apply_stealth(context) -> None:
     """Apply playwright-stealth evasion patches to the browser context.
 
     playwright-stealth modifies navigator.webdriver, chrome.runtime,
@@ -361,10 +361,10 @@ def _apply_stealth(context) -> None:
             "playwright-stealth not installed — falling back to manual evasion. "
             "Install with: pip install playwright-stealth"
         )
-        _apply_stealth_manual(context)
+        await _apply_stealth_manual(context)
 
 
-def _apply_stealth_manual(context) -> None:
+async def _apply_stealth_manual(context) -> None:
     """Basic evasion when playwright-stealth isn't available.
 
     Hides navigator.webdriver and adds minimal Chrome automation
@@ -697,35 +697,7 @@ async def run(
     orchestrator uses this to fire the `phase_1_jd_extractor` progress
     tick early so the UI doesn't sit at `○` for the full 30-50s of
     company-side scraping + summarisation.
-
-    Opt-in Managed Agents path (PROCESS.md Entry 35): when
-    `settings.enable_managed_company_investigator` is on, try the
-    sandboxed MA investigator first and fall back to this Playwright
-    pipeline if it raises `ManagedInvestigatorFailed`. With the flag
-    off, behaviour is byte-identical to pre-MA-integration state.
     """
-    if settings.enable_managed_company_investigator:
-        try:
-            from ..managed.company_investigator import (
-                ManagedInvestigatorFailed,
-                investigate,
-            )
-
-            return await investigate(job_url=job_url, session_id=session_id)
-        except ManagedInvestigatorFailed as exc:
-            logger.warning(
-                "Managed Agents investigator failed (%s); falling back to "
-                "Playwright pipeline for %s",
-                exc, job_url,
-            )
-        except Exception as exc:
-            # Defensive — any other exception from the MA path falls
-            # back too; the Playwright pipeline is the known-good path.
-            logger.warning(
-                "Managed Agents investigator raised unexpected %s: %r; "
-                "falling back to Playwright for %s",
-                type(exc).__name__, exc, job_url,
-            )
 
     # For the JD page we need raw HTML so the JSON-LD Tier 0 extractor can
     # read the `<script type="application/ld+json">` blocks that

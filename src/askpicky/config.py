@@ -44,10 +44,6 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
 
     # --- feature flags
-    # Opt-in Managed Agents path for the company investigator. Default
-    # off: with flag off, behaviour is byte-identical to the plain
-    # company_scraper pipeline.
-    enable_managed_company_investigator: bool = False
     enforce_rate_limit: bool = False
     # Per-agent Phase 1 timeout. Generous enough that Opus xhigh +
     # Playwright both fit comfortably; trim per-agent via future
@@ -61,19 +57,6 @@ class Settings(BaseSettings):
     enable_source_status_verdict: bool = True
     # Prompt caching on large static system prompts + research bundles.
     enable_prompt_caching: bool = True
-    # Route /api/queue/process through the Anthropic Batch API instead
-    # of the in-process Semaphore fan-out. 50% cost discount + true
-    # async semantics; up to ~1h end-to-end latency per batch.
-    enable_batch_queue_runner: bool = False
-    # Managed agentic Phase 4 generators. When True, the generator
-    # routes through a `client.beta.sessions.*` session with live web
-    # tools instead of the in-process single-call path. Off by default
-    # — managed sessions are slower (~30-90s) and ~$0.30-1.50/call
-    # more expensive but yield richer, live-grounded output. Each
-    # falls back to its in-process equivalent on session failure.
-    enable_managed_cover_letter: bool = False
-    enable_managed_likely_questions: bool = False
-    enable_managed_salary_strategist: bool = False
 
     # --- sponsor-register matching tunables (sub_agents/sponsor_register)
     sponsor_match_threshold: float = 92.0

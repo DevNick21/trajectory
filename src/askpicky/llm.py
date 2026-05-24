@@ -2,16 +2,12 @@
 
 Every agent in `sub_agents/` goes through `call_agent`. The wrapper:
 
-- Calls Anthropic via the plain Messages API. (Previously this module
-  also routed Phase 1 and Phase 4 fan-out agents through a "Managed
-  Agents" branch; it attached the beta header to `client.messages.create`
-  which was a no-op. Deleted 2026-04-23 — see PROCESS.md Entry 35. The
-  genuine Managed Agents integration now lives in
-  `src/askpicky/managed/company_investigator.py`.)
+- Multi-provider dispatch: Anthropic, DeepSeek (Anthropic-compatible API),
+  and OpenAI (native chat completions). Provider selected per-agent via
+  `config.py::agent_model_map`.
 - Forces structured output via `tool_use` — the agent is given a single
   tool whose input_schema is the Pydantic JSON schema, and we parse
-  `tool_use.input` back into the model. This is the "strict Pydantic
-  validated JSON" rule.
+  `tool_use.input` back into the model.
 - Retries on (a) validation failures and (b) citation-validator rejection,
   feeding the failure back into the prompt. `max_retries=2` by default.
 - Logs token usage + USD cost to `storage.log_llm_cost`.
@@ -1433,28 +1429,3 @@ async def call_with_tools(
         f"Agent {agent_name} (with-tools) failed after {max_retries + 1} attempts. "
         f"Last feedback: {last_feedback}"
     )
-
-
-# --- (4) call_in_session - Managed Agents dispatcher ----------------------
-
-
-async def call_in_session(agent_name: str, *args, **kwargs):
-    """Dispatch to a registered Managed Agents session.
-
-    Concrete sessions (post-migration):
-      - "company_investigator" -> managed/company_investigator.py
-      - "reviews_investigator" -> managed/reviews_investigator.py
-      - "verdict_deep_research" -> managed/verdict_deep_research.py
-      - "cv_tailor_advisor" -> managed/cv_tailor_advisor.py
-      - "prompt_auditor_empirical" -> managed/prompt_auditor_empirical.py
-    """
-    from . import managed as _managed
-
-    sessions = getattr(_managed, "SESSIONS", {})
-    session = sessions.get(agent_name)
-    if session is None:
-        raise NotImplementedError(
-            f"No managed session registered for agent {agent_name!r}. "
-            f"Available: {sorted(sessions)}"
-        )
-    return await session(*args, **kwargs)

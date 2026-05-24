@@ -2,7 +2,7 @@
 
 *Canonical source of truth. Supersedes CLAUDE.md, AGENTS.md, PROCESS.md, new_claude.md, trajec_notes.md where any contradiction exists.*
 
-*Last updated 2026-05-22 15:59 BST · commit `ca61263` (AskPicky overhaul: rebrand + cuts + cross-surface outcomes + identity resolver). Subsequent commits `ea35fcf` (distress signals: salary out, Gazette in, CH officers/charges/PSC in), `9760a0e` (agent consolidation), and `d03b6fd` (frontend cv_enrich + verdict prompt update) are consistent with this spec.*
+*Last updated 2026-05-24 — multi-provider routing (DeepSeek V4 Flash/Pro), 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator, managed agents removed, benchmark harness + CI dashboard.*
 
 ---
 
@@ -26,7 +26,7 @@ The premium tier deepens it: continuous monitoring, salary defensibility against
 - An identity verifier (CLEAR/Sardine territory).
 - An AI-detector for CVs (adversarial, unwinnable, contradicts using AI).
 - A general job board. We don't aggregate listings; users bring URLs.
-- A wrapper around LangChain / LangGraph / RapidAPI / Firecrawl. First-party SDK + Managed Agents only.
+- A LangChain / RapidAPI wrapper. We use raw SDKs + Firecrawl for scraping + LangGraph for optional orchestration wrapping.
 
 ---
 
@@ -124,7 +124,7 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Feature | Tier | Status | What breaks without it |
 |---|---|---|---|
 | 9-agent Phase 1 parallel fan-out | F | S | **The product.** Differentiation lives here |
-| JD extractor (Sonnet) | F | S | Every downstream agent reasons on raw HTML |
+| JD extractor (DeepSeek V4 Flash) | F | S | Every downstream agent reasons on raw HTML |
 | Tier-0 JSON-LD extractor (7 ATSes pre-LLM) | F | S | Every JD costs an LLM call — unsustainable cost |
 | Company scraper + summariser (Playwright, trafilatura, BS4) | F | S | No company context; verdict reasoning hollow |
 | Sponsor Register check + alias + Splink fuzzy match | F | S | Visa moat gone |
@@ -133,10 +133,10 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Companies House lookup (dissolution / admin / overdue filings) | F | S | Ghost / dying companies pass verdict |
 | SOC threshold check (£41,700 + new-entrant) | F | S | Salary signal for visa wrong; verdicts mislead |
 | Salary data sub-agent (ASHE primary, JD band, jobspy fallback) | F | S | No salary baseline — no defensibility analysis |
-| Ghost-job detector (single consolidated system, 4 signals + Opus 5-dim score) | F | B (consolidate from current dual systems) | Volume-spam jobs pass verdict |
-| Red flags detector (Citations API + Web Search) | F | S | Picky can't take a sharp position on bad actors |
-| Reviews investigator (Managed Agents — Glassdoor mirrors / archive / Reddit) | F (light) / P (deep) | S, U | Reputation signal absent; users blind to public sentiment |
-| Triage-before-verdict (SERIOUS / EXPLORATORY / DEFINITE_PASS) | F | B | Every role gets full Opus treatment — cost spirals; obvious passes get same depth as critical decisions |
+| Ghost-job detector (deterministic 5-dim score) | F | S | Volume-spam jobs pass verdict |
+| Red flags detector (DeepSeek V4 Flash) | F | S | Picky can't take a sharp position on bad actors |
+| Reviews scraping (Firecrawl anti-bot fallback) | F | S | No reputation signal; users blind to Glassdoor |
+| Triage-before-verdict (SERIOUS / EXPLORATORY / DEFINITE_PASS, DeepSeek V4 Flash) | F | B | Every role gets full treatment — cost spirals |
 | Live going-rates parser (gov.uk Appendix Skilled Occupations) | I | B | Salary defensibility premium feature impossible |
 | Gov-data freshness sidecars (14d / 400d) + weekly refresh | I | S | Stale visa rules — wrong verdicts — loss of trust |
 
@@ -144,15 +144,15 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 
 | Feature | Tier | Status | What breaks without it |
 |---|---|---|---|
-| Verdict agent (Opus, Citations API) | F | S | No position. No product |
+| Verdict agent (DeepSeek V4 Pro, 6-label taxonomy + entropy_norm) | F | S | No position. No product |
 | User-type branching (resident vs visa) | F | S | Wrong verdict for half the user base |
-| Hard-blocker GO→NO_GO programmatic flip | F | S | Visa-impossible roles slip through as "concerns" |
-| Motivation-fit as stretch concern (not blocker) | F | S | Users get NO_GO for soft mismatches — verdicts feel wrong |
+| Hard-blocker → BLOCKED guard (fatal vs negotiable blockers) | F | S | Visa-impossible roles slip through |
+| 6-label verdict taxonomy (STRONG_GO through BLOCKED) | F | S | Binary GO/NO_GO too coarse for real-world nuance |
 | Citation discipline (3 kinds, enforced) | F | S | No trust. No defensible claim |
 | Self-audit (Phase 4.5, banned-phrase + company-swap test) | F | S | Voice drift, sycophancy, fabrication leak through |
 | Source-status fallback sentinels (OK/UNREACHABLE/NO_DATA/STALE) | F | S | Picky claims knowledge it doesn't have |
 | Streaming Phase 1 progress (Telegram debounce + SSE) | F | S | Long verdicts feel dead; users churn during the 30s wait |
-| Real-time hiring intent verification (promote verdict deep-research from flag to premium) | **P** | U → B | Premium feature #1. Without it, no compute-heavy differentiation |
+| LangGraph orchestrator wrapper (opt-in, checkpointed state) | F | B | Long-running pipelines lack durable retry |
 | Outcome → verdict calibration loop | I | B | Network data doesn't improve verdicts — flywheel doesn't compound |
 | `challenge_verdict` intent (conversational refinement) | F | B | Picky can't defend a position when pushed; voice is incomplete |
 
@@ -240,11 +240,6 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Credits check with priority refusal at <$20 | I | S | Account drains mid-month |
 | Batch URL queue with Semaphore(3) concurrency cap | I | S | Bulk runs DoS the system |
 | Compaction + context-editing helper (opt-in) | I | S | Long sessions hit context limits |
-| Classified bot error copy (5 branches) | I | S | All errors look identical to users |
-| Smoke harness with budget vs actual delta | I | S | Cost regressions land silently |
-| Pricing constants with "last verified" date | I | S | Stale prices — wrong cost estimates |
-| Managed Agents resource cache (`data/managed_agents.json`) | I | S | Every cold start re-fetches MA resources |
-| 24h Managed Agents session cache | I | S, not wired | Same conversation re-establishes MA context each turn |
 | Real Batch API dispatch (50% discount) | I | D | Cost optimisation, not strategic for v1 |
 
 ---
@@ -370,7 +365,7 @@ These close the gap between current state and the new positioning. Without them,
 2. Salary defensibility for visa roles (extends salary_advice) — **Premium feature #1 to ship**
 3. CRN-based entity resolution + parent/subsidiary walk
 4. Sponsor licence change alerts on saved roles
-5. Real-time hiring intent verification (promote verdict deep-research to premium) — **Premium feature #2**
+5. Live-web hiring-intent verification (multi-step DeepSeek agent with Firecrawl) — **Premium feature #2**
 
 ### P2 — data network reaches threshold (~1,000 contributing users)
 
@@ -385,7 +380,7 @@ These close the gap between current state and the new positioning. Without them,
 2. Phase 1 signal weighting (learned)
 3. Freshness gradient (continuous staleness)
 4. Continuous background monitoring of saved roles
-5. Always-on managed company_investigator + reviews with 24h cache
+5. Always-on company research with Firecrawl + Playwright pipeline
 
 ### Deferred indefinitely (until evidence demands it)
 
@@ -399,10 +394,14 @@ These close the gap between current state and the new positioning. Without them,
 ### Cut entirely
 
 - LaTeX CV renderer + LaTeX writer/repairer agents + LaTeX sandbox
-- Multi-provider CV tailor (consolidate to single Sonnet 4.6 path)
-- Reviews investigator legacy jobspy fallback
+- All Anthropic Managed Agents (company_investigator, reviews_investigator,
+  verdict_deep_research, managed generator sessions) — replaced by
+  in-process DeepSeek agents + Firecrawl + Playwright pipeline
+- Multi-provider CV tailor v1 — replaced by unified agent_model_map routing
+- Binary GO/NO_GO verdict — replaced by 6-label VerdictLabel taxonomy
+- Cohere provider — dead code, no integration
 - Three competing CV-tailor feature flags — collapse to one
-- All discarded `new_claude.md` items (Smart-Apply, Concierge, behavioural telemetry, Playwright Stealth, self-healing schema, IP rotation, Firecrawl, LangGraph, "Behavioral Moat" framing)
+- All discarded `new_claude.md` items (Smart-Apply, Concierge, behavioural telemetry, self-healing schema, IP rotation, "Behavioral Moat" framing)
 
 ---
 

@@ -109,17 +109,6 @@ CREATE TABLE IF NOT EXISTS queued_jobs (
 CREATE INDEX IF NOT EXISTS idx_queued_user ON queued_jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_queued_status ON queued_jobs(status);
 
-CREATE TABLE IF NOT EXISTS managed_session_cache (
-    -- Cache key = (agent_label, key_hash). e.g. agent_label="company_investigator"
-    -- + key_hash=sha256("acme.com") -> the JSON blob of the previous
-    -- successful output. Used by managed/_resources.py to skip a re-run
-    -- when we have a fresh result for the same target. PROCESS Entry 45.
-    agent_label TEXT NOT NULL,
-    key_hash TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    cached_at TEXT NOT NULL,
-    PRIMARY KEY (agent_label, key_hash)
-);
 CREATE TABLE IF NOT EXISTS jobs (
     -- A persistent Job entity. Each forwarded URL creates or reuses one;
     -- sessions reference job_id so the bot can disambiguate "draft a CV
@@ -1275,55 +1264,8 @@ class Storage:
 
 # ===========================================================================
 # Managed-session cache + Job entity (PROCESS Entry 45)
-# ===========================================================================
-
-
-async def cache_managed_result(
-    agent_label: str,
-    key: str,
-    payload: dict,
-) -> None:
-    """Cache a managed-session result keyed by (agent_label, hash(key))."""
-    import hashlib
-    key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
-    async with await _connect() as db:
-        await db.execute(
-            "INSERT OR REPLACE INTO managed_session_cache "
-            "(agent_label, key_hash, payload_json, cached_at) VALUES (?, ?, ?, ?)",
-            (agent_label, key_hash, json.dumps(payload, default=str),
-             _utcnow().isoformat()),
-        )
-        await db.commit()
-
-
-async def get_cached_managed_result(
-    agent_label: str,
-    key: str,
-    max_age_hours: int = 24,
-) -> Optional[dict]:
-    """Return a cached managed-session result if fresher than max_age."""
-    import hashlib
-    key_hash = hashlib.sha256(key.encode("utf-8")).hexdigest()[:32]
-    cutoff = _utcnow() - timedelta(hours=max_age_hours)
-    async with await _connect() as db:
-        async with db.execute(
-            "SELECT payload_json, cached_at FROM managed_session_cache "
-            "WHERE agent_label = ? AND key_hash = ?",
-            (agent_label, key_hash),
-        ) as cur:
-            row = await cur.fetchone()
-    if not row:
-        return None
-    cached_at = datetime.fromisoformat(row[1])
-    if cached_at < cutoff:
-        return None
-    try:
-        return json.loads(row[0])
-    except (ValueError, TypeError):
-        return None
-
-
 # --- Job entity --------------------------------------------------------------
+
 
 
 async def upsert_job(
