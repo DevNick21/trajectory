@@ -9,7 +9,7 @@ from __future__ import annotations
 from ..prompts import load_prompt
 
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import settings
 from ..llm import call_agent
@@ -27,7 +27,7 @@ from ..validators.citations import ValidationContext, validate_output
 SYSTEM_PROMPT = load_prompt("salary_strategist")
 
 
-def _make_post_validate(citation_ctx: Optional[ValidationContext]):
+def _make_post_validate(citation_ctx: Optional[ValidationContext]) -> Any:
     def _post_validate(rec: SalaryRecommendation) -> list[str]:
         failures: list[str] = []
         if not (rec.floor <= rec.opening_number <= rec.ceiling):

@@ -286,7 +286,7 @@ async def _apply_additive_migrations(db: Any) -> None:
             raise
 
 
-async def _connect():
+async def _connect() -> _ConnectionWithPragmas:
     """Return an un-awaited aiosqlite Connection proxy.
 
     Every caller uses `async with await _connect() as db:`. aiosqlite ≥0.21
@@ -301,7 +301,7 @@ async def _connect():
     await _ensure_db()
     conn = aiosqlite.connect(settings.sqlite_db_path)
 
-    async def _connect_with_pragmas():
+    async def _connect_with_pragmas() -> Any:
         db = await conn
         await db.execute("PRAGMA busy_timeout=5000")
         return db
@@ -323,7 +323,7 @@ class _ConnectionWithPragmas:
     def __await__(self):
         return self._open().__await__()
 
-    async def _open(self):
+    async def _open(self) -> Any:
         self._inner = await aiosqlite.connect(self._path)
         await self._inner.execute("PRAGMA busy_timeout=5000")
         return self._inner
@@ -389,7 +389,7 @@ _faiss_id_map: list[str] = []
 _faiss_lock = threading.Lock()
 
 
-def _get_embedding_model():
+def _get_embedding_model() -> Any:
     global _embedding_model
     if _embedding_model is None:
         with _embedding_lock:
@@ -400,7 +400,7 @@ def _get_embedding_model():
     return _embedding_model
 
 
-def _faiss():
+def _faiss() -> tuple:
     global _faiss_index, _faiss_id_map
     if _faiss_index is not None:
         return _faiss_index, _faiss_id_map

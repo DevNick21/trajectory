@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
 
@@ -252,7 +252,7 @@ def _domain_to_alias_seeds(domain: Optional[str]) -> list[str]:
     return sorted(seeds)
 
 
-async def _sponsor_lookup_async(name: str):
+async def _sponsor_lookup_async(name: str) -> Any:
     """Wrap the (sync) sponsor-register lookup in a thread."""
     from ..sub_agents.sponsor_register import _lookup_sync
     return await asyncio.to_thread(_lookup_sync, name)

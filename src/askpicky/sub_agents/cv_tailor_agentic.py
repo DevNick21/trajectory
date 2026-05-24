@@ -159,7 +159,7 @@ class CVTailorToolExecutor:
     """Runs the agent's tool calls; tracks retrieved entry IDs for the
     post-hoc hallucination check."""
 
-    def __init__(self, profile: UserProfile, session_id: Optional[str]):
+    def __init__(self, profile: UserProfile, session_id: Optional[str]) -> None:
         self._profile = profile
         self._session_id = session_id
         self._retrieved_ids: set[str] = set()

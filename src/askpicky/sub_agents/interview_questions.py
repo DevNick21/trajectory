@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from ..config import settings
 from ..llm import call_agent
@@ -161,7 +161,7 @@ async def design(
 # ---------------------------------------------------------------------------
 
 
-def _make_predict_validator(citation_ctx: Optional[ValidationContext]):
+def _make_predict_validator(citation_ctx: Optional[ValidationContext]) -> Any:
     def _validate(lq: LikelyQuestionsOutput) -> list[str]:
         failures: list[str] = []
         if not (8 <= len(lq.questions) <= 12):

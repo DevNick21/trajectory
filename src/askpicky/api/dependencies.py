@@ -12,6 +12,8 @@ onboarding — the frontend interprets this as "redirect to
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Depends, HTTPException, Request, status
 
 from ..config import settings
@@ -29,7 +31,7 @@ def get_rate_limiter() -> RateLimiter:
     return _rate_limiter
 
 
-def rate_limit(intent: str):
+def rate_limit(intent: str) -> Any:
     """Return a FastAPI dependency that throttles `intent` per-user.
 
     Usage: `@router.post(..., dependencies=[Depends(rate_limit("draft_cv"))])`

@@ -33,7 +33,7 @@ _T_MARGIN = 12 * mm
 _B_MARGIN = 12 * mm
 
 
-def _styles():
+def _styles() -> dict:
     base = getSampleStyleSheet()
     return {
         "name": ParagraphStyle(

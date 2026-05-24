@@ -279,7 +279,7 @@ async def forward_job(
         )
     )
 
-    async def stream():
+    async def stream() -> Any:
         try:
             async for frame in event_stream(queue):
                 yield frame

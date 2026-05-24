@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Callable
+from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sse_starlette.sse import EventSourceResponse
@@ -132,7 +132,7 @@ def _build_pack_result(
 # ---------------------------------------------------------------------------
 
 
-def _make_individual_endpoint(name: str):
+def _make_individual_endpoint(name: str) -> Any:
     runner = _GENERATORS[name]
 
     async def endpoint(
@@ -300,7 +300,7 @@ async def full_prep(
         _run_full_prep(session, user, storage, queue, emitter)
     )
 
-    async def stream():
+    async def stream() -> Any:
         try:
             async for frame in event_stream(queue):
                 yield frame

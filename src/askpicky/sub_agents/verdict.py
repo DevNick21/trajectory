@@ -213,7 +213,7 @@ def _enforce_label_blocker_consistency(v: Verdict) -> Verdict:
     return v
 
 
-def _make_post_validate(ctx: ValidationContext):
+def _make_post_validate(ctx: ValidationContext) -> Any:
     def _post_validate(v: Verdict) -> list[str]:
         failures: list[str] = []
         failures.extend(validate_output(v, ctx))

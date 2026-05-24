@@ -9,7 +9,7 @@ import asyncio
 import logging
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from .config import settings
 from .progress import NoOpEmitter, ProgressEmitter
@@ -272,7 +272,7 @@ async def handle_forward_job(
 
     timeout = settings.phase1_agent_timeout_s
 
-    async def run_reviews():
+    async def run_reviews() -> list:
         # Reviews were handled by Anthropic Managed Agents (reviews_investigator),
         # removed 2026-05-24. Company research is now served by the Playwright +
         # Firecrawl pipeline in company_scraper. Glassdoor/Indeed reviews are
@@ -282,7 +282,7 @@ async def handle_forward_job(
         await mark("reviews")
         return []
 
-    async def run_gazette():
+    async def run_gazette() -> Any:
         """The Gazette insolvency-notice check. Hard blocker on any
         active winding-up petition / administrator appointment /
         resolution to wind up. Empty list when the company is fine,
@@ -310,7 +310,7 @@ async def handle_forward_job(
             await mark("gazette_check")
             return []
 
-    async def run_sponsor():
+    async def run_sponsor() -> Optional[SponsorStatus]:
         if user.user_type != "visa_holder":
             await mark("sponsor_register")
             return None
@@ -336,7 +336,7 @@ async def handle_forward_job(
                 source_status="UNREACHABLE",
             )
 
-    async def run_soc():
+    async def run_soc() -> Optional[SocCheckResult]:
         if user.user_type != "visa_holder":
             await mark("soc_check")
             return None
@@ -360,7 +360,7 @@ async def handle_forward_job(
                 source_status="UNREACHABLE",
             )
 
-    async def run_ghost():
+    async def run_ghost() -> GhostJobAssessment:
         try:
             result = await asyncio.wait_for(
                 ghost_job_detector.score(
@@ -406,7 +406,7 @@ async def handle_forward_job(
                 age_days=None,
             )
 
-    async def run_red_flags():
+    async def run_red_flags() -> RedFlagsReport:
         try:
             # Wait for reviews to complete (or fail to []) before scoring.
             reviews_for_flags = await reviews_future
@@ -631,10 +631,10 @@ async def _load_session_bundle(
 
 async def _walk_parent_sponsors(
     *,
-    sponsor_status,
-    ch_snapshot,
-    sr_agent,
-):
+    sponsor_status: Any,
+    ch_snapshot: Any,
+    sr_agent: Any,
+) -> Any:
     """Architecture gap #2 — parent/subsidiary CRN walk.
 
     When the JD's company is a subsidiary that's NOT_LISTED on the
@@ -864,7 +864,7 @@ def _build_shielded_fallback_verdict(
     )
 
 
-def _apply_rewrites_to_strings(obj, rewrites: list[tuple[str, str]]):
+def _apply_rewrites_to_strings(obj: Any, rewrites: list[tuple[str, str]]) -> Any:
     """Walk a nested JSON-ish structure, applying (find, replace) substitutions
     to every string leaf. Model is revalidated after.
 
@@ -895,13 +895,13 @@ def _apply_rewrites_to_strings(obj, rewrites: list[tuple[str, str]]):
 
 
 async def _audit_and_ship(
-    generated,
+    generated: Any,
     research_bundle: Optional[ResearchBundle],
     style_profile: WritingStyleProfile,
     company_name: str,
-    generator_coro,
+    generator_coro: Any,
     session_id: Optional[str] = None,
-):
+) -> Any:
     """Run self-audit; apply rewrites or re-run generator on HARD_REJECT."""
     from .sub_agents import self_audit
 
@@ -998,7 +998,7 @@ async def handle_draft_cv(
         career_entries=retrieved,
     )
 
-    async def generator():
+    async def generator() -> CVOutput:
         return await cv_tailor.generate(
             jd=jd,
             research_bundle=bundle,
@@ -1050,7 +1050,7 @@ async def handle_draft_cover_letter(
 
     company_name = bundle.company_research.company_name
 
-    async def generator():
+    async def generator() -> CoverLetterOutput:
         return await cover_letter.generate(
             jd=jd,
             research_bundle=bundle,
@@ -1105,7 +1105,7 @@ async def handle_predict_questions(
         career_entries=retrieved,
     )
 
-    async def generator():
+    async def generator() -> LikelyQuestionsOutput:
         return await interview_questions.predict(
             jd=jd,
             research_bundle=bundle,
@@ -1298,7 +1298,7 @@ async def handle_analyse_offer(
     file_id: Optional[str] = None,
     pdf_bytes: Optional[bytes] = None,
     text_pasted: Optional[str] = None,
-):
+) -> Any:
     """Analyse a forwarded offer letter.
 
     Inputs (one required): `file_id` (already uploaded to Files API),

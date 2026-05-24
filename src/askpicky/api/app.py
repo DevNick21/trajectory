@@ -14,7 +14,7 @@ import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 # Windows + Playwright fix: subprocess_exec is only implemented on the
 # Proactor event loop. uvicorn defaults to Selector under --reload on
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
     )
 
     @app.middleware("http")
-    async def _correlation_middleware(request: Request, call_next):
+    async def _correlation_middleware(request: Request, call_next) -> Any:
         # Honour a client-supplied X-Request-ID when present, otherwise
         # mint a new one. Propagates into every log record via the
         # contextvars-backed CorrelationFilter.

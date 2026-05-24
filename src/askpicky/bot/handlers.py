@@ -541,7 +541,7 @@ async def _send_document(
         ) from exc
 
 
-async def _handle_draft_cv(update, context, user, storage, last_session):
+async def _handle_draft_cv(update, context, user, storage, last_session) -> None:
     session = await _require_session(
         update, last_session, storage, "a CV",
         user_id=user.user_id, routed_message=update.message.text or "",
@@ -558,7 +558,7 @@ async def _handle_draft_cv(update, context, user, storage, last_session):
     await _send_document(context, chat_id, pdf_path, filename=pdf_path.name)
 
 
-async def _handle_draft_cover_letter(update, context, user, storage, last_session):
+async def _handle_draft_cover_letter(update, context, user, storage, last_session) -> None:
     session = await _require_session(
         update, last_session, storage, "a cover letter",
         user_id=user.user_id, routed_message=update.message.text or "",
@@ -575,7 +575,7 @@ async def _handle_draft_cover_letter(update, context, user, storage, last_sessio
     await _send_document(context, chat_id, pdf_path, filename=pdf_path.name)
 
 
-async def _handle_predict_questions(update, context, user, storage, last_session):
+async def _handle_predict_questions(update, context, user, storage, last_session) -> None:
     session = await _require_session(
         update, last_session, storage, "interview questions",
         user_id=user.user_id, routed_message=update.message.text or "",
@@ -589,7 +589,7 @@ async def _handle_predict_questions(update, context, user, storage, last_session
         await update.message.reply_html(chunk)
 
 
-async def _handle_salary_advice(update, context, user, storage, last_session):
+async def _handle_salary_advice(update, context, user, storage, last_session) -> None:
     session = await _require_session(
         update, last_session, storage, "salary advice",
         user_id=user.user_id, routed_message=update.message.text or "",
@@ -603,7 +603,7 @@ async def _handle_salary_advice(update, context, user, storage, last_session):
         await update.message.reply_html(chunk)
 
 
-async def _handle_full_prep(update, context, user, storage, last_session):
+async def _handle_full_prep(update, context, user, storage, last_session) -> None:
     session = await _require_session(
         update, last_session, storage, "a full pack",
         user_id=user.user_id, routed_message=update.message.text or "",
@@ -643,7 +643,7 @@ async def _handle_full_prep(update, context, user, storage, last_session):
             await update.message.reply_html(chunk)
 
 
-async def _handle_draft_reply(update, context, user, storage, text):
+async def _handle_draft_reply(update, context, user, storage, text) -> None:
     # Note: storage.get_writing_style_profile is keyed on user_id (the
     # module-level SELECT uses WHERE user_id = ?). Passing the
     # writing_style_profile_id here previously caused a silent miss —
@@ -660,7 +660,7 @@ async def _handle_draft_reply(update, context, user, storage, text):
     )
 
 
-async def _handle_profile_query(update, context, user, storage):
+async def _handle_profile_query(update, context, user, storage) -> None:
     entries = await storage.retrieve_relevant_entries(
         user_id=user.user_id,
         query=update.message.text or "profile",
@@ -673,7 +673,7 @@ async def _handle_profile_query(update, context, user, storage):
     await update.message.reply_text("\n".join(lines))
 
 
-async def _handle_recent(update, context, user, storage):
+async def _handle_recent(update, context, user, storage) -> None:
     sessions = await storage.get_recent_sessions(user.user_id, limit=5)
     if not sessions:
         await update.message.reply_text("No recent sessions.")
@@ -728,7 +728,7 @@ def _format_offer_analysis(analysis) -> str:
     return "\n".join(lines)
 
 
-async def _handle_analyse_offer_pdf(update, context, user, storage, document):
+async def _handle_analyse_offer_pdf(update, context, user, storage, document) -> None:
     """Fast-path: user forwarded a PDF offer letter."""
     log.info("analyse_offer (PDF): user=%s file=%s", user.user_id, document.file_name)
     await update.message.reply_text(
@@ -753,7 +753,7 @@ async def _handle_analyse_offer_pdf(update, context, user, storage, document):
     await update.message.reply_markdown(_format_offer_analysis(analysis))
 
 
-async def _handle_analyse_offer_text(update, context, user, storage, text, last_session):
+async def _handle_analyse_offer_text(update, context, user, storage, text, last_session) -> None:
     """Slow-path: user pasted the offer letter as text."""
     log.info("analyse_offer (text): user=%s len=%d", user.user_id, len(text))
     await update.message.reply_text(

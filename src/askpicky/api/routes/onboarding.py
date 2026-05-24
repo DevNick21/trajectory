@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
@@ -78,7 +78,7 @@ async def _parse_voice_stages(req: OnboardingFinaliseRequest) -> dict:
     """
     from ...sub_agents.onboarding_parser import parse_stage
 
-    async def _maybe_parse(stage: str, text: str):
+    async def _maybe_parse(stage: str, text: str) -> Any:
         if not text.strip():
             return None
         try:
@@ -179,7 +179,7 @@ async def finalise(
     # style extractor was downgraded from Opus to Sonnet in the
     # 2026-05-22 model audit, so this section now runs ~3x faster
     # than the original sequential Opus path.
-    async def _run_style():
+    async def _run_style() -> Optional[WritingStyleProfile]:
         if not req.writing_samples:
             return None
         try:

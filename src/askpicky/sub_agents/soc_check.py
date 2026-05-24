@@ -37,7 +37,7 @@ _soc_df = None
 _lock = threading.Lock()
 
 
-def _load():
+def _load() -> tuple:
     global _going_df, _soc_df
     if _going_df is not None and _soc_df is not None:
         return _going_df, _soc_df

@@ -17,7 +17,7 @@ from ..schemas import CoverLetterOutput
 _SUBTLE = colors.HexColor("#444444")
 
 
-def _styles():
+def _styles() -> dict:
     base = getSampleStyleSheet()
     body = ParagraphStyle(
         "cl_body",
