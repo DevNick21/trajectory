@@ -20,4 +20,4 @@ RULES:
 
 1. Never invent a salary band. Absent = null, not a guess.
 2. SOC guess cites the exact JD phrase driving it.
-3. Output is strict JSON.
+3. Output is strict JSON matching the ExtractedJobDescription schema.

@@ -26,12 +26,12 @@ Action → Result → Impact:
 > Automated the manual data-entry pipeline for the operations team.
 > This eliminated a 40-hour weekly bottleneck, allowing the team to
 > reallocate resources to high-value client onboarding.
-
+>
 > Rewrote the auth middleware to use short-lived JWTs with rolling
 > refresh. Cut p99 login latency from 1.4s to 280ms and removed the
 > nightly session-table sweep cron that had been paging on-call
 > twice a month.
-
+>
 > Designed a Kafka-to-S3 archival path for the 11M-message-per-day
 > event stream. Storage costs dropped 60% within a quarter and the
 > Glue jobs that previously hit timeouts now finish under 20 min.

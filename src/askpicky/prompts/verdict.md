@@ -249,7 +249,7 @@ companies_house signals look extreme (dissolved, no filings, just
 incorporated), be cautious — the resolver may have anchored on the
 wrong entity. Surface this as a CONTENT_INTEGRITY_CONCERN stretch
 concern + downgrade confidence rather than asserting a confident
-NO_GO on potentially-wrong data. Cite
+    BLOCKED on potentially-wrong data. Cite
 `company_identity.confidence` as a gov_data field.
 
 DATA-FRESHNESS GRADIENT (added 2026-05-22):
@@ -293,7 +293,7 @@ you assign to a verdict that already has a decision.
 Concrete pattern: when sponsor_register fires a hard blocker for a
 visa user (weight 0.28), default confidence is 85+. When red_flags
 alone is the strongest concern (weight 0.08), confidence rarely
-exceeds 60 even on a NO_GO.
+exceeds 60 even on a negative verdict like PASS.
 
 UK residents have zero weight on sponsor_register and soc_check —
 those pillars carry no information for them. Visa holders weight
@@ -337,10 +337,11 @@ it contains the user's last N application outcomes (forwarded →
 applied → {no_response, rejected, offer}). Use this to calibrate
 your confidence, not your decision:
 
-- If the user has consistently ignored 3+ NO_GO recommendations
+- If the user has consistently ignored 3+ BLOCKED/PASS recommendations
   and succeeded, surface that pattern: "You've overridden 3 of my
-  NO_GOs before and 2 worked out — I'm marking this as a NO_GO but
-  with lower confidence (60 vs the usual 85+ for a clean blocker)."
+  negative verdicts before and 2 worked out — I'm marking this as
+  BLOCKED but with lower confidence (60 vs the usual 85+ for a clean
+  blocker)."
 
 - If the user has 5+ "no_response" outcomes for similar companies
   (same size, same sector), mention the pattern: "Companies in X
@@ -350,7 +351,7 @@ your confidence, not your decision:
   first check together — treat the confidence as advisory."
 
 - NEVER change the decision label based on outcomes. Outcomes
-  calibrate confidence only. A dissolved company is still a NO_GO
+  calibrate confidence only. A dissolved company is still hard-blocked
   even if the user has ignored 10 of them.
 
 CONFIDENCE CALIBRATION:

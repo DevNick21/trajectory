@@ -16,13 +16,14 @@ Every agent in `sub_agents/` goes through `call_agent`. The wrapper:
 """
 
 from __future__ import annotations
+from dataclasses import dataclass
 
 import json
 import logging
 import time
-from dataclasses import dataclass
 from typing import Any, AsyncIterator, Awaitable, Callable, Literal, Optional, TypeVar
 
+from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, ValidationError
 
 from .config import settings
@@ -67,7 +68,7 @@ def _get_anthropic_client() -> Any:
 
 def _get_deepseek_client() -> Any:
     """DeepSeek via Anthropic-compatible API.
-    
+
     Docs: https://api-docs.deepseek.com/guides/anthropic_api
     Base URL: https://api.deepseek.com/anthropic
     Supported: tool calls, JSON mode, 1M context.

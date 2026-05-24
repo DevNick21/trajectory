@@ -18,4 +18,4 @@ RULES:
    "we have a flat culture" (implied) -> do not include.
 3. If the company's careers page exists and this job URL's listing is
    NOT on it, flag `not_on_careers_page=true`.
-4. Output is strict JSON, no prose.
+4. Output is strict JSON matching the CompanyResearch schema, no prose.
