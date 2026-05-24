@@ -52,12 +52,12 @@ _EFFORT_LEVELS = {"low", "medium", "high", "xhigh"}
 
 Provider = Literal["anthropic", "deepseek", "openai"]
 
-_anthropic_client = None
-_deepseek_client = None
-_openai_client = None
+_anthropic_client: Any = None
+_deepseek_client: Any = None
+_openai_client: Any = None
 
 
-def _get_anthropic_client():
+def _get_anthropic_client() -> Any:
     global _anthropic_client
     if _anthropic_client is None:
         from anthropic import AsyncAnthropic
@@ -66,9 +66,9 @@ def _get_anthropic_client():
     return _anthropic_client
 
 
-def _get_deepseek_client():
+def _get_deepseek_client() -> Any:
     """DeepSeek via Anthropic-compatible API.
-
+    
     Docs: https://api-docs.deepseek.com/guides/anthropic_api
     Base URL: https://api.deepseek.com/anthropic
     Supported: tool calls, JSON mode, 1M context.
@@ -85,7 +85,7 @@ def _get_deepseek_client():
     return _deepseek_client
 
 
-def _get_openai_client():
+def _get_openai_client() -> Any:
     """OpenAI via native chat completions API with structured outputs."""
     global _openai_client
     if _openai_client is None:
@@ -635,7 +635,7 @@ def _flatten_blocks(content: str | list[dict]) -> str:
     return "\n".join(texts) if texts else ""
 
 
-def _zero_usage():
+def _zero_usage() -> Any:
     """Fallback when the API response doesn't include usage info."""
     from types import SimpleNamespace
     return SimpleNamespace(prompt_tokens=0, completion_tokens=0)
