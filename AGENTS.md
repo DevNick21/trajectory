@@ -18,7 +18,7 @@ table.
 Provider routing legend (2026-05-23):
   🟢 DeepSeek V4 Flash — structured extraction, routing, triage, style
   🟡 Anthropic Haiku 4.5  — cover letters, CV tailoring, salary, voice
-  🟠 Anthropic Sonnet 4.6 — verdict, managed agents
+  🟠 GPT-5.4 — verdict, managed agents
   🔴 Anthropic Opus 4.7   — self-audit, prompt auditor (build-time)
 
 | # | Agent | Model | Adapter | Called by | Phase |
@@ -29,7 +29,7 @@ Provider routing legend (2026-05-23):
 | 4 | Red Flags Detector | **DeepSeek V4 Flash** | `call_agent` | Phase 1 fan-out | Phase 1 |
 | 5 | Ghost Job JD Scorer | **Deterministic (no LLM)** | Regex 5-dim scoring | ghost_job_detector.py | Phase 1 |
 | 6 | Gazette insolvency check | **Deterministic (no LLM)** | HTTP + regex against thegazette.co.uk | Phase 1 fan-out | Phase 1 |
-| 7 | Verdict | **Sonnet 4.6** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
+| 7 | Verdict | **GPT-5.4 primary, DeepSeek Pro fallback** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
 | 8 | Interview Questions (design + predict) | **DeepSeek V4 Flash** | `call_agent` | `design` post-verdict; `predict` user-triggered | Phase 3/4 |
 | 9 | STAR Polisher | **DeepSeek V4 Flash** | `call_agent` | After each user answer | Phase 3 |
 | 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Onboarding, once | Onboarding |
@@ -231,7 +231,7 @@ RULES:
 
 **Purpose:** Scan the research bundle for non-verdict red flags (recent news, review patterns, legal).
 
-**Model:** `claude-opus-4-7`, `xhigh`
+**Model:** `deepseek-v4-flash`
 
 ## System prompt
 
@@ -315,7 +315,7 @@ RULES:
 
 **Purpose:** Single synchronous call. Most consequential agent. Produces a VerdictLabel (6-value taxonomy) with citations and entropy_norm.
 
-**Model:** `claude-sonnet-4-6` (updated 2026-05-23 from Opus 4.7)
+**Model:** GPT-5.4 primary, DeepSeek Pro fallback
 
 ## System prompt
 
@@ -1462,13 +1462,12 @@ Retry count: **maximum 2 retries per agent call**. More than 2 usually means a p
 
 ## Model routing summary
 
-| Task type | Model | Effort |
-|-----------|-------|--------|
-| Anything with judgement/reasoning | Opus 4.7 | xhigh |
-| Structured extraction from scraped pages | Sonnet 4.6 | medium |
-| JD field extraction | Sonnet 4.6 | medium |
-| Simple reshaping (already-structured data) | Sonnet 4.6 | low |
-| Intent routing | Opus 4.7 | xhigh (misroute is costly) |
-| Citation validation LLM checks | Sonnet 4.6 | medium |
+| Task type | Model | Priority |
+|-----------|-------|----------|
+| Verdict (judgement, hard blockers, citation reasoning) | GPT-5.4 primary / DeepSeek Pro fallback | CRITICAL |
+| Self-audit, voice-sensitive generators | DeepSeek V4 Pro | high |
+| Structured extraction, triage, routing, style | DeepSeek V4 Flash | low |
+| Citation validation LLM checks | DeepSeek V4 Flash | low |
+| Prompt auditor (build-time only) | Opus 4.7 | xhigh |
 
-No routing ever defaults to a model below Sonnet 4.6. No task requires Haiku in this project.
+No routing ever defaults to a model below Sonnet 4.6 except the verdict fallback path, which uses DeepSeek Pro as a recovery route. No task requires Haiku in this project.

@@ -112,7 +112,7 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 | Layer | Choice |
 |-------|--------|
 | Language | Python 3.12+ |
-| LLM | Multi-provider via `llm.py`: DeepSeek V4 Flash/Pro (Anthropic-compatible endpoint), Anthropic (Opus 4.7, Sonnet 4.6, Haiku 4.5), OpenAI (GPT-5.4 mini for benchmarks) |
+| LLM | Multi-provider via `llm.py`: DeepSeek V4 Flash/Pro (Anthropic-compatible endpoint), Anthropic (Opus 4.7, Sonnet 4.6, Haiku 4.5), OpenAI (GPT-5.4, primary verdict) |
 | Orchestration | `orchestrator.py` (imperative) + `langgraph_orchestrator.py` (opt-in StateGraph wrapper, checkpointed state) |
 | Bot | `python-telegram-bot` v21+, async long-polling |
 | Web | React 18 + Vite + TypeScript + TanStack Query + react-router + Tailwind |
