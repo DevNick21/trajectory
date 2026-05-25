@@ -192,9 +192,13 @@ def mock_handle_forward_job(monkeypatch):
         emitter = kwargs["emitter"]
         session = kwargs["session"]
         # Simulate a handful of agent completions through the emitter.
+        await emitter.emit({"type": "agent_started", "agent": "phase_1_jd_extractor"})
         await emitter.emit({"type": "agent_complete", "agent": "phase_1_jd_extractor"})
+        await emitter.emit({"type": "agent_started", "agent": "phase_1_company_scraper_summariser"})
         await emitter.emit({"type": "agent_complete", "agent": "phase_1_company_scraper_summariser"})
+        await emitter.emit({"type": "agent_started", "agent": "companies_house"})
         await emitter.emit({"type": "agent_complete", "agent": "companies_house"})
+        await emitter.emit({"type": "agent_started", "agent": "soc_check"})
         await emitter.emit({"type": "agent_complete", "agent": "soc_check"})
         calls.append(kwargs)
         return _make_bundle(session.session_id), _make_verdict()
@@ -227,9 +231,12 @@ def test_forward_job_streams_progress_then_verdict_then_done(
     events = _read_sse_events(_R())
 
     types = [e.get("type") for e in events]
-    # All four agent_completes precede the verdict, which precedes done.
-    assert types[:4] == [
-        "agent_complete", "agent_complete", "agent_complete", "agent_complete",
+    assert types[0] == "session_started"
+    assert types[1:9] == [
+        "agent_started", "agent_complete",
+        "agent_started", "agent_complete",
+        "agent_started", "agent_complete",
+        "agent_started", "agent_complete",
     ]
     assert "verdict" in types
     assert types[-1] == "done"

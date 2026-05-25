@@ -106,6 +106,9 @@ class SessionDetailResponse(BaseModel):
     the API layer doesn't have to keep its types lockstep with every
     domain-schema tweak. Frontend reads with TanStack Query and types
     against the migration plan's TypeScript shapes.
+
+    `progress_events` contains the durable event log from
+    session_progress_events — empty for pre-migration sessions.
     """
 
     id: str
@@ -117,6 +120,7 @@ class SessionDetailResponse(BaseModel):
     verdict: Optional[dict[str, Any]] = None
     generated_files: list[GeneratedFile] = Field(default_factory=list)
     cost_summary: CostSummary = Field(default_factory=CostSummary)
+    progress_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

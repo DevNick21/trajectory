@@ -1,24 +1,25 @@
 """Session API:
 
   - GET  /api/sessions               — slim recent-sessions list
-  - GET  /api/sessions/{id}          — full detail (bundle + verdict + files)
+  - GET  /api/sessions/{id}          — full detail (bundle + verdict + files + progress)
   - POST /api/sessions/forward_job   — Phase 1 pipeline as SSE stream
 
 All three are ownership-gated to settings.demo_user_id. The same 404
 covers "not found" and "not yours" so an attacker cannot enumerate
 session ids.
 
-SSE event vocabulary (Wave 4 — see MIGRATION_PLAN.md §7):
+SSE event vocabulary:
 
-  - {"type": "agent_complete", "agent": "<name>"}    (each Phase 1 agent finishing)
+  - {"type": "session_started", "session_id": "<id>", "job_url": "<url>"}
+  - {"type": "agent_started",  "agent": "<name>"}
+  - {"type": "agent_complete", "agent": "<name>"}
+  - {"type": "agent_failed",   "agent": "<name>", "error"?: "<reason>"}
   - {"type": "verdict", "data": <Verdict.model_dump>}
   - {"type": "error",   "data": {"message": "..."}}
   - {"type": "done"}                                  (sentinel from SSEEmitter.close)
 
-`agent_started` / `agent_failed` are deliberately deferred. The
-frontend infers in-progress from "agents in PHASE_1_AGENTS not yet
-in completed[]"; adding explicit started/failed events would touch
-every Phase 1 closure and isn't needed for the dashboard UX.
+Every event is persisted to session_progress_events so the dashboard
+can recover after page refresh or SSE disconnect.
 """
 
 from __future__ import annotations
@@ -63,6 +64,32 @@ log = logging.getLogger(__name__)
 _RUNNING_TASKS: set = set()
 
 
+class _PersistingEmitter:
+    """Wraps an SSEEmitter so every emitted event is also persisted to
+    session_progress_events. Persistence failures are logged but never
+    block the live stream — the durable log is best-effort."""
+
+    def __init__(self, inner: SSEEmitter, storage: Storage, session_id: str) -> None:
+        self._inner = inner
+        self._storage = storage
+        self._session_id = session_id
+
+    async def emit(self, event: dict) -> None:
+        try:
+            await self._storage.append_session_progress_event(
+                self._session_id, event,
+            )
+        except Exception:
+            log.exception(
+                "Failed to persist progress event for session %s",
+                self._session_id,
+            )
+        await self._inner.emit(event)
+
+    async def close(self) -> None:
+        await self._inner.close()
+
+
 _FILE_KIND_BY_SUFFIX = {
     ".docx": "docx",
     ".pdf": "pdf",
@@ -70,6 +97,8 @@ _FILE_KIND_BY_SUFFIX = {
 
 
 def _classify_file(filename: str) -> str:
+    if filename.lower().endswith("_latex_full.pdf"):
+        return "latex_pdf"
     suffix = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return _FILE_KIND_BY_SUFFIX.get(suffix, "other")
 
@@ -176,6 +205,8 @@ async def get_session_detail(
             else session.verdict
         )
 
+    progress_events = await storage.get_session_progress_events(session_id)
+
     return SessionDetailResponse(
         id=session.session_id,
         user_id=session.user_id,
@@ -186,6 +217,7 @@ async def get_session_detail(
         verdict=verdict_payload,
         generated_files=_list_generated_files(session_id),
         cost_summary=CostSummary(**cost),
+        progress_events=progress_events,
     )
 
 
@@ -216,24 +248,44 @@ async def _run_forward_job(
     """Background runner. Pushes events to the queue via the emitter,
     then the verdict event on success or an error event on failure,
     then closes the emitter (which enqueues the `done` sentinel).
+
+    Progress events are persisted to session_progress_events through
+    a _PersistingEmitter wrapper so the dashboard can recover state
+    after page refresh or SSE disconnect.
     """
     # Lazy import — avoids pulling the orchestrator graph into the
     # FastAPI startup path for routes that don't need it.
     from ...orchestrator import handle_forward_job
 
+    persisting = _PersistingEmitter(emitter, storage, session.session_id)
+
     try:
         await storage.save_session(session)
+        # Emit session_started so the frontend can persist the
+        # session_id in localStorage and recover on page refresh.
+        await persisting.emit({
+            "type": "session_started",
+            "session_id": session.session_id,
+            "job_url": job_url,
+        })
         bundle, verdict = await handle_forward_job(
             job_url=job_url,
             user=user,
             session=session,
             storage=storage,
-            emitter=emitter,
+            emitter=persisting,
         )
-        await queue.put({
+        verdict_event = {
             "type": "verdict",
             "data": verdict.model_dump(mode="json"),
-        })
+        }
+        try:
+            await storage.append_session_progress_event(
+                session.session_id, verdict_event,
+            )
+        except Exception:
+            log.exception("Failed to persist verdict for session %s", session.session_id)
+        await queue.put(verdict_event)
     except asyncio.CancelledError:
         # Client disconnected — let the cancellation propagate so
         # the runner task exits cleanly. Don't enqueue a final event;
@@ -241,10 +293,17 @@ async def _run_forward_job(
         raise
     except Exception:
         log.exception("forward_job failed for %s", job_url)
-        await queue.put({
+        error_event = {
             "type": "error",
             "data": {"message": "Research failed. Try the URL again, or paste it directly."},
-        })
+        }
+        try:
+            await storage.append_session_progress_event(
+                session.session_id, error_event,
+            )
+        except Exception:
+            log.exception("Failed to persist error for session %s", session.session_id)
+        await queue.put(error_event)
     finally:
         await emitter.close()
 

@@ -223,6 +223,7 @@ def test_session_detail_404_for_other_users_session(client):
 
 
 def test_session_detail_returns_full_payload(client, tmp_path: Path):
+    from askpicky.config import settings
     from askpicky.storage import (
         insert_session,
         log_llm_cost,
@@ -238,13 +239,12 @@ def test_session_detail_returns_full_payload(client, tmp_path: Path):
     _seed(log_llm_cost(
         session_id="full",
         agent_name="verdict",
-        model="claude-opus-4-7",
+        model=settings.opus_model_id,
         input_tokens=1000,
         output_tokens=500,
     ))
 
     # Drop a generated file so generated_files isn't empty.
-    from askpicky.config import settings
     sess_dir = settings.generated_dir / "full"
     sess_dir.mkdir(parents=True, exist_ok=True)
     (sess_dir / "cv.docx").write_bytes(b"fake docx")

@@ -106,21 +106,48 @@ async def handle_forward_job(
     if emitter is None:
         emitter = NoOpEmitter()
 
-    async def mark(name: str) -> None:
+    async def emit_progress(event_type: str, name: str, **extra: Any) -> None:
+        payload: dict[str, Any] = {"type": event_type, "agent": name}
+        payload.update(extra)
+        await emitter.emit(payload)
+
+    async def mark_started(name: str) -> None:
+        await emit_progress("agent_started", name)
+
+    async def mark_complete(name: str) -> None:
         await emitter.emit({"type": "agent_complete", "agent": name})
+
+    async def mark_failed(name: str, error: str | None = None) -> None:
+        await emit_progress(
+            "agent_failed",
+            name,
+            **({"error": error} if error else {}),
+        )
 
     # ── Phase 1A: company scraper (JD + company research, serial) ─────────
     log.info("Phase 1A: company_scraper for %s", job_url)
-    # Fire the JD-extractor tick the moment _extract_jd returns inside
-    # company_scraper, BEFORE the company-page scrape + summariser run.
-    # Without this, both ticks pop together at the end of the full
-    # ~30-50s block and the UI sits at `○` the whole time.
-    company_research, jd = await company_scraper.run(
-        job_url=job_url,
-        session_id=session.session_id,
-        on_jd_extracted=lambda: mark("phase_1_jd_extractor"),
-    )
-    await mark("phase_1_company_scraper_summariser")
+    await mark_started("phase_1_jd_extractor")
+    company_scraper_summariser_started = False
+
+    async def on_jd_extracted() -> None:
+        nonlocal company_scraper_summariser_started
+        await mark_complete("phase_1_jd_extractor")
+        await mark_started("phase_1_company_scraper_summariser")
+        company_scraper_summariser_started = True
+
+    try:
+        company_research, jd = await company_scraper.run(
+            job_url=job_url,
+            session_id=session.session_id,
+            on_jd_extracted=on_jd_extracted,
+        )
+    except Exception as exc:
+        if company_scraper_summariser_started:
+            await mark_failed("phase_1_company_scraper_summariser", "failed")
+        else:
+            await mark_failed("phase_1_jd_extractor", "failed")
+        raise
+    await mark_complete("phase_1_company_scraper_summariser")
 
     # Cache scraped pages from company_research
     for page in company_research.scraped_pages:
@@ -130,16 +157,17 @@ async def handle_forward_job(
     # A Haiku call (~$0.02) that gates whether the full $1-2 Phase 1
     # pipeline runs at all. DEFINITE_PASS skips the pipeline entirely;
     # EXPLORATORY runs the verdict with medium effort; SERIOUS gets the
-    # full Opus verdict. Single biggest cost-leverage move.
+    # full verdict. Single biggest cost-leverage move.
     triage_result = None
     try:
         from .sub_agents.triage import classify as triage_classify
+        await mark_started("phase_0_triage")
         triage_result = await triage_classify(
             jd=jd,
             user=user,
             retrieved_entries=None,  # triage is pre-retrieval by design
         )
-        await mark("phase_0_triage")
+        await mark_complete("phase_0_triage")
         log.info(
             "Phase 0 triage: %s — %s",
             triage_result.classification,
@@ -147,6 +175,7 @@ async def handle_forward_job(
         )
     except Exception as exc:  # pragma: no cover - defensive
         log.warning("Triage failed (non-fatal, defaults to SERIOUS): %s", exc)
+        await mark_failed("phase_0_triage", "failed")
 
     if triage_result and triage_result.classification == "DEFINITE_PASS":
         log.info(
@@ -162,6 +191,7 @@ async def handle_forward_job(
             reasoning=[
                 ReasoningPoint(
                     claim=triage_result.reasoning_brief,
+                    supporting_evidence=triage_result.reasoning_brief,
                     citation=Citation(
                         kind="gov_data",
                         data_field="triage_classification",
@@ -250,6 +280,7 @@ async def handle_forward_job(
     log.info("Phase 1B: companies_house")
     ch_snapshot = None
     try:
+        await mark_started("companies_house")
         ch_kwargs = {"company_name": company_research.company_name}
         if company_identity:
             if company_identity.crn:
@@ -257,10 +288,10 @@ async def handle_forward_job(
             if company_identity.aliases:
                 ch_kwargs["aliases"] = company_identity.aliases
         ch_snapshot = await ch_agent.lookup(**ch_kwargs)
-        await mark("companies_house")
+        await mark_complete("companies_house")
     except Exception as exc:
         log.warning("companies_house failed: %s", exc)
-        await mark("companies_house")
+        await mark_failed("companies_house", "unavailable")
 
     # ── Phase 1C: remaining agents in parallel ─────────────────────────────
     log.info("Phase 1C: parallel agents")
@@ -277,9 +308,10 @@ async def handle_forward_job(
         # removed 2026-05-24. Company research is now served by the Playwright +
         # Firecrawl pipeline in company_scraper. Glassdoor/Indeed reviews are
         # scraped via Firecrawl fallback when available.
+        await mark_started("reviews")
         if not reviews_future.done():
             reviews_future.set_result([])
-        await mark("reviews")
+        await mark_complete("reviews")
         return []
 
     async def run_gazette() -> Any:
@@ -293,6 +325,7 @@ async def handle_forward_job(
         crn = None
         if company_identity is not None:
             crn = getattr(company_identity, "crn", None)
+        await mark_started("gazette_check")
         try:
             result = await asyncio.wait_for(
                 gazette_check.check(
@@ -302,17 +335,18 @@ async def handle_forward_job(
                 ),
                 timeout=timeout,
             )
-            await mark("gazette_check")
+            await mark_complete("gazette_check")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             timed_out = isinstance(exc, asyncio.TimeoutError)
             log.warning("gazette_check failed (timed_out=%s): %s", timed_out, exc)
-            await mark("gazette_check")
+            await mark_failed("gazette_check", "timed out" if timed_out else "unavailable")
             return []
 
     async def run_sponsor() -> Optional[SponsorStatus]:
+        await mark_started("sponsor_register")
         if user.user_type != "visa_holder":
-            await mark("sponsor_register")
+            await mark_complete("sponsor_register")
             return None
         try:
             result = await asyncio.wait_for(
@@ -322,14 +356,17 @@ async def handle_forward_job(
                 ),
                 timeout=timeout,
             )
-            await mark("sponsor_register")
+            await mark_complete("sponsor_register")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             timed_out = isinstance(exc, asyncio.TimeoutError)
             log.warning(
                 "sponsor_register failed (timed_out=%s): %s", timed_out, exc
             )
-            await mark("sponsor_register")
+            await mark_failed(
+                "sponsor_register",
+                "timed out" if timed_out else "unavailable",
+            )
             from .schemas import SponsorStatus
             return SponsorStatus(
                 status="UNKNOWN",
@@ -337,20 +374,24 @@ async def handle_forward_job(
             )
 
     async def run_soc() -> Optional[SocCheckResult]:
+        await mark_started("soc_check")
         if user.user_type != "visa_holder":
-            await mark("soc_check")
+            await mark_complete("soc_check")
             return None
         try:
             result = await asyncio.wait_for(
                 soc_agent.verify(jd=jd, user=user),
                 timeout=timeout,
             )
-            await mark("soc_check")
+            await mark_complete("soc_check")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             timed_out = isinstance(exc, asyncio.TimeoutError)
             log.warning("soc_check failed (timed_out=%s): %s", timed_out, exc)
-            await mark("soc_check")
+            await mark_failed(
+                "soc_check",
+                "timed out" if timed_out else "unavailable",
+            )
             from .schemas import SocCheckResult
             return SocCheckResult(
                 soc_code=jd.soc_code_guess or "unknown",
@@ -361,6 +402,7 @@ async def handle_forward_job(
             )
 
     async def run_ghost() -> GhostJobAssessment:
+        await mark_started("phase_1_ghost_job_jd_scorer")
         try:
             result = await asyncio.wait_for(
                 ghost_job_detector.score(
@@ -372,7 +414,7 @@ async def handle_forward_job(
                 ),
                 timeout=timeout,
             )
-            await mark("phase_1_ghost_job_jd_scorer")
+            await mark_complete("phase_1_ghost_job_jd_scorer")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             # Match the sibling Phase 1C pattern (run_red_flags, run_soc):
@@ -387,7 +429,10 @@ async def handle_forward_job(
             log.warning(
                 "ghost_job_detector failed (timed_out=%s): %s", timed_out, exc
             )
-            await mark("phase_1_ghost_job_jd_scorer")
+            await mark_failed(
+                "phase_1_ghost_job_jd_scorer",
+                "timed out" if timed_out else "unavailable",
+            )
             from .schemas import GhostJobAssessment, GhostJobJDScore
             return GhostJobAssessment(
                 probability="LIKELY_REAL",
@@ -407,6 +452,7 @@ async def handle_forward_job(
             )
 
     async def run_red_flags() -> RedFlagsReport:
+        await mark_started("phase_1_red_flags")
         try:
             # Wait for reviews to complete (or fail to []) before scoring.
             reviews_for_flags = await reviews_future
@@ -419,12 +465,15 @@ async def handle_forward_job(
                 ),
                 timeout=timeout,
             )
-            await mark("phase_1_red_flags")
+            await mark_complete("phase_1_red_flags")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
             timed_out = isinstance(exc, asyncio.TimeoutError)
             log.warning("red_flags failed (timed_out=%s): %s", timed_out, exc)
-            await mark("phase_1_red_flags")
+            await mark_failed(
+                "phase_1_red_flags",
+                "timed out" if timed_out else "unavailable",
+            )
             from .schemas import RedFlagsReport
             return RedFlagsReport(flags=[], checked=True)
 

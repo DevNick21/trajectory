@@ -13,8 +13,8 @@ That exercises:
   - verdict.generate runs with the assembled ResearchBundle
   - Session is persisted with phase1_output + verdict for later
     GET /api/sessions/{id} reads
-  - SSE frame sequence matches the Wave 4 contract
-    (agent_complete × 9 + verdict + done)
+  - SSE frame sequence matches the current contract
+    (session_started + agent_started/completed × 9 + verdict + done)
 
 This is Wave 11 of MIGRATION_PLAN.md. It's the test that would have
 caught the `streamer`-reference NameError Wave 1 left behind.
@@ -98,7 +98,11 @@ def _synthetic_jd() -> ExtractedJobDescription:
         posting_platform="company_site",
         hiring_manager_named=True,
         hiring_manager_name="Alex",
-        jd_text_full="Senior Backend Engineer at Acme Ltd. Python + AWS.",
+        jd_text_full=(
+            "Senior Backend Engineer at Acme Ltd. Build backend services in "
+            "Python and AWS, improve reliability, and collaborate with the "
+            "payments platform team on production systems and incident response."
+        ),
         specificity_signals=["named_hiring_manager"],
         vagueness_signals=[],
     )
@@ -153,6 +157,7 @@ def client(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(settings, "faiss_index_path", tmp_path / "test.faiss")
     monkeypatch.setattr(settings, "generated_dir", tmp_path / "generated")
     monkeypatch.setattr(settings, "demo_user_id", "demo-user-1")
+    monkeypatch.setattr(settings, "enable_triage_before_verdict", False)
     monkeypatch.setattr(storage_module, "_initialised", False)
 
     from askpicky.api.app import create_app
@@ -193,23 +198,21 @@ def mock_phase1(monkeypatch):
         companies_house,
         ghost_job_detector,
         red_flags,
-        reviews,
         salary_data,
         sponsor_register,
         soc_check,
         verdict,
     )
 
-    async def fake_scraper_run(job_url, session_id=None):
+    async def fake_scraper_run(job_url, session_id=None, on_jd_extracted=None):
+        if on_jd_extracted is not None:
+            await on_jd_extracted()
         return _synthetic_company_research(), _synthetic_jd()
 
-    async def fake_ch_lookup(company_name):
+    async def fake_ch_lookup(company_name, **kwargs):
         # None = "company not found" — orchestrator still emits mark
         # on the caller side.
         return None
-
-    async def fake_reviews_fetch(company_name):
-        return []
 
     async def fake_salary_fetch(role, location, soc_code, posted_band=None):
         return SalarySignals(sources_consulted=["ASHE"], data_citations=[])
@@ -231,13 +234,12 @@ def mock_phase1(monkeypatch):
         return RedFlagsReport(flags=[], checked=True)
 
     async def fake_verdict_generate(
-        research_bundle, user, retrieved_entries, session_id=None,
+        research_bundle, user, retrieved_entries, session_id=None, **kwargs,
     ):
         return _synthetic_verdict()
 
     monkeypatch.setattr(company_scraper, "run", fake_scraper_run)
     monkeypatch.setattr(companies_house, "lookup", fake_ch_lookup)
-    monkeypatch.setattr(reviews, "fetch", fake_reviews_fetch)
     monkeypatch.setattr(salary_data, "fetch", fake_salary_fetch)
     monkeypatch.setattr(sponsor_register, "lookup", fake_sponsor_lookup)
     monkeypatch.setattr(soc_check, "verify", fake_soc_verify)
@@ -274,22 +276,28 @@ def test_end_to_end_forward_job_streams_all_phase1_events_plus_verdict(
     events = _read_sse_events(body)
     types = [e.get("type") for e in events]
 
-    # All PHASE_1_AGENTS emit a complete event (each closure calls mark()
-    # in both the success branch and the short-circuit / fallback branches).
+    agent_starts = {
+        e["agent"] for e in events if e.get("type") == "agent_started"
+    }
     agent_completes = {
         e["agent"] for e in events if e.get("type") == "agent_complete"
     }
+    assert agent_starts == set(PHASE_1_AGENTS), (
+        f"missing starts: {set(PHASE_1_AGENTS) - agent_starts}, "
+        f"extras: {agent_starts - set(PHASE_1_AGENTS)}"
+    )
     assert agent_completes == set(PHASE_1_AGENTS), (
         f"missing marks: {set(PHASE_1_AGENTS) - agent_completes}, "
         f"extras: {agent_completes - set(PHASE_1_AGENTS)}"
     )
 
-    # Verdict is emitted after all agent_completes.
+    # Verdict is emitted after all agent events (plus the initial
+    # session_started sentinel).
     verdict_index = types.index("verdict")
     assert all(
-        types[i] == "agent_complete"
+        types[i] in {"session_started", "agent_started", "agent_complete"}
         for i in range(verdict_index)
-    ), f"non-agent_complete event before verdict: {types[:verdict_index]}"
+    ), f"unexpected event before verdict: {types[:verdict_index]}"
 
     verdict_event = events[verdict_index]
     assert verdict_event["data"]["decision"] == "GO"

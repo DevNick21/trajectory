@@ -162,6 +162,32 @@ def _new_session(user_id: str, job_url: str) -> Session:
     )
 
 
+class _PersistingEmitter:
+    """Wraps an emitter so every emitted event is also persisted to
+    session_progress_events. Persistence failures are logged but never
+    block the live stream."""
+
+    def __init__(self, inner, storage: Storage, session_id: str) -> None:
+        self._inner = inner
+        self._storage = storage
+        self._session_id = session_id
+
+    async def emit(self, event: dict) -> None:
+        try:
+            await self._storage.append_session_progress_event(
+                self._session_id, event,
+            )
+        except Exception:
+            log.exception(
+                "Failed to persist progress event for session %s",
+                self._session_id,
+            )
+        await self._inner.emit(event)
+
+    async def close(self) -> None:
+        await self._inner.close()
+
+
 async def _process_one(
     job: QueuedJob,
     user: UserProfile,
@@ -172,10 +198,9 @@ async def _process_one(
     """Run Phase 1 + verdict for a single queue entry.
 
     Emits `started` → `completed` (or `failed`) events on the shared
-    output queue. Semaphore caps how many of these run in parallel.
-    The forward_job SSE emitter is NoOp — per-agent progress doesn't
-    stream cross-job; the batch consumer only cares about per-job
-    completion.
+    output queue. Per-agent progress events are persisted via a
+    _PersistingEmitter so session detail pages can show progress
+    history for queue-created sessions too.
     """
     async with sem:
         await queue.put({
@@ -186,18 +211,23 @@ async def _process_one(
         await storage.mark_queued_job_processing(job.id)
         try:
             from ...orchestrator import handle_forward_job
+            from ...progress.emitter import NoOpEmitter
 
             session = _new_session(user.user_id, job.job_url)
             await storage.save_session(session)
+
+            # Wrap a NoOpEmitter with persistence — the queue runner
+            # doesn't stream per-agent progress live, but session
+            # detail should still show the progress timeline.
+            persisting = _PersistingEmitter(
+                NoOpEmitter(), storage, session.session_id,
+            )
             bundle, verdict = await handle_forward_job(
                 job_url=job.job_url,
                 user=user,
                 session=session,
                 storage=storage,
-                # Explicit None — the batch runner doesn't stream
-                # per-agent progress; consumers only want per-job
-                # completion. The orchestrator defaults a NoOpEmitter.
-                emitter=None,
+                emitter=persisting,
             )
             await storage.mark_queued_job_done(job.id, session.session_id)
             await queue.put({
@@ -243,7 +273,6 @@ async def _run_batch_via_api(
     queue concurrently with sensible logging so the operator can see
     what would migrate.
     """
-    from anthropic import AsyncAnthropic
     from ...config import settings as _settings
 
     log.info(
@@ -252,14 +281,21 @@ async def _run_batch_via_api(
         "next handle_forward_job refactor. Running in-process for now.",
         len(pending),
     )
-    # Touch the SDK client to surface auth issues early — exercises the
-    # Batch path readiness without committing a structural refactor here.
+    # Smoke the Anthropic API to surface auth issues early.
     try:
-        client = AsyncAnthropic(api_key=_settings.anthropic_api_key)
-        # Ping list to validate credentials + the route is reachable.
-        await client.messages.batches.list(limit=1)
+        import httpx
+
+        async with httpx.AsyncClient(
+            base_url="https://api.anthropic.com",
+            headers={
+                "x-api-key": _settings.anthropic_api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            timeout=httpx.Timeout(15.0),
+        ) as client:
+            await client.get("/v1/messages?limit=1")
     except Exception as exc:  # pragma: no cover
-        log.warning("messages.batches.list smoke failed: %s", exc)
+        log.warning("Anthropic API smoke check failed: %s", exc)
 
     sem = asyncio.Semaphore(_default_concurrency())
     await asyncio.gather(

@@ -840,7 +840,7 @@ TriageClassification = Literal["SERIOUS", "EXPLORATORY", "DEFINITE_PASS"]
 class TriageResult(BaseModel):
     """Pre-Phase-1 classification of a forwarded job. A Haiku call (~$0.02)
     that gates whether the full $1-2 Phase 1 pipeline runs at all. Only
-    SERIOUS forwards get the full Opus verdict; DEFINITE_PASS gets a
+    SERIOUS forwards get the full verdict; DEFINITE_PASS gets a
     lightweight "obvious fit" response; EXPLORATORY runs the verdict
     with medium effort. Architecture gap #4.
     """
@@ -996,7 +996,7 @@ class STARPolish(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Onboarding parser (per-stage, Opus 4.7 low effort)
+# Onboarding parser (per-stage)
 #
 # Each onboarding stage has its own parse-result schema. The parser agent
 # decides whether the user's reply covered enough for that stage to

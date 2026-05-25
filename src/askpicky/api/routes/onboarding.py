@@ -258,57 +258,56 @@ async def finalise(
         if parts:
             narrative = "Career profile: " + ". ".join(parts) + "."
 
+    pending_entries: list[CareerEntry] = []
+
     if narrative:
-        await storage.insert_career_entry(CareerEntry(
+        pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="conversation",
             raw_text=narrative,
             created_at=now,
         ))
-        entries_written += 1
 
     for text in motivations:
-        await storage.insert_career_entry(CareerEntry(
+        pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="motivation",
             raw_text=text,
             created_at=now,
         ))
-        entries_written += 1
 
     for text in deal_breakers:
-        await storage.insert_career_entry(CareerEntry(
+        pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="deal_breaker",
             raw_text=text,
             created_at=now,
         ))
-        entries_written += 1
 
     for text in good_role_signals:
-        await storage.insert_career_entry(CareerEntry(
+        pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="good_role_signal",
             raw_text=text,
             created_at=now,
         ))
-        entries_written += 1
 
-    # Writing samples also go in as career entries so they're
-    # retrievable when generators want to match the user's voice.
     for text in req.writing_samples:
-        await storage.insert_career_entry(CareerEntry(
+        pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,
             kind="writing_sample",
             raw_text=text,
             created_at=now,
         ))
-        entries_written += 1
+
+    if pending_entries:
+        await storage.insert_career_entries_batch(pending_entries)
+        entries_written = len(pending_entries)
 
     log.info(
         "onboarding finalised for %s: entries=%d style_profile=%s",
