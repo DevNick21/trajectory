@@ -39,6 +39,7 @@ data/ch_bulk/
 # Logs
 *.log
 logs/
+session-ses_*.md
 
 # Test / lint caches
 .pytest_cache/
