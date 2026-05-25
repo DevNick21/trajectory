@@ -34,13 +34,13 @@ class Settings(BaseSettings):
     companies_house_api_key: str = ""
 
     # Multi-provider support (architecture gap #10)
-    # DeepSeek — Anthropic-compatible endpoint at api.deepseek.com/anthropic
+    # DeepSeek — OpenAI-compatible endpoint at api.deepseek.com/v1
     deepseek_api_key: str = ""
-    deepseek_base_url: str = "https://api.deepseek.com/anthropic"
+    deepseek_base_url: str = "https://api.deepseek.com/v1"
     # Firecrawl — anti-bot page scraping fallback
     firecrawl_api_key: str = ""
     firecrawl_base_url: str = "https://api.firecrawl.dev/v2"
-    # OpenAI — GPT-5.4 mini for benchmarking and optional routing
+    # OpenAI — GPT-5.4 for primary verdict, benchmarking, and optional routing
     openai_api_key: str = ""
 
     # --- feature flags
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     enable_splink_sponsor_match: bool = False
     # Pre-verdict triage (architecture gap #4). A Haiku call (~$0.02)
     # classifies forwards as SERIOUS/EXPLORATORY/DEFINITE_PASS before
-    # the full Phase 1 pipeline. Only SERIOUS gets the full Opus verdict.
+    # the full Phase 1 pipeline. Only SERIOUS gets the full verdict.
     # Single biggest cost-leverage move. Defaults on.
     enable_triage_before_verdict: bool = True
 
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     # DeepSeek models (Anthropic-compatible endpoint)
     deepseek_flash_model_id: str = "deepseek-v4-flash"
     deepseek_pro_model_id: str = "deepseek-v4-pro"
-    # OpenAI models (for benchmarking and optional routing)
+    # OpenAI models
     openai_mini_model_id: str = "gpt-5.4-mini"
     openai_pro_model_id: str = "gpt-5.4"
     # LangGraph orchestrator (opt-in — wraps handle_forward_job)
@@ -98,15 +98,16 @@ class Settings(BaseSettings):
 
     # Per-agent model routing. Keys are agent_name strings; overrides
     # the default (opus_model_id) when set. Use DeepSeek V4 Flash for
-    # low-stakes extraction/routing tasks; keep Anthropic for verdict,
-    # self-audit, and voice-sensitive generators.
-    #
-    # Format: "agent_name": (model_id_str, provider)
-    # provider is "anthropic" or "deepseek". Default: "anthropic".
+    # low-stakes extraction/routing tasks.
+    # DeepSeek Pro handles self-audit and voice-sensitive generators.
+    # Verdict is NOT in the map — the sub-agent wrapper passes the model
+    # explicitly (GPT-5.4 primary, DeepSeek Pro fallback on failure).
+    # provider is "anthropic", "deepseek", or "openai". Default: "anthropic".
     # Example: {"jd_extractor": ("deepseek-v4-flash", "deepseek")}
+    #
+    # Verdict is NOT in the map — the sub-agent wrapper passes the model
+    # explicitly (GPT-5.4 primary, DeepSeek Pro fallback on failure).
     agent_model_map: dict = Field(default_factory=lambda: {
-        # DeepSeek V4 Pro — quality-critical agents (reasoning, voice, citations)
-        "verdict": ("deepseek-v4-pro", "deepseek"),
         "self_audit": ("deepseek-v4-pro", "deepseek"),
         "cover_letter": ("deepseek-v4-pro", "deepseek"),
         "cv_tailor": ("deepseek-v4-pro", "deepseek"),

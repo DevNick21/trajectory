@@ -9,7 +9,7 @@ module before reaching any agent's prompt. Two tiers:
             them with a visible `[REDACTED: pattern_name]` marker so
             downstream agents still read natural text.
 
-  Tier 2  — Sonnet 4.6 classifier. Only runs when Tier 1 flagged at
+  Tier 2  — LLM residual-risk classifier. Only runs when Tier 1 flagged at
             least one pattern AND the downstream agent is in the
             high-stakes list. Returns SAFE / SUSPICIOUS / MALICIOUS
             with a recommended action (PASS_THROUGH / PASS_WITH_WARNING
@@ -310,21 +310,18 @@ def _is_retryable_error(exc: BaseException) -> bool:
     """Classifier retries apply to transient network / upstream-5xx only.
 
     Schema/validation errors are surfaced immediately — a malformed
-    Sonnet response is not a "try again" situation.
+    response is not a "try again" situation.
     """
     if isinstance(exc, asyncio.TimeoutError):
         return True
     try:
-        import anthropic  # type: ignore
+        import httpx
 
-        if isinstance(exc, anthropic.APIConnectionError):
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code >= 500
+        if isinstance(exc, (httpx.ConnectError, httpx.RemoteProtocolError)):
             return True
-        if isinstance(exc, anthropic.APIStatusError):
-            status = getattr(exc, "status_code", None)
-            if isinstance(status, int) and status >= 500:
-                return True
-            return False
-    except Exception:  # pragma: no cover — anthropic import guarded
+    except Exception:  # pragma: no cover — httpx import guarded
         pass
     return False
 
@@ -334,7 +331,7 @@ async def tier2(
     source_type: SourceType,
     downstream_agent: str,
 ) -> ContentShieldVerdict:
-    """Run the Sonnet 4.6 residual-risk classifier.
+    """Run the residual-risk classifier.
 
     Callers should only invoke this when `tier1().flags` is non-empty
     AND `downstream_agent in HIGH_STAKES_AGENTS`. We still guard

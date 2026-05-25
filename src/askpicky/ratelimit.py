@@ -38,7 +38,7 @@ class Limit:
 
 
 # Intent → limit. Picking these conservatively:
-#   forward_job: the expensive path (Phase 1 fan-out + verdict = ~$1 Opus).
+#   forward_job: the expensive path (Phase 1 fan-out + verdict).
 #     5/min is well above any real user's pace and well below a runaway
 #     loop's pace.
 #   generator: CV, cover letter, draft reply etc. Pack-level generation.

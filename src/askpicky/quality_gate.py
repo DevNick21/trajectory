@@ -8,7 +8,7 @@ This is the same pattern social media realtime systems use: a firehose
 filter (deterministic, fast, handles 99% of quality decisions) before the
 ranking model (expensive, only sees clean data). The verdict currently
 does both jobs — it has to evaluate data quality AND make a GO/NO_GO
-decision in a single Opus call. That's why verdicts are inconsistent.
+decision in a single call. That's why verdicts are inconsistent.
 
 No LLM. No API calls. Runs in <1ms. Pure functions, testable in isolation.
 """
@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from ..schemas import (
+from .schemas import (
     CompaniesHouseSnapshot,
     CompanyResearch,
     ExtractedJobDescription,

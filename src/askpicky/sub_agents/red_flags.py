@@ -1,6 +1,6 @@
 """Phase 1 — Red Flags Detector.
 
-Opus 4.7 xhigh LLM scan of the research bundle for non-verdict red flags
+LLM scan of the research bundle for non-verdict red flags
 (recent layoffs, lawsuits, review patterns, Companies House distress).
 
 System prompt verbatim from AGENTS.md §4.

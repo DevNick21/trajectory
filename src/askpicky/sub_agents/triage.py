@@ -2,7 +2,7 @@
 
 A single Haiku call (~$0.02) classifies every forward_job as
 SERIOUS / EXPLORATORY / DEFINITE_PASS before the full Phase 1
-pipeline runs. Only SERIOUS gets the full Opus verdict; the other
+pipeline runs. Only SERIOUS gets the full verdict; the other
 two get lighter treatment. This is the single biggest cost-leverage
 move in the codebase.
 

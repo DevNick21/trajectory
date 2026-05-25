@@ -11,6 +11,7 @@ Post-generation validation:
   3. headline <= 12 words (enforced by the Pydantic validator).
   4. At least 3 reasoning points.
   5. Up to 2 regeneration retries with validator feedback, then fail loud.
+  6. Primary verdict model: GPT-5.4. Fallback: DeepSeek Pro.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import os
 from typing import Any, Optional
 
 from ..config import settings
-from ..llm import call_agent
+from ..llm import AgentCallFailed, BackendError, call_agent
 from ..prompts import load_prompt
 from ..schemas import (
     CareerEntry,
@@ -248,11 +249,11 @@ def _make_post_validate(ctx: ValidationContext) -> Any:
 def _mock_verdict(user: UserProfile, bundle: ResearchBundle) -> Verdict:
     """Fixture verdict used when SMOKE_TEST_MOCK=1.
 
-    Debug loops on smoke_test.py would otherwise burn Opus 4.7 xhigh on
-    every iteration — roughly $0.50–$1.50 per call. Gating the real API
-    call behind an env var preserves the full wiring of call_agent,
-    post_validate, and _enforce_no_go_with_blockers for integration runs
-    while letting local iteration stay free.
+    Debug loops on smoke_test.py would otherwise burn the primary GPT
+    call on every iteration — roughly $0.50–$1.50 per call. Gating the
+    real API call behind an env var preserves the full wiring of
+    call_agent, post_validate, and _enforce_label_blocker_consistency
+    for integration runs while letting local iteration stay free.
     """
     role = bundle.extracted_jd.role_title or "this role"
     company = bundle.company_research.company_name or "this company"
@@ -268,11 +269,11 @@ def _mock_verdict(user: UserProfile, bundle: ResearchBundle) -> Verdict:
         decision="GO",
         confidence_pct=72,
         entropy_norm=0.15,
-        headline="Apply - fixture verdict, no real Opus call.",
+        headline="Apply - fixture verdict, no real model call.",
         reasoning=[
             ReasoningPoint(
                 claim=f"Fixture verdict for {role} at {company}.",
-                supporting_evidence="SMOKE_TEST_MOCK=1 — no real Opus call.",
+                supporting_evidence="SMOKE_TEST_MOCK=1 — no real model call.",
                 citation=citation,
             ),
             ReasoningPoint(
@@ -300,6 +301,58 @@ def _mock_enabled() -> bool:
     return os.getenv("SMOKE_TEST_MOCK", "").lower() in {"1", "true", "yes"}
 
 
+def _fallback_prompt(system_prompt: str) -> str:
+    return (
+        system_prompt
+        + "\n\n"
+        + "Fallback mode: the primary verdict model failed. "
+        + "Return the same Verdict schema with the same grounding rules. "
+        + "Do not mention the failure in the output."
+    )
+
+
+async def _call_primary_verdict(
+    *,
+    system_prompt: str,
+    user_input: str,
+    session_id: Optional[str],
+    ctx,
+) -> Verdict:
+    return await call_agent(
+        agent_name="verdict",
+        system_prompt=system_prompt,
+        user_input=user_input,
+        output_schema=Verdict,
+        model=settings.openai_pro_model_id,
+        effort="high",
+        max_retries=2,
+        session_id=session_id,
+        priority="CRITICAL",
+        post_validate=_make_post_validate(ctx),
+    )
+
+
+async def _call_fallback_verdict(
+    *,
+    system_prompt: str,
+    user_input: str,
+    session_id: Optional[str],
+    ctx,
+) -> Verdict:
+    return await call_agent(
+        agent_name="verdict_fallback",
+        system_prompt=_fallback_prompt(system_prompt),
+        user_input=user_input,
+        output_schema=Verdict,
+        model=settings.deepseek_pro_model_id,
+        effort="high",
+        max_retries=2,
+        session_id=session_id,
+        priority="CRITICAL",
+        post_validate=_make_post_validate(ctx),
+    )
+
+
 async def generate(
     research_bundle: ResearchBundle,
     user: UserProfile,
@@ -312,7 +365,8 @@ async def generate(
     if _mock_enabled():
         logger.warning(
             "SMOKE_TEST_MOCK=1 — returning fixture verdict without calling "
-            "the Anthropic API. Unset the env var to exercise real Opus."
+            "the primary GPT verdict model. Unset the env var to exercise "
+            "the real routing path."
         )
         return _enforce_label_blocker_consistency(_mock_verdict(user, research_bundle))
 
@@ -336,16 +390,23 @@ async def generate(
         # redeploying the prompt file.
         system_prompt = SYSTEM_PROMPT + "\n\n" + _SOURCE_STATUS_GUIDANCE
 
-    verdict = await call_agent(
-        agent_name="verdict",
-        system_prompt=system_prompt,
-        user_input=user_input,
-        output_schema=Verdict,
-        effort="high",
-        max_retries=2,
-        session_id=session_id,
-        priority="CRITICAL",
-        post_validate=_make_post_validate(ctx),
-    )
+    try:
+        verdict = await _call_primary_verdict(
+            system_prompt=system_prompt,
+            user_input=user_input,
+            session_id=session_id,
+            ctx=ctx,
+        )
+    except (BackendError, AgentCallFailed) as exc:
+        logger.warning(
+            "Primary verdict model failed (%s); falling back to DeepSeek Pro.",
+            exc,
+        )
+        verdict = await _call_fallback_verdict(
+            system_prompt=system_prompt,
+            user_input=user_input,
+            session_id=session_id,
+            ctx=ctx,
+        )
 
     return _enforce_label_blocker_consistency(verdict)

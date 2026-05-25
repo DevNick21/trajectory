@@ -4,7 +4,7 @@
 Usage:
     python scripts/benchmarks/run.py                    # live run (needs keys)
     python scripts/benchmarks/run.py --mock             # CI-safe mock mode
-    python scripts/benchmarks/run.py --providers anthropic,deepseek
+    python scripts/benchmarks/run.py --providers anthropic,deepseek,openai
     python scripts/benchmarks/run.py --output-json data/benchmarks/latest.json
 
 Output: JSON lines per task + a summary block written to
@@ -161,6 +161,8 @@ class ProviderConfig:
     """Settings attribute holding the API key. E.g. 'anthropic_api_key'."""
 
 
+# Benchmark-specific model choices (intentionally pinned, not derived
+# from the per-agent routing config in config.py).
 PROVIDERS: dict[str, ProviderConfig] = {
     "anthropic": ProviderConfig(
         name="anthropic",
@@ -360,7 +362,7 @@ def main() -> None:
     parser.add_argument(
         "--providers",
         default="anthropic",
-        help="Comma-separated provider names (anthropic,deepseek).",
+        help="Comma-separated provider names (anthropic,deepseek,openai).",
     )
     parser.add_argument(
         "--tasks",

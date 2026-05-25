@@ -21,7 +21,7 @@ from typing import Optional
 
 from ..citation_docs import build_documents_for_bundle
 from ..config import settings
-from ..llm import call_with_citations, AgentCallFailed
+from ..llm import call_with_citations, upload_pdf, AgentCallFailed
 from ..schemas import (
     Citation,
     OfferAnalysis,
@@ -78,13 +78,9 @@ be considered slightly below market in some interpretations".
 
 async def upload_pdf(pdf_bytes: bytes, filename: str = "offer.pdf") -> str:
     """Upload a PDF to Anthropic's Files API and return the file_id."""
-    from anthropic import AsyncAnthropic
+    from ..llm import upload_pdf as _upload
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-    f = await client.beta.files.upload(
-        file=(filename, pdf_bytes, "application/pdf"),
-    )
-    file_id = getattr(f, "id")
+    file_id = await _upload(pdf_bytes, filename)
     logger.info("offer_analyst: uploaded PDF -> file_id=%s", file_id)
     return file_id
 
