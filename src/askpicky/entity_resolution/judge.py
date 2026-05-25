@@ -158,7 +158,6 @@ async def judge_candidates(
             system_prompt=_SYSTEM_PROMPT,
             user_input=user_input,
             output_schema=JudgeVerdict,
-            model=settings.haiku_model_id,
             effort="medium",
         )
     except Exception as exc:

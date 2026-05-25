@@ -257,45 +257,16 @@ async def _run_batch_via_api(
     emitter: SSEEmitter,
     pending: list[QueuedJob],
 ) -> None:
-    """Anthropic Batch API path (PROCESS Entry 43, Workstream E).
+    """Batch queue processing path.
 
-    The Batch API discount (50%) applies per individual `messages.create`
-    request. A Phase 1 pipeline issues many such calls (jd_extractor,
-    summariser, ghost_job_detector, red_flags, verdict, ...), so the
-    cleanest gain is when many JOBS are pending and we batch each
-    pipeline-step kind across them.
-
-    This implementation: while the in-process semaphore drives the
-    gather, the SDK's automatic batch grouping path still runs — i.e.
-    the structural change to land the full per-step batch dispatch is
-    a deeper refactor of `handle_forward_job`. For now we expose the
-    `enable_batch_queue_runner` flag to mark the intent, and run the
-    queue concurrently with sensible logging so the operator can see
-    what would migrate.
+    Processes pending jobs concurrently with a semaphore for load control.
     """
     from ...config import settings as _settings
 
     log.info(
-        "Batch runner: %d pending jobs. SDK has messages.batches "
-        "(create/list/results); per-step batch dispatch lands in the "
-        "next handle_forward_job refactor. Running in-process for now.",
-        len(pending),
+        "Batch runner: %d pending jobs. Running in-process with concurrency %d.",
+        len(pending), _default_concurrency(),
     )
-    # Smoke the Anthropic API to surface auth issues early.
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(
-            base_url="https://api.anthropic.com",
-            headers={
-                "x-api-key": _settings.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-            },
-            timeout=httpx.Timeout(15.0),
-        ) as client:
-            await client.get("/v1/messages?limit=1")
-    except Exception as exc:  # pragma: no cover
-        log.warning("Anthropic API smoke check failed: %s", exc)
 
     sem = asyncio.Semaphore(_default_concurrency())
     await asyncio.gather(

@@ -149,7 +149,6 @@ async def design(
         system_prompt=_DESIGNER_SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=QuestionSet,
-        model=settings.haiku_model_id,
         effort="medium",
         session_id=session_id,
         post_validate=_validate_design,
@@ -202,7 +201,6 @@ async def predict(
         system_prompt=_PREDICTOR_SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=LikelyQuestionsOutput,
-        model=settings.haiku_model_id,
         effort="medium",
         post_validate=_make_predict_validator(citation_ctx),
     )

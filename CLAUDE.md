@@ -4,7 +4,7 @@
 > Read this first, every session.
 > For **what AskPicky is** (positioning, free/premium split, roadmap), read [ASKPICKY.md](./ASKPICKY.md). That document is canonical and supersedes anything here on contradiction.
 
-*Last updated 2026-05-24 — multi-provider routing (DeepSeek V4 Flash/Pro, Anthropic, OpenAI), 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator wrapper, benchmark harness + CI dashboard.*
+*Last updated 2026-05-25 — three-tier model config (TIER_FAST/NORMAL/STRONG), Anthropic removed, all agents route via DeepSeek/OpenAI via tier-based dispatch, agent_tier_map replaces agent_model_map.*
 
 ---
 
@@ -26,7 +26,7 @@ Test-mode opt-out for required-secret validation: `ASKPICKY_TEST_MODE=1` (was `T
 These apply to every piece of code. A change that violates one is wrong — fix the change, not the rule.
 
 ### Rule 1 — No invented data
-No agent emits a claim without a resolvable citation. Source-grounded agents (cover_letter, likely_questions, salary_strategist, draft_reply, red_flags, verdict, offer_analyst) use Anthropic's Citations API via `call_with_citations` — every `cited_text` is a guaranteed-verbatim substring of the source. Schema-dense agents (cv_tailor, intent_router, etc.) use `call_structured` and embed `Citation` objects validated by `validators/citations.py`. Three citation kinds: `url_snippet`, `gov_data`, `career_entry`.
+No agent emits a claim without a resolvable citation. Source-grounded agents inline document context into their prompts and emit `Citation` objects validated by `validators/citations.py`. Three citation kinds: `url_snippet`, `gov_data`, `career_entry`.
 
 ### Rule 2 — 6-label verdict taxonomy
 The verdict agent produces one of six labels: STRONG_GO, GO, TRY_ANYWAY, ASK_FIRST, PASS, BLOCKED. Hard blockers (company dissolved, Gazette insolvency, SOC ineligible, deal-breaker triggered) force BLOCKED. Negotiable blockers (sponsor not listed, salary below floor) downgrade to TRY_ANYWAY or ASK_FIRST.
@@ -45,18 +45,18 @@ Every LLM call returns strict Pydantic-validated JSON. No free-form prose from s
 ### Rule 6 — On-demand, not on-the-fly
 `forward_job` runs Phase 1 + verdict and STOPS. Pack components are triggered by separate intents (`draft_cv`, `draft_cover_letter`, `salary_advice`, `predict_questions`, `draft_reply`) or by `full_prep`.
 
-### Rule 7 — Model routing: cheapest that meets the bar; DeepSeek default
+### Rule 7 — Three-tier model routing: fast / normal / strong
 
-Routing is configured in `config.py::agent_model_map`. The provider abstraction in `llm.py` dispatches to Anthropic, DeepSeek (Anthropic-compatible endpoint), or OpenAI (native chat completions) based on the agent name.
+Routing is configured in `config.py::agent_tier_map`. Each agent is assigned a tier ("fast", "normal", or "strong"). `call_agent` resolves the tier to a concrete (model_id, provider) tuple. To swap every agent in a tier, change one line in config.py.
 
-**DeepSeek V4 Pro** ($0.435/$0.87 Mtok) — quality-critical agents:
-- `verdict`, `self_audit`, `cover_letter`, `cv_tailor`, `salary_strategist`
-
-**DeepSeek V4 Flash** ($0.14/$0.28 Mtok) — extraction, routing, triage, style:
+**fast tier** — extraction, routing, triage, style (DeepSeek V4 Flash):
 - `intent_router`, `triage`, `jd_extractor`, `company_scraper_summariser`, `red_flags`, `ghost_job_jd_scorer`, `interview_questions`, `star_polisher`, `style_extractor`, `onboarding_parser`, `cv_parser`, `draft_reply`, `content_shield_tier2`
 
-**Anthropic** (optional — used only when DeepSeek is unavailable):
-- `offer_analyst`, managed agent sessions (`company_investigator`, `verdict_deep_research`, etc.)
+**normal tier** — quality-sensitive generation (DeepSeek V4 Pro):
+- `cover_letter`, `cv_tailor`, `cv_tailor_agentic`, `salary_strategist`
+
+**strong tier** — high-stakes judgment (GPT-5.4):
+- `verdict`, `self_audit`, `offer_analyst`
 
 **OpenAI** (benchmarks only, not production routing)
 
@@ -80,10 +80,9 @@ Three provider backends share one cost-tracking, prompt-caching, banned-phrase p
 
 | Adapter | When | Mechanism |
 |---------|------|-----------|
-| Anthropic-compatible (DeepSeek + Anthropic) | All production agents | `client.messages.create` with `tool_use` forced output |
-| OpenAI native | Benchmarks, optional routing | `chat.completions.create` with `response_format=json_schema` |
+| OpenAI-compat (DeepSeek + OpenAI) | All agents | `chat.completions.create` with structured output (json_schema for OpenAI, json_object for DeepSeek) |
 
-Adding a new agent = pick one provider tier in `config.py::agent_model_map` and document the choice in [AGENTS.md](./AGENTS.md).
+Adding a new agent = assign a tier in `config.py::agent_tier_map` and document the choice in [AGENTS.md](./AGENTS.md).
 
 ---
 
@@ -106,7 +105,7 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 | Layer | Choice |
 |-------|--------|
 | Language | Python 3.12+ |
-| LLM | Multi-provider via `llm.py`: DeepSeek V4 Flash/Pro (Anthropic-compatible endpoint), Anthropic (Opus 4.7, Sonnet 4.6, Haiku 4.5), OpenAI (GPT-5.4, primary verdict) |
+| LLM | Multi-provider via `llm.py`: DeepSeek V4 Flash/Pro (primary), OpenAI (GPT-5.4, strong tier) |
 | Orchestration | `orchestrator.py` (imperative) + `langgraph_orchestrator.py` (opt-in StateGraph wrapper, checkpointed state) |
 | Web | React 18 + Vite + TypeScript + TanStack Query + react-router + Tailwind |
 | API | FastAPI + `sse-starlette` |

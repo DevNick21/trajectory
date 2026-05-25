@@ -929,7 +929,6 @@ async def _extract_jd(
         # cleanly at ~3x lower cost + latency vs Sonnet. The JSON-LD
         # tier-0 extractor in `jsonld_extractor.py` covers the major
         # ATSes upstream — when it fires, this call never runs at all.
-        model=settings.haiku_model_id,
         effort="medium",
         session_id=session_id,
     )
@@ -998,7 +997,6 @@ async def _summarise_company(
         system_prompt=COMPANY_SUMMARISER_SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=CompanyResearch,
-        model=settings.sonnet_model_id,
         effort="medium",
         session_id=session_id,
     )

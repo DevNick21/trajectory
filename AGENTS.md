@@ -3,7 +3,7 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-05-23 — multi-provider routing (DeepSeek V4 Flash for low-stakes tasks), Firecrawl anti-bot fallback, 6-label verdict taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard, OpenAI provider support, LangGraph orchestrator wrapper. See config.py agent_model_map for the per-agent provider→model routing table.*
+*Last updated 2026-05-25 — three-tier model config (TIER_FAST/NORMAL/STRONG), Anthropic removed, all models via DeepSeek + OpenAI, agent_tier_map replaces agent_model_map. See config.py for tier routing.*
 
 ## Agent inventory
 
@@ -15,11 +15,10 @@ taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard.
 See config.py agent_model_map for the per-agent provider→model routing
 table.
 
-Provider routing legend (2026-05-23):
-  🟢 DeepSeek V4 Flash — structured extraction, routing, triage, style
-  🟡 Anthropic Haiku 4.5  — cover letters, CV tailoring, salary, voice
-  🟠 GPT-5.4 — verdict, managed agents
-  🔴 Anthropic Opus 4.7   — self-audit, prompt auditor (build-time)
+Provider routing legend (2026-05-25):
+  🟢 DeepSeek V4 Flash — fast tier: extraction, routing, triage, style
+  🟠 DeepSeek V4 Pro  — normal tier: generators, CV, cover letter, salary
+  🔴 GPT-5.4          — strong tier: verdict, self-audit, offer analyst
 
 | # | Agent | Model | Adapter | Called by | Phase |
 |---|-------|-------|---------|-----------|-------|
@@ -29,24 +28,21 @@ Provider routing legend (2026-05-23):
 | 4 | Red Flags Detector | **DeepSeek V4 Flash** | `call_agent` | Phase 1 fan-out | Phase 1 |
 | 5 | Ghost Job JD Scorer | **Deterministic (no LLM)** | Regex 5-dim scoring | ghost_job_detector.py | Phase 1 |
 | 6 | Gazette insolvency check | **Deterministic (no LLM)** | HTTP + regex against thegazette.co.uk | Phase 1 fan-out | Phase 1 |
-| 7 | Verdict | **GPT-5.4 primary, DeepSeek Pro fallback** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
+| 7 | Verdict | **strong tier (GPT-5.4)** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
 | 8 | Interview Questions (design + predict) | **DeepSeek V4 Flash** | `call_agent` | `design` post-verdict; `predict` user-triggered | Phase 3/4 |
 | 9 | STAR Polisher | **DeepSeek V4 Flash** | `call_agent` | After each user answer | Phase 3 |
 | 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Onboarding, once | Onboarding |
 | 11 | Onboarding Parser | **DeepSeek V4 Flash** | `call_agent` | End of onboarding flow | Onboarding |
-| 12 | Salary Strategist | **Haiku 4.5** | `call_agent` | On-demand only | Phase 4 |
-| 13 | CV Tailor (agentic) | **Haiku 4.5** | `call_agent` (multi-turn FAISS retrieval) | User-triggered | Phase 4 |
-| 14 | Cover Letter Writer | **Haiku 4.5** | `call_agent` | User-triggered | Phase 4 |
+| 12 | Salary Strategist | **DeepSeek V4 Pro** | `call_agent` | On-demand only | Phase 4 |
+| 13 | CV Tailor (agentic) | **DeepSeek V4 Pro** | `call_agent` (multi-turn tool use) | User-triggered | Phase 4 |
+| 14 | Cover Letter Writer | **DeepSeek V4 Pro** | `call_agent` | User-triggered | Phase 4 |
 | 15 | Draft Reply | **DeepSeek V4 Flash** | `call_agent` | User-triggered | PA |
-| 16 | Self-Audit | **Opus 4.7** | `call_agent` | After every Phase 4 generation | Phase 4.5 |
-| 17 | Prompt Auditor | Opus 4.7 `xhigh` | `call_structured` / `call_in_session` (`--empirical`) | Developer, via `scripts/audit_prompt.py` | Build-time only |
+| 16 | Self-Audit | **GPT-5.4** | `call_agent` | After every Phase 4 generation | Phase 4.5 |
+| 17 | Prompt Auditor | GPT-5.4 | `call_agent` | Developer, via `scripts/audit_prompt.py` | Build-time only |
 | 18 | Content Shield (Tier 2) | **DeepSeek V4 Flash** | `call_agent` | `validators/content_shield.py` on flagged untrusted content | Pre-prompt |
-| 19 | Company Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/company_investigator.py`) | Phase 1, when `enable_managed_company_investigator=True` | Phase 1 |
-| 20 | Reviews Investigator (managed) | Sonnet 4.6 (in session) | `call_in_session` (`managed/reviews_investigator.py`) | Phase 1 fan-out, replaces no-op jobspy path | Phase 1 |
-| 21 | Verdict Deep Research (managed) | Opus 4.7 `xhigh` (in session) | `call_in_session` (`managed/verdict_deep_research.py`) | Premium "Real-time hiring intent verification" (ASKPICKY.md §8) | Phase 2 |
-| 22 | Offer Analyst | **Opus 4.7 `xhigh`** | `call_with_citations` (+ Files API) | User-triggered (`analyse_offer` intent) | Phase 4 |
-| 23 | CV Parser (structure + narrative in one call) | **DeepSeek V4 Flash** | `call_agent` (tier-0 regex pre-pass + enrich) | `/api/onboarding/cv_import` + `/cv_enrich` | Onboarding |
-| 24 | Entity Resolution Judge | **Haiku 4.5** | `call_structured` | `entity_resolution.judge` on ambiguous CRN matches | Phase 1A.5 |
+| 19 | Offer Analyst | **GPT-5.4** | `call_agent` (+ pypdf text extraction) | User-triggered (`analyse_offer` intent) | Phase 4 |
+| 20 | CV Parser | **DeepSeek V4 Flash** | `call_agent` | `/api/onboarding/cv_import` | Onboarding |
+| 21 | Entity Resolution Judge | **DeepSeek V4 Flash** | `call_agent` | `entity_resolution.judge` on ambiguous CRN matches | Phase 1
 
 Cuts since the original inventory:
 
@@ -57,14 +53,11 @@ Cuts since the original inventory:
 - ~~Salary Data agent in Phase 1~~ — kept as module for on-demand Salary Strategist
 
 New since 2026-05-23:
-- Multi-provider routing via `config.py::agent_model_map` — per-agent (provider, model_id) overrides. Supports Anthropic, DeepSeek (via Anthropic-compatible endpoint), and OpenAI (via native chat completions + json_schema).
-- Firecrawl anti-bot fallback in `company_scraper.py` — only fires on Glassdoor/Indeed/LinkedIn when Playwright is blocked. 1 credit/page.
-- 6-label verdict taxonomy (`VerdictLabel`) replacing binary GO/NO_GO: STRONG_GO, GO, TRY_ANYWAY, ASK_FIRST, PASS, BLOCKED.
-- `entropy_norm` (0-1) on Verdict — evidence-spread metric.
-- Benchmark harness at `scripts/benchmarks/run.py` — runs 5 agent-typical tasks against configured providers (anthropic, deepseek, openai); `--mock` for CI, live otherwise. Includes tool-use benchmark case.
-- Benchmark dashboard at `/benchmarks` (frontend) + `/api/benchmarks/latest` (backend). CI workflow at `.github/workflows/benchmarks.yml`.
-- LangGraph orchestrator wrapper at `langgraph_orchestrator.py` — opt-in via `ENABLE_LANGGRAPH_ORCHESTRATOR`. Wraps the forward_job pipeline as a StateGraph with checkpointed state, retry, and structured error handling. Domain logic (scraping, verdict rules, citation validation) remains untouched in the existing modules.
-- OpenAI provider — integrated via native chat completions with `json_schema` structured output. Available for benchmarking and optional agent routing. Cohere removed (dead code, no integration).
+- Three-tier model config — `TIER_FAST`/`TIER_NORMAL`/`TIER_STRONG` in config.py. Per-agent `agent_tier_map` maps agent name to tier string. `call_agent` resolves tier → (model_id, provider) automatically.
+- Anthropic provider removed. All models via DeepSeek (primary) and OpenAI (strong tier). `anthropic_backend.py`, `server_tools.py`, Citations API, Files API, Managed Agents all deleted.
+- Multi-turn tool use is provider-agnostic via OpenAI-compat tool calling. `call_agent_with_tools` works with both DeepSeek and OpenAI.
+- Citation-grounded output uses inline document context instead of the Anthropic Citations API.
+- Offer analysis uses local pypdf text extraction instead of the Anthropic Files API.
 
 ---
 
@@ -1460,7 +1453,7 @@ Retry count: **maximum 2 retries per agent call**. More than 2 usually means a p
 
 ---
 
-## Model routing summary
+## Model routing summary (2026-05-25)
 
 | Task type | Model | Priority |
 |-----------|-------|----------|

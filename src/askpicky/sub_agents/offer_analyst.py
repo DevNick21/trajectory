@@ -1,27 +1,22 @@
-"""Offer letter analyst (PROCESS Entry 43, Workstream F).
+"""Offer letter analyst.
 
 Pipeline:
-  1. PDF in via Files API (`client.beta.files.upload`) -> file_id.
-  2. Citations enabled on the document.
-  3. Output: `OfferAnalysis` with every component cited to a page.
-  4. Comparison flags via ASHE + sponsor_register cited as gov_data.
-
-The analysis prompt asks for a single JSON block as the FINAL output;
-citations attach to spans within it. After parsing, citations are
-projected via `Citation.from_api`.
+  1. PDF text extracted locally via pypdf (no remote Files API).
+  2. Analysis via call_agent with structured output.
+  3. Market comparison via inline gov_data documents.
+  4. Banned-phrase post-validation.
 """
 
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import re
 from typing import Optional
 
-from ..citation_docs import build_documents_for_bundle
+from ..citation_docs import build_document_context
 from ..config import settings
-from ..llm import call_with_citations, upload_pdf, AgentCallFailed
+from ..llm import AgentCallFailed, call_agent
 from ..schemas import (
     Citation,
     OfferAnalysis,
@@ -31,15 +26,17 @@ from ..schemas import (
 )
 from ..validators.banned_phrases import contains_banned
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """\
-You are the Trajectory offer-letter analyst. Analyse the offer letter
-attached as the first document and answer for the user whose UK
-profile is supplied in the prompt.
+You are the AskPicky offer-letter analyst. Analyse the offer letter
+text supplied in the prompt and answer for the user whose UK
+profile is also supplied.
 
-Return the analysis as ONE JSON object inside a single text block. Do
+Return the analysis as ONE JSON object inside a code block. Do
 NOT wrap in Markdown fences. Schema:
 
 {
@@ -57,12 +54,6 @@ NOT wrap in Markdown fences. Schema:
   "flags": [str, ...]
 }
 
-CITATION RULES (Citations API will validate):
-- Every numeric / clause field must cite the exact page in the offer letter.
-- Comparisons against ASHE / SOC use the gov_data documents supplied
-  alongside the PDF.
-- value_text fields should be the verbatim figure or clause.
-
 WHAT TO FLAG:
 - base salary below ASHE p25 for the role's region
 - base salary below the user's stated salary_floor
@@ -76,13 +67,32 @@ be considered slightly below market in some interpretations".
 """
 
 
-async def upload_pdf(pdf_bytes: bytes, filename: str = "offer.pdf") -> str:
-    """Upload a PDF to Anthropic's Files API and return the file_id."""
-    from ..llm import upload_pdf as _upload
+class _OfferAnalysisBody(BaseModel):
+    company_name: str
+    role_title: Optional[str] = None
+    base_salary_gbp: Optional[dict] = None
+    bonus: Optional[dict] = None
+    equity: Optional[dict] = None
+    benefits: list[dict] = []
+    notice_period: Optional[dict] = None
+    non_compete: Optional[dict] = None
+    ip_assignment: Optional[dict] = None
+    unusual_clauses: list[dict] = []
+    market_comparison_note: Optional[str] = None
+    flags: list[str] = []
 
-    file_id = await _upload(pdf_bytes, filename)
-    logger.info("offer_analyst: uploaded PDF -> file_id=%s", file_id)
-    return file_id
+
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Extract raw text from a PDF using pypdf (local, no API call)."""
+    try:
+        from io import BytesIO
+        from pypdf import PdfReader
+        reader = PdfReader(BytesIO(pdf_bytes))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n\n".join(pages)
+    except Exception as exc:
+        logger.warning("offer_analyst: pypdf extraction failed: %s", exc)
+        return "[PDF text extraction failed — raw bytes not readable as PDF]"
 
 
 async def analyse(
@@ -94,61 +104,25 @@ async def analyse(
     text_pasted: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> OfferAnalysis:
-    """Analyse an offer letter.
-
-    One of `file_id`, `pdf_bytes`, or `text_pasted` must be provided.
-    `research_bundle` adds gov_data + scraped-page documents for richer
-    market comparison; optional but recommended.
-    """
-    if not any([file_id, pdf_bytes, text_pasted]):
+    if not any([pdf_bytes, text_pasted]):
         raise ValueError(
-            "analyse requires one of file_id, pdf_bytes, or text_pasted."
+            "analyse requires one of pdf_bytes or text_pasted."
         )
 
-    # Build the offer document block.
-    offer_doc: dict
-    if file_id is None and pdf_bytes is not None:
-        # Inline upload via Files API for efficiency on re-runs.
-        file_id = await upload_pdf(pdf_bytes)
-    if file_id:
-        offer_doc = {
-            "type": "file_id",
-            "file_id": file_id,
-            "title": "Offer letter",
-            "context": "PDF offer letter under analysis",
-        }
+    # Extract offer text
+    if pdf_bytes:
+        offer_text = extract_pdf_text(pdf_bytes)
     else:
-        offer_doc = {
-            "type": "text",
-            "text": text_pasted or "",
-            "title": "Offer letter (pasted)",
-        }
+        offer_text = text_pasted or ""
 
-    documents = [offer_doc]
-    idx_maps: dict = {
-        "url_by_doc_index": {},
-        "kind_by_doc_index": {},
-        "gov_field_by_doc_index": {},
-        "entry_id_by_doc_index": {},
-    }
-    # The offer document itself: cite as url_snippet with title as URL.
-    idx_maps["url_by_doc_index"][0] = "offer_letter.pdf"
-    idx_maps["kind_by_doc_index"][0] = "url_snippet"
-
+    # Build inline context from research bundle
+    context_text = ""
     if research_bundle is not None:
-        bundle_docs, bundle_maps = build_documents_for_bundle(
+        context_text, _citation_map = build_document_context(
             bundle=research_bundle,
             career_entries=None,
             include_career_entries=False,
         )
-        offset = len(documents)
-        documents.extend(bundle_docs)
-        for k, v in bundle_maps["url_by_doc_index"].items():
-            idx_maps["url_by_doc_index"][k + offset] = v
-        for k, v in bundle_maps["kind_by_doc_index"].items():
-            idx_maps["kind_by_doc_index"][k + offset] = v
-        for k, v in bundle_maps["gov_field_by_doc_index"].items():
-            idx_maps["gov_field_by_doc_index"][k + offset] = v
 
     user_input = json.dumps({
         "user": {
@@ -161,53 +135,29 @@ async def analyse(
                 user.visa_status.route if user.visa_status else None
             ),
         },
+        "offer_text": offer_text,
         "instruction": (
-            "Analyse the offer letter (document index 0). Use the "
-            "remaining documents for market / SOC comparison if present. "
-            "Emit ONE JSON object as described in the system prompt."
+            "Analyse the offer letter above. Use the market data documents "
+            "for salary / SOC comparison. Emit ONE JSON object as specified."
         ),
     }, default=str)
 
-    result = await call_with_citations(
+    if context_text:
+        user_input = context_text + "\n\n---\n\n" + user_input
+
+    parsed = await call_agent(
         agent_name="offer_analyst",
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
-        documents=documents,
-        model=settings.opus_model_id,
-        effort="xhigh",
-        session_id=session_id,
+        output_schema=_OfferAnalysisBody,
     )
 
-    # Extract the JSON object from the body. The model is asked to emit
-    # a single JSON block; we tolerate leading/trailing prose.
-    body = result.body.strip()
-    json_obj = _extract_json(body)
-    if json_obj is None:
-        raise AgentCallFailed(
-            f"offer_analyst did not emit a parseable JSON object. "
-            f"Body[:200]: {body[:200]!r}"
-        )
+    json_obj = parsed.model_dump()
 
-    # Build domain Citation objects from the SDK citations. Component-
-    # level citations are not 1:1 with our Citation list, so for this
-    # iteration each OfferComponent receives the closest preceding
-    # citation; flat raw_citations available for future structured
-    # mapping.
-    flat_citations: list[Citation] = []
-    for raw in result.raw_citations:
-        try:
-            flat_citations.append(Citation.from_api(raw, **idx_maps))
-        except Exception as exc:
-            logger.warning("offer_analyst: skip bad citation: %s (%s)", raw, exc)
-
-    fallback_citation = (
-        flat_citations[0]
-        if flat_citations
-        else Citation(
-            kind="url_snippet",
-            url="offer_letter.pdf",
-            verbatim_snippet=(json_obj.get("base_salary_gbp") or {}).get("value_text", "see attached"),
-        )
+    fallback_citation = Citation(
+        kind="url_snippet",
+        url="offer_letter.pdf",
+        verbatim_snippet=(json_obj.get("base_salary_gbp") or {}).get("value_text", "see attached"),
     )
 
     def _to_component(field: dict | None) -> Optional[OfferComponent]:
@@ -246,7 +196,6 @@ async def analyse(
         flags=list(json_obj.get("flags", [])),
     )
 
-    # Banned-phrase post-validation across every text field.
     text_blob = " ".join(filter(None, [
         analysis.market_comparison_note or "",
         *(analysis.flags or []),
@@ -258,26 +207,3 @@ async def analyse(
         logger.warning("offer_analyst banned phrases (non-fatal): %s", bp)
 
     return analysis
-
-
-_JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
-
-
-def _extract_json(body: str) -> Optional[dict]:
-    """Pull the JSON object out of free-form body text. Tolerates
-    leading commentary or trailing notes."""
-    try:
-        return json.loads(body)
-    except json.JSONDecodeError:
-        pass
-    m = _JSON_BLOCK_RE.search(body)
-    if not m:
-        return None
-    try:
-        return json.loads(m.group(0))
-    except json.JSONDecodeError:
-        return None
-
-
-def _b64_pdf(pdf_bytes: bytes) -> str:
-    return base64.b64encode(pdf_bytes).decode("ascii")

@@ -111,7 +111,6 @@ async def _call_parser(
         system_prompt=system_prompt,
         user_input=user_input,
         output_schema=schema,
-        model=settings.sonnet_model_id,
         effort="low",
         max_retries=1,
     )

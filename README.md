@@ -3,7 +3,7 @@
 > **Verify roles before you apply.**
 > UK-first, visa-aware, agent-powered job search assistant. Forward a job URL, get a cited verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
 
-AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro, Anthropic, OpenAI) · No auto-apply, ever.
+AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro + OpenAI GPT-5.4) · No auto-apply, ever.
 
 *Last updated 2026-05-24 — full DeepSeek routing, 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator, benchmark harness + CI dashboard.*
 
@@ -99,7 +99,7 @@ pip install -r requirements.txt
 # Fetch UK gov data (Sponsor Register, ASHE, SOC codes, Appendix Skilled Occupations)
 python scripts/fetch_gov_data.py
 
-# Copy .env.example to .env, fill ANTHROPIC_API_KEY + DEEPSEEK_API_KEY + TELEGRAM_BOT_TOKEN + DEMO_USER_ID
+# Copy .env.example to .env, fill DEEPSEEK_API_KEY + DEMO_USER_ID
 cp .env.example .env
 
 # Web frontend

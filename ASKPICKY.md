@@ -394,9 +394,8 @@ These close the gap between current state and the new positioning. Without them,
 ### Cut entirely
 
 - LaTeX CV renderer + LaTeX writer/repairer agents + LaTeX sandbox
-- All Anthropic Managed Agents (company_investigator, reviews_investigator,
-  verdict_deep_research, managed generator sessions) — replaced by
-  in-process DeepSeek agents + Firecrawl + Playwright pipeline
+- Anthropic provider entirely — all models via DeepSeek + OpenAI (2026-05-25)
+- Managed Agents (company_investigator, reviews_investigator, verdict_deep_research) — dead stubs, removed
 - Multi-provider CV tailor v1 — replaced by unified agent_model_map routing
 - Binary GO/NO_GO verdict — replaced by 6-label VerdictLabel taxonomy
 - Cohere provider — dead code, no integration

@@ -128,7 +128,6 @@ async def generate(
         system_prompt=layered_prompt,
         user_input=user_input,
         output_schema=DraftReplyOutput,
-        model=settings.sonnet_model_id,  # downgraded 2026-05-22: Sonnet sufficient for structured task
         effort="high",
         post_validate=_post_validate,
     )

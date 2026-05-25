@@ -236,7 +236,6 @@ async def route(
         system_prompt=SYSTEM_PROMPT,
         user_input="\n".join(context_lines),
         output_schema=IntentRouterOutput,
-        model=settings.haiku_model_id,  # downgraded 2026-05-22: tier-0 handles 80%, Haiku for the rest
         effort="medium",
         session_id=session_id,
     )

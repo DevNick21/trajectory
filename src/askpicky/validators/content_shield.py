@@ -363,7 +363,6 @@ async def tier2(
                 system_prompt=TIER2_SYSTEM_PROMPT,
                 user_input=user_input,
                 output_schema=ContentShieldVerdict,
-                model=settings.sonnet_model_id,
                 effort="medium",
                 max_retries=1,
                 priority="NORMAL",

@@ -98,8 +98,8 @@ async def parse(
         system_prompt=_SYSTEM_PROMPT,
         user_input=shielded,
         output_schema=CVImportLLMOutput,
-        model=settings.haiku_model_id,
         session_id=session_id,
+        max_tokens=16_384,
     )
     out = CVImport(**extracted.model_dump(), raw_text=cv_text)
     logger.info(

@@ -1,13 +1,8 @@
 """Phase 4 — Cover Letter Writer.
 
-Source-grounded prose with first-party Citations API attached.
-System prompt verbatim from AGENTS.md §13. Migrated from `call_agent`
-(structured tool_use) to `call_with_citations` on 2026-04-25
-(PROCESS Entry 43, Workstream B/D).
-
-The Citations API guarantees verbatim_snippet validity at the SDK
-boundary, so the `validate_output` post-hook on citations becomes
-unnecessary. Banned-phrase + word-count post-validation stays.
+Source-grounded prose with inline citation-grounded output. Replaces
+the old Anthropic Citations API path (removed 2026-05-25). Now uses
+`call_agent` with inline document context and structured JSON output.
 """
 
 from __future__ import annotations
@@ -16,9 +11,9 @@ import json
 import logging
 from typing import Optional
 
-from ..citation_docs import build_documents_for_bundle
+from ..citation_docs import build_document_context
 from ..config import settings
-from ..llm import CitationResult, call_with_citations
+from ..llm import AgentCallFailed, call_agent
 from ..prompts import load_prompt
 from ..schemas import (
     CareerEntry,
@@ -32,22 +27,27 @@ from ..schemas import (
 )
 from ..validators.banned_phrases import contains_banned
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
-# Original cover-letter system prompt + a short addendum that asks the
-# model to emit paragraphs separated by blank lines (the only structuring
-# requirement we still need now that Citations replaces tool_use).
 _SYSTEM_PROMPT_BASE = load_prompt("cover_letter")
 SYSTEM_PROMPT = _SYSTEM_PROMPT_BASE + (
     "\n\nOUTPUT FORMAT:\n"
-    "Emit the cover letter as plain prose. Each paragraph on its own, "
-    "separated by a blank line. Do not output Markdown, JSON, or any "
-    "wrapper structure. Cite source documents inline using the Citations "
-    "API — every concrete claim about the company, role, or your own "
-    "experience MUST attach a verbatim cited_text. The first line of your "
-    "output must be the salutation (`Dear ...`); the last must be the "
-    "signoff line.\n"
+    "Emit valid JSON matching the CoverLetterOutput schema. The 'paragraphs' "
+    "field is a list of paragraph strings. The 'addressed_to' field is the "
+    "salutation. Every concrete claim about the company, role, or your own "
+    "experience MUST cite a source document by its index number using this "
+    "format in the citation array: "
+    '{"doc_index": <int>, "excerpt": "<verbatim text from document>"}.\n'
+    "Do not output Markdown, only JSON.\n"
 )
+
+
+class _CoverLetterBody(BaseModel):
+    addressed_to: str
+    paragraphs: list[str]
+    citations: list[dict] = []
 
 
 async def generate(
@@ -69,7 +69,8 @@ async def generate(
         style_hint += " (low confidence — directional only)"
 
     hiring_manager = (
-        jd.hiring_manager_name if jd.hiring_manager_named and jd.hiring_manager_name
+        jd.hiring_manager_name
+        if jd.hiring_manager_named and jd.hiring_manager_name
         else "Hiring Team"
     )
 
@@ -81,6 +82,12 @@ async def generate(
                 "action": p.action.text,
                 "result": p.result.text,
             })
+
+    # Build inline document context
+    context_text, citation_map = build_document_context(
+        bundle=research_bundle,
+        career_entries=retrieved_entries,
+    )
 
     user_input = json.dumps(
         {
@@ -100,79 +107,67 @@ async def generate(
             "star_polishes": polishes_summary,
             "instruction": (
                 "Write a 250-380 word UK cover letter. 3-4 paragraphs. "
-                "Cite every concrete claim from the supplied documents."
+                "Cite every concrete claim by document index from the "
+                "source documents above."
             ),
         },
         default=str,
     )
 
-    documents, idx_maps = build_documents_for_bundle(
-        bundle=research_bundle,
-        career_entries=retrieved_entries,
-    )
+    full_input = context_text + "\n\n---\n\n" + user_input
 
-    def _post_validate(r: CitationResult) -> list[str]:
-        body_local = r.body.strip()
+    def _post_validate(parsed: _CoverLetterBody) -> list[str]:
+        body_text = " ".join(parsed.paragraphs)
         failures: list[str] = [
             f"Banned phrase in cover letter: '{p}'"
-            for p in contains_banned(body_local)
+            for p in contains_banned(body_text)
         ]
-        wc = len(body_local.split())
+        wc = len(body_text.split())
         if not (200 <= wc <= 450):
             failures.append(f"word_count {wc} outside 200-450 range")
-        # Use raw SDK citations here — projection failures (idx_maps
-        # mismatch) are caller-side and not recoverable by re-prompting.
-        if not r.raw_citations:
+        if not parsed.citations:
             failures.append(
-                "Cover letter produced 0 citations — Citations API should "
-                "have attached at least one cited_text per paragraph."
+                "Cover letter produced 0 citations — must cite at least "
+                "one source document."
             )
         return failures
 
-    # Compose: Thought Partner persona (outer rhetoric) + base prompt
-    # (Citations API contract). The user's style profile is injected
-    # into `user_input` below, so all three voice layers — persona,
-    # phonetics, task — ship together.
     from ..voice import compose_system_prompt
     layered_prompt = compose_system_prompt(
         base_prompt=SYSTEM_PROMPT,
         persona="thought_partner",
     )
-    result = await call_with_citations(
+
+    parsed = await call_agent(
         agent_name="cover_letter",
         system_prompt=layered_prompt,
-        user_input=user_input,
-        documents=documents,
-        model=settings.opus_model_id,
-        effort="xhigh",
+        user_input=full_input,
+        output_schema=_CoverLetterBody,
         max_retries=1,
         post_validate=_post_validate,
     )
 
-    body = result.body.strip()
+    body_text = " ".join(parsed.paragraphs)
 
-    # Parse paragraphs (split on blank lines, keep non-empty).
-    paragraphs = [p.strip() for p in body.split("\n\n") if p.strip()]
-    if len(paragraphs) < 2:
-        # Fallback: split on single newline if blank-line split failed.
-        paragraphs = [p.strip() for p in body.split("\n") if p.strip()]
-
-    # Project SDK citations into our domain Citation schema. Projection
-    # failures only — model-side validity (banned phrases, word count,
-    # citation presence) is enforced by `_post_validate` above.
-    citations: list[Citation] = []
-    for raw in result.raw_citations:
-        try:
-            citations.append(Citation.from_api(raw, **idx_maps))
-        except Exception as exc:
-            logger.warning(
-                "cover_letter: skipping citation that failed projection: %s (%s)",
-                raw, exc,
-            )
+    # Project model-emitted citations to domain Citation schema
+    citations = []
+    for raw in parsed.citations:
+        idx = raw.get("doc_index", -1)
+        info = citation_map.get(idx, {})
+        if not info:
+            logger.warning("cover_letter: citation doc_index %d not found in map", idx)
+            continue
+        citations.append(Citation(
+            kind=info["kind"],
+            url=info.get("url"),
+            verbatim_snippet=raw.get("excerpt"),
+            data_field=info.get("gov_field"),
+            entry_id=info.get("entry_id"),
+        ))
 
     return CoverLetterOutput(
         addressed_to=hiring_manager,
-        paragraphs=paragraphs,
+        paragraphs=parsed.paragraphs,
         citations=citations,
-        word_count=len(body.split()),
+        word_count=len(body_text.split()),
     )

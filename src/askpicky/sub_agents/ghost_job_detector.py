@@ -83,7 +83,6 @@ async def _score_jd(
         system_prompt=_JD_SCORER_PROMPT,
         user_input=jd.jd_text_full,
         output_schema=GhostJobJDScore,
-        model=settings.haiku_model_id,
         session_id=session_id,
     )
 

@@ -148,7 +148,6 @@ async def classify(
         system_prompt=TRIAGE_SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=TriageResult,
-        model=settings.haiku_model_id,
         effort="low",
         max_retries=1,
         priority="NORMAL",

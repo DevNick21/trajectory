@@ -150,7 +150,6 @@ async def generate(
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=SalaryRecommendation,
-        model=settings.opus_model_id,
         effort="xhigh",
         post_validate=_make_post_validate(citation_ctx),
     )

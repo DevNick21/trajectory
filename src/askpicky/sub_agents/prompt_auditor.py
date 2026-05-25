@@ -54,7 +54,6 @@ async def audit(
         system_prompt=SYSTEM_PROMPT,
         user_input=user_input,
         output_schema=PromptAuditReport,
-        model=settings.opus_model_id,
         effort="xhigh",
         session_id=session_id,
         priority="NORMAL",
