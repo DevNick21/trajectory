@@ -76,7 +76,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     await log_llm_cost(
         session_id=session.session_id,
         agent_name="smoke_crud",
-        model="claude-sonnet-4-6",
+        model=settings.sonnet_model_id,
         input_tokens=1_000,
         output_tokens=500,
     )

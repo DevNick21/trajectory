@@ -1,10 +1,10 @@
 """End-to-end live stress — 20 (user, job) scenarios against the real
-Opus verdict agent.
+verdict agent.
 
 The user asked for a full live + paid E2E stress matrix: 20+ variations
 exercising every stage of the system. This smoke takes the route the
 demo cares about most — `forward_job → verdict` — and runs the LIVE
-Opus xhigh verdict against 20 controlled bundle fixtures, each
+verdict against 20 controlled bundle fixtures, each
 representing a different decision pathway:
 
   - 6 GO paths: UK resident matching motivations; visa holder LISTED +
@@ -28,7 +28,7 @@ with model_copy overlays — synthetic enough to control the verdict's
 inputs, real enough that the citations validator resolves against the
 fixture's scraped pages.
 
-Cost: budget ~$25 for 20 verdict calls at Opus xhigh ($1-1.50 each).
+Cost: budget ~$25 for 20 verdict calls.
 Gated behind `SMOKE_E2E_STRESS=1` so a casual run doesn't spend.
 """
 
@@ -279,7 +279,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if os.environ.get(_GATE_ENV, "") != "1":
         messages.append(
             f"skipped — set {_GATE_ENV}=1 to opt into the paid live "
-            "verdict stress (~$20-25 across 20 Opus xhigh calls)"
+            "verdict stress (~$20-25 across 20 calls)"
         )
         return messages, failures, 0.0
 

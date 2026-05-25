@@ -4,15 +4,15 @@ Exercises:
   - httpx fetch path (not Playwright — we intentionally pick a plain HTML
     page that doesn't need a headless browser)
   - trafilatura text extraction
-  - Phase 1 JD extractor (Sonnet 4.6)
-  - Phase 1 company summariser (Sonnet 4.6)
+  - Phase 1 JD extractor
+  - Phase 1 company summariser
   - Content Shield Tier 1 on scraped bytes
 
 Default URL is the UK gov.uk Civil Service careers listing — stable,
 publicly-scrapable, non-JS. Override with SMOKE_SCRAPER_URL if you want
 to point at something else.
 
-Cost: ~$0.10 (two Sonnet calls).
+Cost: ~$0.10 (two extraction calls).
 """
 
 from __future__ import annotations

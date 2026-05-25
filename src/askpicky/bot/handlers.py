@@ -297,21 +297,16 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 def _is_transient_error(exc: BaseException) -> bool:
-    """Network / upstream-5xx / sqlite-busy / our own timeouts.
-
-    Kept as a free function so tests can monkeypatch around the
-    anthropic import on bare CI environments.
-    """
+    """Network / upstream-5xx / sqlite-busy / our own timeouts."""
     if isinstance(exc, (asyncio.TimeoutError, sqlite3.OperationalError)):
         return True
     try:
-        import anthropic  # type: ignore
+        import httpx
 
-        if isinstance(exc, anthropic.APIConnectionError):
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code >= 500
+        if isinstance(exc, (httpx.ConnectError, httpx.RemoteProtocolError)):
             return True
-        if isinstance(exc, anthropic.APIStatusError):
-            status = getattr(exc, "status_code", None)
-            return isinstance(status, int) and status >= 500
     except Exception:  # pragma: no cover
         pass
     return False

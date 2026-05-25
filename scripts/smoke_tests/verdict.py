@@ -10,7 +10,7 @@ Exercises:
 
 Set SMOKE_TEST_MOCK=1 to run the same wiring against a fixture
 verdict — useful when iterating on orchestrator/storage without
-burning Opus credits.
+burning model credits.
 
 Cost: ~$0.50-$1.50 live, $0 mock.
 """
@@ -63,7 +63,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         f"{bundle.company_research.company_name} "
         f"({len(bundle.company_research.scraped_pages)} pages)"
     )
-    messages.append(f"mode: {'MOCK' if mock else 'LIVE Opus 4.7 xhigh'}")
+    messages.append(f"mode: {'MOCK' if mock else 'LIVE GPT-5.4 (DeepSeek Pro fallback)'}")
 
     try:
         verdict = await verdict_agent.generate(
