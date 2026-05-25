@@ -128,7 +128,13 @@ export default function Queue() {
     dispatch({ kind: "reset" });
     try {
       await streamQueueBatch({
-        onEvent: (event) => dispatch({ kind: "event", event }),
+        onEvent: (event) => {
+          dispatch({ kind: "event", event });
+          if (event.type !== "done") {
+            void queryClient.invalidateQueries({ queryKey: ["queue"] });
+            void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          }
+        },
       });
     } catch (err) {
       // streamQueueBatch only rejects on network — the reducer

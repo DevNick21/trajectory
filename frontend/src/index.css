@@ -47,6 +47,39 @@
     --panel-foreground: 0 0% 90%;
     --panel-muted: 220 4% 19%;
   }
+
+  .theme-light {
+    --background: 220 14% 96%;
+    --foreground: 220 13% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 13% 10%;
+
+    --primary: 152 69% 45%; /* UXBooster Green */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 13% 10%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 8% 40%;
+    --accent: 220 14% 92%;
+    --accent-foreground: 220 13% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 152 69% 45%;
+    --success-foreground: 0 0% 98%;
+    --warning: 28 99% 54%; /* UXBooster Orange */
+    --warning-foreground: 0 0% 98%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 152 69% 45%;
+
+    --panel: 0 0% 100%;
+    --panel-foreground: 220 13% 10%;
+    --panel-muted: 220 14% 96%;
+  }
 }
 
 @layer base {
@@ -86,6 +119,9 @@
   .border-canvas {
     border-color: hsl(0 0% 100% / 0.08);
   }
+  .theme-light .border-canvas {
+    border-color: hsl(0 0% 0% / 0.08);
+  }
   /* VSCode-style focus accent. Use on links / citation chips where
      the default ring is too heavy. */
   .accent-rule {
@@ -112,5 +148,8 @@
   }
   .citation-chip:hover {
     background-color: hsl(210 100% 92%);
+  }
+  .theme-light .citation-chip:hover {
+    background-color: hsl(152 69% 92%);
   }
 }

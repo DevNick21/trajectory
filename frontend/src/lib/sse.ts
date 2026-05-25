@@ -48,23 +48,42 @@ async function postSSE<TEvent>(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  function extractFrames(input: string) {
+    // EventSourceResponse emits CRLF by default; normalize so the parser
+    // accepts both browser-native SSE and our manual POST stream.
+    const normalized = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const frames = normalized.split("\n\n");
+    return {
+      frames: frames.slice(0, -1),
+      rest: frames.length > 0 ? frames[frames.length - 1] : "",
+    };
+  }
+
+  function extractPayload(rawFrame: string) {
+    const dataLines = rawFrame
+      .split("\n")
+      .filter((line) => line.startsWith("data:"));
+    if (dataLines.length === 0) return null;
+
+    // SSE allows multiple data lines per event; join them the way the
+    // browser EventSource implementation does.
+    return dataLines
+      .map((line) => line.slice("data:".length).replace(/^ /, ""))
+      .join("\n");
+  }
+
   try {
     while (true) {
       const { value, done } = await reader.read();
       if (done) return;
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE messages are separated by blank lines (\n\n). Split on
-      // double-newline; keep the trailing partial in the buffer.
-      const messages = buffer.split("\n\n");
-      buffer = messages.pop() ?? "";
+      // Keep the trailing partial frame in the buffer.
+      const { frames, rest } = extractFrames(buffer);
+      buffer = rest;
 
-      for (const raw of messages) {
-        const dataLine = raw
-          .split("\n")
-          .find((line) => line.startsWith("data:"));
-        if (!dataLine) continue;
-        const payload = dataLine.slice("data:".length).trim();
+      for (const raw of frames) {
+        const payload = extractPayload(raw);
         if (!payload) continue;
         try {
           onEvent(JSON.parse(payload) as TEvent);

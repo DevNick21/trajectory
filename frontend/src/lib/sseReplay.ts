@@ -23,15 +23,26 @@ interface CannedEvent {
 // fast, then scraper, then Sonnet agents, then Opus verdict. Order
 // follows PHASE_1_AGENTS so the visible ticks march down the list.
 const CAPITAL_ON_TAP_GO: CannedEvent[] = [
+  { delayMs:     0, event: { type: "session_started", session_id: "replay-demo", job_url: "https://example.com/job" } },
+  { delayMs:   200, event: { type: "agent_started", agent: "phase_1_jd_extractor" } },
   { delayMs:   500, event: { type: "agent_complete", agent: "phase_1_jd_extractor" } },
+  { delayMs:   650, event: { type: "agent_started", agent: "phase_1_company_scraper_summariser" } },
   { delayMs:  1100, event: { type: "agent_complete", agent: "phase_1_company_scraper_summariser" } },
+  { delayMs:  1200, event: { type: "agent_started", agent: "phase_0_triage" } },
   { delayMs:  1350, event: { type: "agent_complete", agent: "phase_0_triage" } },
+  { delayMs:  1400, event: { type: "agent_started", agent: "companies_house" } },
   { delayMs:  1500, event: { type: "agent_complete", agent: "companies_house" } },
+  { delayMs:  2300, event: { type: "agent_started", agent: "sponsor_register" } },
   { delayMs:  2400, event: { type: "agent_complete", agent: "sponsor_register" } },
+  { delayMs:  2900, event: { type: "agent_started", agent: "soc_check" } },
   { delayMs:  3000, event: { type: "agent_complete", agent: "soc_check" } },
+  { delayMs:  3500, event: { type: "agent_started", agent: "gazette_check" } },
   { delayMs:  3800, event: { type: "agent_complete", agent: "gazette_check" } },
+  { delayMs:  4300, event: { type: "agent_started", agent: "reviews" } },
   { delayMs:  4600, event: { type: "agent_complete", agent: "reviews" } },
+  { delayMs:  6800, event: { type: "agent_started", agent: "phase_1_ghost_job_jd_scorer" } },
   { delayMs:  7100, event: { type: "agent_complete", agent: "phase_1_ghost_job_jd_scorer" } },
+  { delayMs:  8100, event: { type: "agent_started", agent: "phase_1_red_flags" } },
   { delayMs:  8400, event: { type: "agent_complete", agent: "phase_1_red_flags" } },
   {
     delayMs: 10800,

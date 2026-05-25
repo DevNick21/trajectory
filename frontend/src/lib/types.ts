@@ -52,7 +52,7 @@ export interface CompanyResearchData {
   team_size_signals?: string[];
   recent_activity_signals?: string[];
   posted_salary_bands?: string[];
-  explicit_policies?: string[];
+  policies?: Record<string, unknown>;
 }
 
 export interface CompaniesHouseData {
@@ -64,7 +64,7 @@ export interface CompaniesHouseData {
 }
 
 export interface SponsorStatusData {
-  status: "NOT_LISTED" | "A_RATED" | "B_RATED" | "SUSPENDED";
+  status: "LISTED" | "NOT_LISTED" | "B_RATED" | "SUSPENDED" | "UNKNOWN" | "AMBIGUOUS";
   matched_name?: string | null;
   rating?: string | null;
   city?: string | null;
@@ -84,6 +84,8 @@ export interface SOCCheckData {
 export interface GhostJobSignal {
   type: string;
   evidence: string;
+  severity?: "HARD" | "SOFT";
+  citation?: Citation;
 }
 
 export interface GhostJobData {
@@ -195,6 +197,7 @@ export interface SessionDetailResponse {
   verdict: VerdictPayload | null;
   generated_files: GeneratedFile[];
   cost_summary: CostSummary;
+  progress_events: Record<string, unknown>[];
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +420,10 @@ export interface OnboardingFinaliseResponse {
 
 // POST /api/sessions/forward_job
 export type ForwardJobEvent =
+  | { type: "session_started"; session_id: string; job_url: string }
+  | { type: "agent_started"; agent: string }
   | { type: "agent_complete"; agent: string }
+  | { type: "agent_failed"; agent: string; error?: string }
   | { type: "verdict"; data: VerdictPayload }
   | { type: "error"; data: { message: string } }
   | { type: "done" };
