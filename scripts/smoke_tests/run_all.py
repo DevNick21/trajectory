@@ -112,18 +112,14 @@ _REGISTRY: list[_Entry] = [
     _Entry("salary_strategist",  "scripts.smoke_tests.salary_strategist",  cheap=False, category="phase4"),
     _Entry("draft_reply",        "scripts.smoke_tests.draft_reply",        cheap=False, category="phase4"),
 
-    # ── e2e: bot boot + full pipelines ─────────────────────────────────
+    # ── e2e: full pipelines ──────────────────────────────────────────
     # Cheap journey tests — full orchestrator wiring with fixture-driven
     # Phase 1 sub-agents and a mocked verdict. No live LLM calls.
     _Entry("forward_journey_uk",            "scripts.smoke_tests.forward_journey_uk",            cheap=True,  category="e2e"),
     _Entry("forward_journey_visa_block",    "scripts.smoke_tests.forward_journey_visa_block",    cheap=True,  category="e2e"),
-    _Entry("bot_draft_cv_files",            "scripts.smoke_tests.bot_draft_cv_files",            cheap=True,  category="e2e"),
-    _Entry("bot_read_intents",              "scripts.smoke_tests.bot_read_intents",              cheap=True,  category="e2e"),
-    _Entry("bot_analyse_offer_text",        "scripts.smoke_tests.bot_analyse_offer_text",        cheap=True,  category="e2e"),
     _Entry("onboarding_journey_uk",         "scripts.smoke_tests.onboarding_journey_uk",         cheap=True,  category="e2e"),
     _Entry("onboarding_journey_visa",       "scripts.smoke_tests.onboarding_journey_visa",       cheap=True,  category="e2e"),
     _Entry("onboarding_persona_stress",     "scripts.smoke_tests.onboarding_persona_stress",     cheap=True,  category="e2e"),
-    _Entry("bot_boot",           "scripts.smoke_tests.bot_boot",           cheap=False, category="e2e"),
     _Entry("scraper",            "scripts.smoke_tests.scraper",            cheap=False, category="e2e"),
     _Entry("verdict",            "scripts.smoke_tests.verdict",            cheap=False, category="e2e"),
     _Entry("phase4_cv",          "scripts.smoke_tests.phase4_cv",          cheap=False, category="e2e"),
@@ -145,7 +141,7 @@ def _configure_logging(verbose: bool) -> None:
     )
     # Silence noisy third-party loggers unless --verbose.
     if not verbose:
-        for noisy in ("httpx", "httpcore", "anthropic", "telegram",
+        for noisy in ("httpx", "httpcore", "anthropic",
                       "urllib3", "filelock", "sentence_transformers"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
 

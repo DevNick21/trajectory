@@ -121,7 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_queued_status ON queued_jobs(status);
 
 CREATE TABLE IF NOT EXISTS jobs (
     -- A persistent Job entity. Each forwarded URL creates or reuses one;
-    -- sessions reference job_id so the bot can disambiguate "draft a CV
+    -- sessions reference job_id so the app can disambiguate "draft a CV
     -- for that role" by title + company.
     job_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     -- Cross-surface notification + nudge queue. The scheduler picks
     -- rows where status='pending' AND scheduled_for <= now() and
     -- dispatches each via the channel-specific notifier. Web reads
-    -- this table directly via the API; Telegram + Email are push.
+    -- this table directly via the API; Email is push.
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
     kind TEXT NOT NULL,
@@ -230,7 +230,7 @@ async def _ensure_db() -> None:
     journal_mode=WAL is a file-level pragma that persists in the SQLite
     header once set; subsequent connections inherit it. We set it here
     (plus synchronous=NORMAL, the recommended safety/perf pairing for
-    WAL) so concurrent writers from the bot + FastAPI + test harness
+    WAL) so concurrent writers from the FastAPI + test harness
     don't serialise on a single rollback-journal writer.
 
     After the schema script runs, we apply additive ALTER TABLE
@@ -1243,9 +1243,9 @@ async def rebuild_faiss_index(entries: list[CareerEntry]) -> None:
 class Storage:
     """Thin class wrapper around module-level storage functions.
 
-    Passed through orchestrator and bot handlers so they can be tested
-    without touching a real DB. For the single-user demo, one instance
-    is created at bot startup and stored in bot_data["storage"].
+    Passed through orchestrator so it can be tested without touching
+    a real DB. For the single-user demo, one instance is created at
+    startup and stored on app.state.
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
@@ -1464,7 +1464,7 @@ async def find_jobs_for_user(
     limit: int = 10,
 ) -> list[dict]:
     """Find recent jobs for a user, optionally filtered by company / role
-    substring (case-insensitive). Used by the bot to disambiguate
+    substring (case-insensitive). Used to disambiguate
     'draft me a CV for that Acme role' → which Acme role exactly?
     """
     sql = (
@@ -1496,8 +1496,7 @@ async def find_jobs_for_user(
 async def get_session_for_job(
     user_id: str, job_id: str,
 ) -> Optional[Session]:
-    """Return the most-recent session for a job_id (used by the bot to
-    locate the research bundle for a draft request)."""
+    """Return the most-recent session for a job_id."""
     async with await _connect() as db:
         async with db.execute(
             "SELECT s.payload FROM sessions s WHERE s.user_id = ? "

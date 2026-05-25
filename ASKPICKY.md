@@ -108,8 +108,8 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 
 | Feature | Tier | Status | What breaks without it |
 |---|---|---|---|
-| Telegram URL forward | F | S | No mobile capture surface — primary entry point gone |
-| Telegram offer-letter PDF forward | F | S | Offer-stage value disappears |
+| Web URL forward | F | S | Primary entry point gone |
+| Web offer-letter PDF forward | F | S | Offer-stage value disappears |
 | Web onboarding wizard (career, motivations, money, deal-breakers, visa, life, samples, CV) | F | S | No personalisation, no style profile, no visa context — every verdict generic |
 | CV upload (PDF / DOCX / TXT) | F | S | Style profile cold; CV tailoring impossible |
 | `/api/onboarding/cv_import` multipart | F | S | Wizard CV import fails |
@@ -151,7 +151,7 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Citation discipline (3 kinds, enforced) | F | S | No trust. No defensible claim |
 | Self-audit (Phase 4.5, banned-phrase + company-swap test) | F | S | Voice drift, sycophancy, fabrication leak through |
 | Source-status fallback sentinels (OK/UNREACHABLE/NO_DATA/STALE) | F | S | Picky claims knowledge it doesn't have |
-| Streaming Phase 1 progress (Telegram debounce + SSE) | F | S | Long verdicts feel dead; users churn during the 30s wait |
+| Streaming Phase 1 progress (SSE) | F | S | Long verdicts feel dead; users churn during the 30s wait |
 | LangGraph orchestrator wrapper (opt-in, checkpointed state) | F | B | Long-running pipelines lack durable retry |
 | Outcome → verdict calibration loop | I | B | Network data doesn't improve verdicts — flywheel doesn't compound |
 | `challenge_verdict` intent (conversational refinement) | F | B | Picky can't defend a position when pushed; voice is incomplete |
@@ -197,7 +197,7 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 
 | Feature | Tier | Status | What breaks without it |
 |---|---|---|---|
-| **One-tap outcome reporting in Telegram (Day-21 nudge)** | F | B | **No data network. No moat. No premium tier in 12 months.** This is P0 |
+| **One-tap outcome reporting (Day-21 nudge)** | F | B | **No data network. No moat. No premium tier in 12 months.** This is P0 |
 | Smart-timed reporting nudges (selection-bias mitigation) | F | B | Reporting too sparse / too biased |
 | Light verification of adversarial reports (subject / recruiter / date cross-ref) | F | B | Data quality collapses; benchmarks unusable |
 | "Insufficient data" honest UI for long-tail employers | F | B | Trust collapses on first sparse data point |
@@ -250,7 +250,7 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 
 ### What's in free
 
-- All capture surfaces (Telegram + web)
+- All capture surfaces (web)
 - Full onboarding + style + CV import
 - Phase 1 9-agent verdict with citations — **rate-limited to N/month (suggest 15)**
 - All visa-specific features (sponsor register, Companies House, SOC, alerts, eligibility check)
@@ -348,7 +348,7 @@ These are illustrative — calibrate against actual compute spend after the firs
 
 These close the gap between current state and the new positioning. Without them, the strategic shift is aspirational.
 
-1. One-tap outcome reporting in Telegram (Day-21 nudge + smart-timed)
+1. One-tap outcome reporting (Day-21 nudge + smart-timed)
 2. Light verification of adversarial reports
 3. Personal application tracker + follow-up reminders
 4. Tailored CV version management
@@ -357,7 +357,7 @@ These close the gap between current state and the new positioning. Without them,
 7. Sponsor register search (front-page tool)
 8. CV tailor consolidation (cut multi-provider routing + LaTeX templates)
 9. Operational debt: fix doc drift, missing canonical docs, license drift, duplicate PROCESS entries, agent-call inventory
-10. Rename: Trajectory → AskPicky across repo, README, telegram bot, brand assets
+10. Rename: Trajectory → AskPicky across repo, README, brand assets
 
 ### P1 — first premium feature ships
 
@@ -426,7 +426,7 @@ This doc is the new canonical reference. All older docs should point here for pr
 - Reporting opt-in vs opt-out at nudge level (current bias: opt-out at nudge, never silent reporting)
 - Trajectory Interview → AskPicky Interview brand: shared account, separate product
 - Auth mechanism for multi-user (ADR not yet written)
-- Cross-surface identity unification (bot user + web user merge to one row)
+- Cross-surface identity unification (web user identity)
 - Exact credit costs and price points (calibrate against real compute spend post-first-100-users)
 - Whether AskPicky publishes anonymised market data publicly (free goodwill) vs paid licensing only
 

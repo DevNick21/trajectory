@@ -30,7 +30,6 @@ def _is_test_env() -> bool:
 class Settings(BaseSettings):
     # --- external credentials
     anthropic_api_key: str = ""
-    telegram_bot_token: str = ""
     companies_house_api_key: str = ""
 
     # Multi-provider support (architecture gap #10)
@@ -44,7 +43,6 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
 
     # --- feature flags
-    enforce_rate_limit: bool = False
     # Per-agent Phase 1 timeout. Generous enough that Opus xhigh +
     # Playwright both fit comfortably; trim per-agent via future
     # config if needed.
@@ -141,18 +139,14 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = ""
 
-    # --- dual-surface identity (web + Telegram)
-    # Single-user demo: both surfaces resolve to the same user_profiles
-    # row. The Telegram adapter uses `update.effective_user.id` directly;
-    # the web adapter reads demo_user_id since it has no auth. For
-    # multi-user this becomes a session-derived identity in the web
-    # layer. See docs/adr/0001-single-user-identity-seam.md.
+    # --- web surface identity
+    # Single-user demo: resolves to the same user_profiles row keyed by
+    # this value. For multi-user this becomes a session-derived identity.
+    # See docs/adr/0001-single-user-identity-seam.md.
     demo_user_id: str = ""
     api_port: int = 8000
     # CORS allowlist for the FastAPI app — strict, no wildcards.
     web_origin: str = "http://localhost:5173"
-    # Public-facing URL the bot points un-onboarded users at.
-    web_url: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -175,8 +169,6 @@ class Settings(BaseSettings):
         missing: list[str] = []
         if not self.anthropic_api_key:
             missing.append("ANTHROPIC_API_KEY")
-        if not self.telegram_bot_token:
-            missing.append("TELEGRAM_BOT_TOKEN")
         if not self.demo_user_id:
             missing.append("DEMO_USER_ID")
         if missing:

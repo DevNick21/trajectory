@@ -1,8 +1,8 @@
 """ProgressEmitter Protocol — the contract every transport satisfies.
 
-Orchestrator code only knows this Protocol; it doesn't import Telegram,
-FastAPI, or anything transport-shaped. New surfaces (Slack, Discord,
-CLI) only need a new emitter (~50 lines) — the orchestrator is
+Orchestrator code only knows this Protocol; it doesn't import
+any transport-shaped module. New surfaces (Slack, Discord, CLI)
+only need a new emitter (~50 lines) — the orchestrator is
 untouched.
 
 Event shape (current Wave 1 contract):

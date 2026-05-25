@@ -89,7 +89,7 @@ def get_current_user_id() -> str:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=(
                 "DEMO_USER_ID is not set. Add it to your .env "
-                "(your Telegram numeric user id) before starting the API."
+                "before starting the API."
             ),
         )
     return settings.demo_user_id

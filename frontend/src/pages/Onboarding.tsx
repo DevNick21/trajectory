@@ -25,7 +25,7 @@ const PICKY_COMMENTS = [
   "What actually gets you out of bed? I'll score roles against these.",
   "What makes you walk away? I'll flag these as HARD BLOCKERS.",
   "The Narrative. Tell it your way—I'll use it to ground my drafts.",
-  "Your Voice. Paste samples so I don't sound like a generic bot.",
+  "Your Voice. Paste samples so I don't sound generic.",
   "Final Review. Scrutinize everything before I commit it to the archive."
 ];
 

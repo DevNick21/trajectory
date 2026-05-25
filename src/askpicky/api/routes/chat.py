@@ -1,9 +1,8 @@
 """POST /api/chat — natural-language chat surface for the web (PROCESS Entry 45).
 
-Brings the web to parity with the Telegram bot: any message you can
-type to the bot now also works from the web. Internally:
+Natural-language entrypoint for the web UI. Internally:
   1. Run intent_router on the message
-  2. Dispatch to the same handle_* the bot uses
+  2. Dispatch to the same handle_* handlers
   3. Return a single JSON response describing what happened
 
 This is a non-streaming first pass. forward_job and full_prep have
@@ -50,8 +49,7 @@ async def chat(
     user: UserProfile = Depends(get_current_user),
     storage: Storage = Depends(get_storage),
 ) -> ChatResponse:
-    """Run intent_router + dispatch. Mirrors the Telegram bot's
-    on_message dispatch but as a single-shot HTTP response."""
+    """Run intent_router + dispatch as a single-shot HTTP response."""
     if not req.message or not req.message.strip():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -2,11 +2,8 @@
 
   - POST /api/sessions/{id}/outcome  — record what happened after applying
 
-This is the P0 surface for the data network. The Telegram side (Day-N
-nudge inline keyboard) and email side both fan into the same recorder
-+ tracker via `mark_outcome()` below — single source of truth.
-
-Outcomes never gate any other feature. Reporting is always free
+The outcome reporter + tracker via `mark_outcome()` is a single source
+of truth. Outcomes never gate any other feature. Reporting is always free
 (ASKPICKY.md §7 "Limits never gate outcome reporting").
 """
 
@@ -65,9 +62,8 @@ async def mark_outcome(
     """Cross-surface single entry point for recording an outcome.
 
     Wires together the recorder (network/memory), the application
-    tracker state machine, and the notifications queue. Called by:
+    tracker state machine, and the notifications queue.     Called by:
       - this HTTP route (web)
-      - the bot's CallbackQueryHandler (Telegram inline keyboard)
       - email link landing → web route → here
 
     Idempotent on (session_id, outcome) — re-reporting the same

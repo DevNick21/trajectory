@@ -167,7 +167,7 @@ verdict agent reason over `weighted_evidence` instead of raw payloads.
 
 ## 8. No conversational refinement of verdicts
 
-Telegram is "capture", web is "consumption". Neither lets the user
+The web UI is the primary surface for capture and consumption. It doesn't currently let the user
 push back on a verdict. The `analyse_offer` intent comes close but
 only for offer letters, not for verdict disagreements.
 

@@ -1,6 +1,6 @@
 """Top-level pipeline coordination.
 
-Implements all intent handlers. Bot handlers call into this module.
+Implements all intent handlers. The web API calls into this module.
 """
 
 from __future__ import annotations
@@ -88,9 +88,7 @@ async def handle_forward_job(
     `emitter` receives transport-agnostic progress events
     (`{"type": "agent_complete", "agent": <name>}`). When omitted,
     a NoOpEmitter is used — safe default for CLI runs and tests. The
-    Telegram bot wraps a `PhaseOneProgressStreamer` in a
-    `TelegramEmitter`; the FastAPI surface (Wave 4) wires an
-    `SSEEmitter` to an asyncio.Queue. See MIGRATION_PLAN.md ADR-002.
+    FastAPI surface wires an `SSEEmitter` to an asyncio.Queue.
     """
     from .sub_agents import (
         company_scraper,
@@ -506,10 +504,9 @@ async def handle_forward_job(
         sr_agent=sr_agent,
     )
 
-    # Emitter flush is the caller's responsibility now (Wave 1 ADR-002).
-    # bot/handlers.py calls emitter.close() → streamer.flush() on the
-    # Telegram path; api/routes/sessions.py closes the SSEEmitter in
-    # its `finally` block on the web path.
+    # Emitter flush is the caller's responsibility now.
+    # api/routes/sessions.py closes the SSEEmitter in its `finally`
+    # block on the web path.
 
     bundle = ResearchBundle(
         session_id=session.session_id,
@@ -533,7 +530,7 @@ async def handle_forward_job(
 
     # PROCESS Entry 45 — find-or-create the persistent Job entity. Same
     # role at same company across multiple URL forwards = one job_id.
-    # Stamped on the Session so the bot can locate "that Acme role"
+    # Stamped on the Session so the app can locate "that Acme role"
     # later by company + title rather than session-recency.
     try:
         from .storage import update_session, upsert_job
@@ -1212,8 +1209,7 @@ async def handle_full_prep(
 ) -> tuple[Pack, dict[str, Path]]:
     """Parallel fan-out of all 4 Phase 4 generators.
 
-    Returns the Pack plus a mapping of file kinds to rendered paths so the
-    bot surface can attach the .docx/.pdf deliverables (CLAUDE.md Rule 9).
+    Returns the Pack plus a mapping of file kinds to rendered paths.
     """
     cv_task = asyncio.create_task(
         handle_draft_cv(session, user, storage, star_polishes)
@@ -1485,7 +1481,7 @@ async def handle_compare_verdicts(
             company_name = company.get("company_name", company_name) or company_name
 
         # Per-row rationale: just name the dominant driver. Always
-        # include the age in days so the bot can surface staleness
+        # include the age in days so the frontend can surface staleness
         # uniformly across rows.
         if freshness < 0.5:
             rationale = (

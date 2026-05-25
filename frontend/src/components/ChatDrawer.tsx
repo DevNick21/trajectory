@@ -1,7 +1,7 @@
 // Natural-language chat drawer (PROCESS Entry 45).
 //
-// Slides in from the right on every page. Mirrors the Telegram bot's
-// natural-language entrypoint: type any message, intent_router classifies,
+// Slides in from the right on every page. Natural-language entrypoint:
+// type any message, intent_router classifies,
 // the backend either redirects you to a dedicated page (forward_job →
 // streaming view; draft_* → /sessions/{id}/{pack}; analyse_offer → /offer)
 // or responds inline (chitchat / profile_query / draft_reply).
@@ -105,7 +105,7 @@ export default function ChatDrawer({ sessionId, className }: Props) {
           <div>
             <h2 className="font-semibold tracking-tight">Chat</h2>
             <p className="text-xs text-muted-foreground">
-              Natural-language entry — same as the Telegram bot.
+              Natural-language entry — type anything to get started.
             </p>
           </div>
           <Button

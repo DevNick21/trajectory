@@ -65,13 +65,7 @@ To swap a provider: edit `config.py::agent_model_map`, rebuild Docker. No code c
 ### Rule 8 — Cost discipline
 All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.
 
-### Rule 9 — Telegram-native affordances
-1. **Streaming Phase 1 progress.** `forward_job` routes each Phase 1 sub-agent's completion through `PhaseOneProgressStreamer.mark_complete()`. Debounced to 1.2s for Telegram's edit rate limit.
-2. **File generation for CV and cover letter.** `handle_draft_cv` and `handle_draft_cover_letter` produce both `.docx` (`python-docx`) and `.pdf` (`reportlab`) via `renderers/`, sent via `send_document`. In-chat Markdown is a preview, not the deliverable.
-
-No file generation for `LikelyQuestionsOutput` or `SalaryRecommendation` — chat-only.
-
-### Rule 10 — Content Shield on all untrusted content
+### Rule 9 — Content Shield on all untrusted content
 Scraped pages, JD text, user messages, recruiter emails, onboarding samples — all untrusted. Before reaching an agent's prompt they pass through `validators/content_shield.py`:
 1. **Tier 1 regex** — always runs.
 2. **Tier 2 Sonnet classifier** — runs when Tier 1 flagged anything AND the downstream agent is high-stakes (verdict, salary strategist, any Phase 4 generator, draft_reply).
@@ -114,7 +108,6 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 | Language | Python 3.12+ |
 | LLM | Multi-provider via `llm.py`: DeepSeek V4 Flash/Pro (Anthropic-compatible endpoint), Anthropic (Opus 4.7, Sonnet 4.6, Haiku 4.5), OpenAI (GPT-5.4, primary verdict) |
 | Orchestration | `orchestrator.py` (imperative) + `langgraph_orchestrator.py` (opt-in StateGraph wrapper, checkpointed state) |
-| Bot | `python-telegram-bot` v21+, async long-polling |
 | Web | React 18 + Vite + TypeScript + TanStack Query + react-router + Tailwind |
 | API | FastAPI + `sse-starlette` |
 | Scraping | Playwright async + `trafilatura` + BeautifulSoup; Firecrawl fallback for anti-bot hosts (Glassdoor, Indeed, LinkedIn) |

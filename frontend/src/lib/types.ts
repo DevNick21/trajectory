@@ -502,7 +502,7 @@ export type NotificationKind =
   | "sponsor_alert"
   | "system";
 
-export type NotificationChannelName = "telegram" | "web" | "email";
+export type NotificationChannelName = "web" | "email";
 
 export type NotificationStatus =
   | "pending"

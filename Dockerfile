@@ -1,4 +1,4 @@
-# AskPicky backend + bot — one image, two entrypoints.
+# AskPicky backend — single image, single entrypoint for the API.
 #
 # Base image: official Playwright Python image, noble variant.
 # - `noble` (Ubuntu 24.04 LTS) ships Python 3.12; `jammy` ships 3.10
@@ -13,11 +13,8 @@
 # Build:
 #   docker build -t askpicky:latest .
 #
-# Run API:
+# Run:
 #   docker run --rm -p 8000:8000 --env-file .env -v askpicky-data:/data askpicky:latest
-#
-# Run bot:
-#   docker run --rm --env-file .env -v askpicky-data:/data askpicky:latest bot
 #
 # docker-compose.yml handles the multi-container orchestration.
 FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
@@ -51,8 +48,8 @@ VOLUME ["/data"]
 
 EXPOSE 8000
 
-# Default to the API. `docker run ... bot` switches to the Telegram
-# long-poller. `docker run ... shell` drops into bash.
+# Default to the API. `docker run ... smoke` runs cheap smoke tests.
+# `docker run ... shell` drops into bash.
 COPY docker/entrypoint.sh /usr/local/bin/askpicky-entrypoint
 RUN chmod +x /usr/local/bin/askpicky-entrypoint
 ENTRYPOINT ["askpicky-entrypoint"]

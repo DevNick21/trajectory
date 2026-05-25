@@ -43,14 +43,14 @@ _SRC = _REPO_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-# Allow Settings to boot without DEMO_USER_ID / TELEGRAM_BOT_TOKEN in the
+# Allow Settings to boot without DEMO_USER_ID in the
 # environment. Individual smoke tests that need those values set them
 # explicitly on `settings` after `prepare_environment()`. Must be set
 # BEFORE the first `from askpicky.config import settings` anywhere.
 os.environ.setdefault("ASKPICKY_TEST_MODE", "1")
 
 # Windows console defaults to cp1252 — Unicode arrows / em-dashes /
-# emojis in `messages` (and the bot's emoji prompts) crash a standalone
+# emojis in `messages` crash a standalone
 # smoke test on `print(...)` even though the test itself passed. The
 # `run_all.py` runner already does this; replicate it here so a
 # direct `python -m scripts.smoke_tests.<name>` doesn't crash the
@@ -127,7 +127,7 @@ def prepare_environment() -> Path:
 
     # Import `settings` lazily — pydantic-settings reads .env at import
     # time, and we want .env-driven keys (ANTHROPIC_API_KEY,
-    # TELEGRAM_BOT_TOKEN, COMPANIES_HOUSE_API_KEY) to flow through.
+    # COMPANIES_HOUSE_API_KEY) to flow through.
     from askpicky.config import settings
 
     settings.sqlite_db_path = tmp / "smoke.db"

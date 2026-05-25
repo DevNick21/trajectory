@@ -161,8 +161,7 @@ export default function Applications() {
           Applications
         </h1>
         <p className="text-sm text-foreground/60 mt-1">
-          Every role you forwarded. Update outcomes here, in Telegram, or from
-          the Day-21 nudge — they all sync.
+          Every role you forwarded. Update outcomes here — they all sync.
         </p>
       </header>
 

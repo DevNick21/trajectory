@@ -11,8 +11,7 @@ The web wizard skips the LLM parser for structured stages (money,
 visa, location, life, employment, name) — those are typed-form
 inputs that the backend trusts. The parser still runs server-side
 at finalise for the free-text voice stages (motivations,
-deal-breakers, good-role-signals), matching the bot's behaviour.
-If the parser returns an empty list (force-advanced past
+deal-breakers, good-role-signals). If the parser returns an empty list (force-advanced past
 needs_clarification), the raw text is kept as a single-item list
 so Phase 4 generators have something to retrieve against.
 """
@@ -73,8 +72,7 @@ async def _parse_voice_stages(req: OnboardingFinaliseRequest) -> dict:
 
     Returns a dict of stage → parsed result (or None on parser failure
     / empty input). Parser failures don't raise — we fall back to the
-    raw text wrapped as a single-item list, same pattern as the
-    bot's finalise_onboarding.
+    raw text wrapped as a single-item list.
     """
     from ...sub_agents.onboarding_parser import parse_stage
 
@@ -139,7 +137,6 @@ def _derive_visa_status(req: OnboardingFinaliseRequest) -> Optional[VisaStatus]:
     route = req.visa_route or "other"
     expiry = req.visa_expiry
     if expiry is None or expiry < date.today():
-        # Matches bot/onboarding.py::finalise_onboarding fallback —
         # an expired / missing visa date shouldn't flag the user as
         # already-expired in the urgency scorer.
         expiry = date(date.today().year + 2, 12, 31)

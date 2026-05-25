@@ -6,9 +6,7 @@ Date: 2026-04-24
 ## Context
 
 The FastAPI surface today runs single-user with `settings.demo_user_id`
-threaded through every route. The Telegram bot uses the Telegram
-numeric user id directly (which equals `demo_user_id` in the demo
-deployment). Post-demo we want an auth layer that derives identity
+threaded through every route. Post-demo we want an auth layer that derives identity
 from a session cookie / bearer token.
 
 ## Decision

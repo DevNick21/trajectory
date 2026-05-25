@@ -157,7 +157,7 @@ export const removeFromQueue = async (id: string): Promise<void> => {
 
 // ---------------------------------------------------------------------------
 // Chat (PROCESS Entry 45)
-//   POST /api/chat — natural-language entrypoint mirroring the Telegram bot.
+//   POST /api/chat — natural-language entrypoint.
 //   Returns either a redirect target (for forward_job / draft_* etc.) or
 //   an inline text/card response.
 // ---------------------------------------------------------------------------

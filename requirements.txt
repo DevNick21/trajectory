@@ -1,5 +1,4 @@
 httpx>=0.27.0
-python-telegram-bot>=21.0
 playwright==1.55.0  # Pinned to align with the chromium bundled in Dockerfile's playwright base image.
 playwright-stealth>=1.0.6  # Evasion: hides automation markers from anti-bot detection.
 trafilatura>=1.8.0

@@ -21,7 +21,7 @@ Reposition Trajectory from **"AI does your application"** to **"system of record
 
 ## 2. The data flywheel (core mechanic)
 
-User reports outcomes via one-tap in Telegram → aggregated into employer-behaviour micro-database → served back as premium pre-application benchmarks.
+User reports outcomes via one-tap → aggregated into employer-behaviour micro-database → served back as premium pre-application benchmarks.
 
 - **Asymmetric value**: free to contribute (one tap), hours saved to consume
 - **Precedent**: Levels.fyi did this for compensation. There's no equivalent for hiring behaviour (response rate, interview-to-offer ratio, ghost frequency, time-to-response)
@@ -33,7 +33,7 @@ User reports outcomes via one-tap in Telegram → aggregated into employer-behav
 
 | Layer | Open / Closed |
 |---|---|
-| Agent code, Telegram UX, schemas, verification UI | OSS (AGPL — already in place) |
+| Agent code, web UX, schemas, verification UI | OSS (AGPL — already in place) |
 | **Aggregated employer behaviour database** | **Closed — the network-effect moat** |
 | Hosted continuous monitoring (compute layer) | Paid SaaS |
 | Anonymised market data licensing (future) | Future paid tier |
@@ -91,7 +91,7 @@ The contribute-to-earn track aligns incentives: heavy contributors stay free, ca
 
 Don't bundle into Trajectory's premium tier — it's a different product.
 
-- **Separate surface** (probably not Telegram — interactive simulation needs more UI)
+- **Separate surface** (interactive simulation needs more UI)
 - **Different usage pattern** (intensive bursts pre-interview)
 - **Industry analysis**: "most underused AI capability in 2026" is pre-interview research on hiring manager + company news + role pain points
 - **Personal motivation**: JPMC + HMLR rejections both had interview-prep gaps (explaining ML models to different audiences; STAR delivery against Civil Service Success Profiles)
@@ -101,7 +101,7 @@ Don't bundle into Trajectory's premium tier — it's a different product.
 
 ## 7. The reporting UX (critical constraint)
 
-If reporting takes more than one tap inside the existing Telegram flow, the data dies. Hard rule.
+If reporting takes more than one tap, the data dies. Hard rule.
 
 ```
 Day 21 after application:

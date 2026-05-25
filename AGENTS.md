@@ -74,7 +74,7 @@ New since 2026-05-23:
 
 **Model:** `claude-opus-4-7`, `thinking_effort: "xhigh"` (correctness > speed here)
 
-**Called by:** `bot/handlers.py` for every non-onboarding message.
+**Called by:** API chat endpoint for every non-onboarding message.
 
 ## System prompt
 
@@ -145,8 +145,8 @@ class IntentRouterOutput(BaseModel):
 
 ## Validation
 
-- Confidence `LOW` + `intent != "chitchat"` → bot asks for clarification rather than running the pipeline.
-- `blocked_by_verdict=true` → bot responds with the last verdict's NO_GO reasoning instead of running the generator.
+- Confidence `LOW` + `intent != "chitchat"` → app asks for clarification rather than running the pipeline.
+- `blocked_by_verdict=true` → app responds with the last verdict's NO_GO reasoning instead of running the generator.
 
 ---
 
@@ -644,7 +644,7 @@ YOUR JOB:
    (extracted fields), and will get an embedding computed downstream.
 
 4. Flag any contradictions or ambiguities in ambiguities_flagged
-   so the bot can confirm with the user.
+   so the app can confirm with the user.
 
 RULES:
 

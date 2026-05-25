@@ -205,7 +205,6 @@ class UserProfile(BaseModel):
 
     # cross-surface delivery (notifications + email reminders)
     email: Optional[str] = None
-    telegram_chat_id: Optional[str] = None
 
     # onboarding-captured
     motivations: list[str] = Field(default_factory=list)
@@ -377,7 +376,6 @@ class Session(BaseModel):
     phase1_output: Optional[dict] = None
     verdict: Optional["Verdict"] = None
     generated_components: dict = Field(default_factory=dict)
-    telegram_messages: list[dict] = Field(default_factory=list)
     created_at: datetime
 
 

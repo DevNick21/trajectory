@@ -2,7 +2,6 @@
 # AskPicky container entrypoint.
 #
 # - `api`   (default) — uvicorn on :8000 with one worker.
-# - `bot`             — long-poll Telegram bot.
 # - `smoke`           — run the cheap smoke test in-container.
 # - `shell`           — bash for debugging.
 # - anything else     — exec it verbatim.
@@ -20,9 +19,6 @@ case "${1:-api}" in
       --port "${PORT:-8000}" \
       --workers 1 \
       --proxy-headers
-    ;;
-  bot)
-    exec python -m askpicky.bot.app
     ;;
   smoke)
     exec python -m scripts.smoke_tests.run_all --cheap

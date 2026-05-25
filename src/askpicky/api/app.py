@@ -47,11 +47,6 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Single Storage instance for the process lifetime.
-
-    Both surfaces (this API + the Telegram bot) construct their own
-    Storage() but talk to the same SQLite file — aiosqlite serialises
-    writes. FAISS staleness across processes is a known limitation
-    (MIGRATION_PLAN.md §6 risk #2, deferred for single-user demo).
     """
     install_correlation_filter()
     storage = Storage()
