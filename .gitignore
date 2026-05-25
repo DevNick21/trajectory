@@ -2,6 +2,9 @@
 .env
 .env.local
 
+# Docs (untracked — kept local only)
+docs/
+
 # Python
 .venv/
 venv/
