@@ -33,6 +33,8 @@ what remains next.
 
 ## Hardened In This Pass
 
+### Application assist hardening
+
 - Assist UI now starts an assist session first and carries the session id
   through suggest, critique, polish, and approve.
 - Private-save is the default. Attempts and extracted memories inherit private
@@ -50,6 +52,28 @@ what remains next.
 - Live prompt audits were run and high-severity findings were fixed:
   - `application_answer_shaper`: STRONG, 0 HIGH.
   - `memory_extractor`: STRONG, 0 HIGH.
+
+### 16-lens audit-prompt pass
+
+- Every prompt in `docs/audit-prompts/` was applied against the current repo.
+- Full export is in
+  `docs/AUDIT_PROMPT_RUN_2026_06_01.md`.
+- Fixed config drift that could crash rate-limited routes:
+  - added `Settings.enforce_rate_limit`
+  - added `Settings.enable_batch_queue_runner`
+  - restored compatibility model/provider settings still referenced by
+    verdict code, tests, and smoke scripts
+- Added FastAPI security headers and equivalent nginx headers:
+  - `Content-Security-Policy`
+  - `Permissions-Policy`
+  - `Referrer-Policy`
+  - `X-Content-Type-Options`
+  - `X-Frame-Options`
+- Restricted CORS request headers from wildcard to explicit API headers.
+- Added `/api/version` for frontend/API compatibility checks.
+- Hardened `.dockerignore` so `.env.*`, SQLite/DB, and FAISS artifacts do not
+  enter Docker build context.
+- Added regression tests for `/api/version` and API security headers.
 
 ---
 
@@ -78,6 +102,12 @@ what remains next.
   a replacement for generated TypeScript types.
 - Auth/multi-tenant identity is still a future boundary. Storage is keyed by
   `user_id`, but the current API dependency still uses `settings.demo_user_id`.
+- URL safety / SSRF controls need to be added before hosted users can submit
+  arbitrary job URLs.
+- Scheduled privacy cleanup is still needed; the purge route exists, but
+  hosted retention should not depend on a manual call.
+- Per-user quota and cost attribution are still needed; current budgets are
+  global and rate limiting is process-local.
 
 ---
 
@@ -92,4 +122,5 @@ npm run lint
 git diff --check
 python scripts/audit_prompt.py application_answer_shaper
 python scripts/audit_prompt.py memory_extractor
+python -m pytest tests\test_api_health.py tests\test_api_queue.py tests\test_api_pack.py tests\test_verdict_fallback.py tests\test_api_read_routes.py -q
 ```

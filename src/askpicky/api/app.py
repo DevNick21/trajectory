@@ -44,6 +44,22 @@ from .routes import api_router
 log = logging.getLogger(__name__)
 
 
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none'"
+    ),
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    ),
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+}
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Single Storage instance for the process lifetime.
@@ -75,7 +91,7 @@ def create_app() -> FastAPI:
         allow_origins=[settings.web_origin],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
-        allow_headers=["*"],
+        allow_headers=["Accept", "Authorization", "Content-Type", "X-Request-ID"],
     )
 
     @app.middleware("http")
@@ -98,6 +114,9 @@ def create_app() -> FastAPI:
             except Exception:  # pragma: no cover — defensive
                 pass
         response.headers["X-Request-ID"] = rid
+        for header, value in _SECURITY_HEADERS.items():
+            if header not in response.headers:
+                response.headers[header] = value
         return response
 
     app.include_router(api_router)

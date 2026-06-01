@@ -26,3 +26,11 @@ async def health(storage: Storage = Depends(get_storage)) -> dict:
         "storage_initialised": storage is not None,
         "demo_user_id_configured": bool(settings.demo_user_id),
     }
+
+
+@router.get("/api/version")
+async def api_version() -> dict:
+    return {
+        "service": "askpicky.api",
+        "version": "0.1.0",
+    }

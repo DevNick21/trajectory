@@ -151,6 +151,7 @@ The cheap suite is the regression net every change has to hold. Each LLM-backed 
 
 - [ASKPICKY.md](./ASKPICKY.md) — canonical product definition (free/premium split, roadmap, four-question test)
 - [ASKPICKY_AUDIT_EXPORT.md](./ASKPICKY_AUDIT_EXPORT.md) — current done/needed export and verification checklist
+- [docs/AUDIT_PROMPT_RUN_2026_06_01.md](./docs/AUDIT_PROMPT_RUN_2026_06_01.md) — latest 16-lens audit-prompt pass, fixes applied, and launch blockers
 - [MEMORY_ARCHITECTURE.md](./MEMORY_ARCHITECTURE.md) — application-assist memory graph, privacy, API, and tests
 - [CLAUDE.md](./CLAUDE.md) — operating manual for AI-assisted dev
 - [AGENTS.md](./AGENTS.md) — agent prompt inventory + adapter assignments

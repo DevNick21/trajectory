@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     # OpenAI — GPT-5.4 for verdict, benchmarking, and optional routing
     openai_api_key: str = ""
+    # Backward-compatible aliases used by legacy tests/smokes while the
+    # runtime routes through TIER_* and agent_tier_map.
+    anthropic_api_key: str = ""
+    openai_pro_model_id: str = "gpt-5.4"
+    deepseek_pro_model_id: str = "deepseek-v4-pro"
+    opus_model_id: str = "gpt-5.4"
+    sonnet_model_id: str = "deepseek-v4-flash"
     # Firecrawl — anti-bot page scraping fallback
     firecrawl_api_key: str = ""
     firecrawl_base_url: str = "https://api.firecrawl.dev/v2"
@@ -94,6 +101,8 @@ class Settings(BaseSettings):
     enable_splink_sponsor_match: bool = False
     # Pre-verdict triage
     enable_triage_before_verdict: bool = True
+    enable_managed_company_investigator: bool = False
+    enable_batch_queue_runner: bool = False
 
     # --- paths
     data_dir: Path = Path("./data")
@@ -104,6 +113,9 @@ class Settings(BaseSettings):
     # --- credit budget
     credits_budget_usd: float = 500.0
     credits_warn_threshold_usd: float = 20.0
+    # Keep disabled by default for local/dev parity; hosted deployments
+    # should set ASKPICKY_ENFORCE_RATE_LIMIT=true until auth-backed quotas land.
+    enforce_rate_limit: bool = False
 
     # --- embeddings
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -120,6 +132,7 @@ class Settings(BaseSettings):
     demo_user_id: str = ""
     api_port: int = 8000
     web_origin: str = "http://localhost:5173"
+    web_url: str = "http://localhost:5173"
 
     # LangGraph orchestrator (opt-in)
     enable_langgraph_orchestrator: bool = False

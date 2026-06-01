@@ -66,6 +66,23 @@ def test_unknown_route_returns_404(client):
     assert resp.status_code == 404
 
 
+def test_api_version_returns_stable_metadata(client):
+    resp = client.get("/api/version")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "service": "askpicky.api",
+        "version": "0.1.0",
+    }
+
+
+def test_security_headers_present(client):
+    resp = client.get("/health")
+    assert resp.headers.get("x-content-type-options") == "nosniff"
+    assert resp.headers.get("x-frame-options") == "DENY"
+    assert resp.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+    assert "frame-ancestors 'none'" in resp.headers.get("content-security-policy", "")
+
+
 def test_cors_header_present_for_configured_origin(client):
     """CORS allows the configured origin and rejects others (no
     wildcards per MIGRATION_PLAN.md §6 risk #9)."""
