@@ -6,8 +6,10 @@ import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
 import OnboardingGate from "@/components/OnboardingGate";
 import Applications from "@/pages/Applications";
+import Assist from "@/pages/Assist";
 import Benchmarks from "@/pages/Benchmarks";
 import Dashboard from "@/pages/Dashboard";
+import Memory from "@/pages/Memory";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
 import Queue from "@/pages/Queue";
@@ -48,6 +50,9 @@ export default function App() {
           <NavLink to="/applications" className={navLink}>
             Applications
           </NavLink>
+          <NavLink to="/assist" className={navLink}>
+            Assist
+          </NavLink>
           <NavLink to="/queue" className={navLink}>
             Queue
           </NavLink>
@@ -60,6 +65,9 @@ export default function App() {
           <div className="pt-4 mt-4 border-t border-canvas">
             <NavLink to="/onboarding" className={navLink}>
               User Profile
+            </NavLink>
+            <NavLink to="/memory" className={navLink}>
+              Memory Inbox
             </NavLink>
           </div>
         </nav>
@@ -84,12 +92,14 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/applications" element={<Applications />} />
+              <Route path="/assist" element={<Assist />} />
               <Route path="/benchmarks" element={<Benchmarks />} />
               <Route path="/queue" element={<Queue />} />
               <Route path="/offer" element={<Offer />} />
               <Route path="/sessions/:id" element={<SessionDetail />} />
               <Route path="/sessions/:id/:pack" element={<SessionPack />} />
               <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/memory" element={<Memory />} />
             </Routes>
           </OnboardingGate>
         </main>

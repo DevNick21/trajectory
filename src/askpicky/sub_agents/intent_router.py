@@ -1,4 +1,4 @@
-"""Intent Router — classifies every user message into one of the 12 intents.
+"""Intent Router — classifies every user message into AskPicky intents.
 
 Two-tier:
   - **Tier 0** (this file): deterministic URL + keyword rules. Catches
@@ -67,6 +67,13 @@ _KEYWORD_RULES: list[tuple[str, list[re.Pattern]]] = [
         re.compile(r"\bfull\s+(?:prep|pack|preparation|package)\b", re.IGNORECASE),
         re.compile(r"\b(?:do|run|generate)\s+everything\b", re.IGNORECASE),
         re.compile(r"\bgive\s+me\s+everything\b", re.IGNORECASE),
+    ]),
+    ("application_assist", [
+        re.compile(r"\b(?:help|coach|assist)\s+(?:me\s+)?(?:answer|with)\s+(?:this\s+)?(?:application|form)\s+(?:question|answer)\b", re.IGNORECASE),
+        re.compile(r"\b(?:application|form)\s+(?:question|answer)\b", re.IGNORECASE),
+        re.compile(r"\b(?:polish|improve|check)\s+(?:this\s+)?(?:application\s+)?answer\b", re.IGNORECASE),
+        re.compile(r"\bcompetency\s+(?:question|answer)\b", re.IGNORECASE),
+        re.compile(r"\bscreening\s+(?:question|answer)\b", re.IGNORECASE),
     ]),
     ("analyse_offer", [
         re.compile(r"\b(?:analyse|analyze|review|look\s+at)\s+(?:this|my|the)\s+offer\b", re.IGNORECASE),

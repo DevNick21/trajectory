@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -30,13 +32,26 @@ def _utcnow() -> datetime:
     suffix.
     """
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 from .schemas import (
+    AdviceSnippet,
+    AnswerAttempt,
+    ApplicationAssistSession,
     CareerEntry,
+    ExperienceAtom,
+    MemoryEdge,
+    MemoryReviewStatus,
+    MemorySuggestion,
+    QuestionType,
     QueuedJob,
     Session,
+    StoryFrame,
     UserProfile,
     WritingStyleProfile,
 )
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # SQL schema
@@ -212,6 +227,97 @@ CREATE INDEX IF NOT EXISTS idx_notif_due
     ON notifications(scheduled_for, status);
 CREATE INDEX IF NOT EXISTS idx_notif_user_status
     ON notifications(user_id, status, channel, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS application_assist_sessions (
+    assist_session_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    session_id TEXT,
+    job_id TEXT,
+    company_name TEXT,
+    role_title TEXT,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_assist_sessions_user
+    ON application_assist_sessions(user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS answer_attempts (
+    attempt_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    assist_session_id TEXT,
+    session_id TEXT,
+    question_type TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    save_status TEXT NOT NULL,
+    raw_retention_until TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_answer_attempts_user
+    ON answer_attempts(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_answer_attempts_assist
+    ON answer_attempts(assist_session_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS experience_atoms (
+    atom_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    atom_type TEXT NOT NULL,
+    text TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT,
+    visibility TEXT NOT NULL,
+    review_status TEXT NOT NULL,
+    sensitive INTEGER NOT NULL DEFAULT 0,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_atoms_user_status
+    ON experience_atoms(user_id, review_status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_atoms_user_type
+    ON experience_atoms(user_id, atom_type);
+
+CREATE TABLE IF NOT EXISTS story_frames (
+    story_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    review_status TEXT NOT NULL,
+    sensitive INTEGER NOT NULL DEFAULT 0,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_story_frames_user_status
+    ON story_frames(user_id, review_status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS memory_edges (
+    edge_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    edge_type TEXT NOT NULL,
+    weight REAL NOT NULL DEFAULT 1.0,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_edges_source
+    ON memory_edges(user_id, source_id, edge_type);
+CREATE INDEX IF NOT EXISTS idx_memory_edges_target
+    ON memory_edges(user_id, target_id, edge_type);
+
+CREATE TABLE IF NOT EXISTS advice_snippets (
+    advice_id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL,
+    topic_tags TEXT NOT NULL DEFAULT '[]',
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advice_source
+    ON advice_snippets(source_type);
 """
 
 
@@ -496,13 +602,13 @@ async def insert_career_entries_batch(entries: list[CareerEntry]) -> None:
     ]
     if to_embed:
         idxs, batch = zip(*to_embed)
-        embeddings = await _embed_batch(list(batch))
+        embeddings = await _embed_batch([e.raw_text for e in batch])
         for idx, emb in zip(idxs, embeddings):
             entries[idx].embedding = emb
 
     from faiss import normalize_L2
 
-    _, index, id_map = _faiss()
+    index, id_map = _faiss()
     with _faiss_lock:
         new_vecs = np.asarray([e.embedding for e in entries], dtype="float32")
         normalize_L2(new_vecs)
@@ -1236,6 +1342,808 @@ async def rebuild_faiss_index(entries: list[CareerEntry]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Application-assist memory graph
+# ---------------------------------------------------------------------------
+
+
+def _tokens(text: str) -> set[str]:
+    """Small lexical tokenizer for the sub-2s assist path.
+
+    This intentionally stays simple and dependency-free: the fast path
+    needs deterministic exact-skill matches before any embedding/model
+    work. Vector/LLM recall can add nuance, but should not be required
+    for the first nudge a user sees while filling a form.
+    """
+
+    return {
+        t
+        for t in re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]{2,}", text.lower())
+        if t
+        not in {
+            "and",
+            "the",
+            "for",
+            "with",
+            "that",
+            "this",
+            "your",
+            "you",
+            "are",
+            "was",
+            "were",
+            "from",
+            "about",
+            "role",
+            "job",
+            "team",
+        }
+    }
+
+
+def _lexical_score(query_tokens: set[str], text: str) -> float:
+    if not query_tokens:
+        return 0.0
+    hay = _tokens(text)
+    if not hay:
+        return 0.0
+    overlap = query_tokens & hay
+    return min(1.0, len(overlap) / max(3, len(query_tokens)))
+
+
+async def upsert_application_assist_session(
+    session: ApplicationAssistSession,
+) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO application_assist_sessions
+                (assist_session_id, user_id, session_id, job_id, company_name,
+                 role_title, payload, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(assist_session_id) DO UPDATE SET
+                session_id = excluded.session_id,
+                job_id = excluded.job_id,
+                company_name = excluded.company_name,
+                role_title = excluded.role_title,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (
+                session.assist_session_id,
+                session.user_id,
+                session.session_id,
+                session.job_id,
+                session.company_name,
+                session.role_title,
+                session.model_dump_json(),
+                session.created_at.isoformat(),
+                session.updated_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def get_application_assist_session(
+    assist_session_id: str,
+) -> Optional[ApplicationAssistSession]:
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload FROM application_assist_sessions WHERE assist_session_id = ?",
+            (assist_session_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return ApplicationAssistSession.model_validate_json(row[0]) if row else None
+
+
+async def upsert_answer_attempt(attempt: AnswerAttempt) -> None:
+    """Persist the full answer attempt, including raw draft/transcript.
+
+    Raw data is retained according to `raw_retention_until`. The table
+    keeps the full payload because the Memory Inbox needs source
+    provenance and users need to correct extraction errors after the
+    background memory job runs.
+    """
+
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO answer_attempts
+                (attempt_id, user_id, assist_session_id, session_id,
+                 question_type, visibility, save_status, raw_retention_until,
+                 payload, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(attempt_id) DO UPDATE SET
+                assist_session_id = excluded.assist_session_id,
+                session_id = excluded.session_id,
+                question_type = excluded.question_type,
+                visibility = excluded.visibility,
+                save_status = excluded.save_status,
+                raw_retention_until = excluded.raw_retention_until,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (
+                attempt.attempt_id,
+                attempt.user_id,
+                attempt.assist_session_id,
+                attempt.session_id,
+                attempt.question_type,
+                attempt.visibility,
+                attempt.save_status,
+                attempt.raw_retention_until.isoformat(),
+                attempt.model_dump_json(),
+                attempt.created_at.isoformat(),
+                attempt.updated_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def get_answer_attempt(attempt_id: str) -> Optional[AnswerAttempt]:
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload FROM answer_attempts WHERE attempt_id = ?",
+            (attempt_id,),
+        ) as cur:
+            row = await cur.fetchone()
+    return AnswerAttempt.model_validate_json(row[0]) if row else None
+
+
+async def list_answer_attempts_for_user(
+    user_id: str, limit: int = 50,
+) -> list[AnswerAttempt]:
+    limit = max(1, min(int(limit), 200))
+    async with await _connect() as db:
+        async with db.execute(
+            """
+            SELECT payload FROM answer_attempts
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ) as cur:
+            rows = await cur.fetchall()
+    return [AnswerAttempt.model_validate_json(r[0]) for r in rows]
+
+
+async def purge_expired_answer_attempt_raw(
+    *,
+    user_id: Optional[str] = None,
+    before: Optional[datetime] = None,
+) -> int:
+    """Remove expired raw drafts/transcripts while retaining final metadata.
+
+    `AnswerAttempt` remains useful for provenance and outcome learning after
+    raw text expires. The purge clears only the high-retention-risk fields.
+    """
+
+    cutoff = before or _utcnow()
+    where = "raw_retention_until <= ?"
+    args: list[Any] = [cutoff.isoformat()]
+    if user_id:
+        where += " AND user_id = ?"
+        args.append(user_id)
+
+    async with await _connect() as db:
+        async with db.execute(
+            f"SELECT attempt_id, payload FROM answer_attempts WHERE {where}",
+            tuple(args),
+        ) as cur:
+            rows = await cur.fetchall()
+
+        purged = 0
+        for attempt_id, payload in rows:
+            attempt = AnswerAttempt.model_validate_json(payload)
+            if not attempt.raw_draft and attempt.transcript is None:
+                continue
+            attempt.raw_draft = ""
+            attempt.transcript = None
+            attempt.updated_at = _utcnow()
+            await db.execute(
+                """
+                UPDATE answer_attempts
+                SET payload = ?, updated_at = ?
+                WHERE attempt_id = ?
+                """,
+                (attempt.model_dump_json(), attempt.updated_at.isoformat(), attempt_id),
+            )
+            purged += 1
+        await db.commit()
+    return purged
+
+
+async def upsert_experience_atom(atom: ExperienceAtom) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO experience_atoms
+                (atom_id, user_id, atom_type, text, source_type, source_id,
+                 visibility, review_status, sensitive, payload, created_at,
+                 updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(atom_id) DO UPDATE SET
+                atom_type = excluded.atom_type,
+                text = excluded.text,
+                source_type = excluded.source_type,
+                source_id = excluded.source_id,
+                visibility = excluded.visibility,
+                review_status = excluded.review_status,
+                sensitive = excluded.sensitive,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (
+                atom.atom_id,
+                atom.user_id,
+                atom.atom_type,
+                atom.text,
+                atom.source_type,
+                atom.source_id,
+                atom.visibility,
+                atom.review_status,
+                1 if atom.sensitive else 0,
+                atom.model_dump_json(),
+                atom.created_at.isoformat(),
+                atom.updated_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def upsert_story_frame(story: StoryFrame) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO story_frames
+                (story_id, user_id, title, summary, visibility, review_status,
+                 sensitive, payload, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(story_id) DO UPDATE SET
+                title = excluded.title,
+                summary = excluded.summary,
+                visibility = excluded.visibility,
+                review_status = excluded.review_status,
+                sensitive = excluded.sensitive,
+                payload = excluded.payload,
+                updated_at = excluded.updated_at
+            """,
+            (
+                story.story_id,
+                story.user_id,
+                story.title,
+                story.summary,
+                story.visibility,
+                story.review_status,
+                1 if story.sensitive else 0,
+                story.model_dump_json(),
+                story.created_at.isoformat(),
+                story.updated_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def insert_memory_edge(edge: MemoryEdge) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO memory_edges
+                (edge_id, user_id, source_id, target_id, edge_type, weight,
+                 payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(edge_id) DO UPDATE SET
+                weight = excluded.weight,
+                payload = excluded.payload
+            """,
+            (
+                edge.edge_id,
+                edge.user_id,
+                edge.source_id,
+                edge.target_id,
+                edge.edge_type,
+                edge.weight,
+                edge.model_dump_json(),
+                edge.created_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def upsert_advice_snippet(snippet: AdviceSnippet) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO advice_snippets
+                (advice_id, source_type, topic_tags, payload, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(advice_id) DO UPDATE SET
+                source_type = excluded.source_type,
+                topic_tags = excluded.topic_tags,
+                payload = excluded.payload
+            """,
+            (
+                snippet.advice_id,
+                snippet.source_type,
+                json.dumps(snippet.topic_tags),
+                snippet.model_dump_json(),
+                snippet.created_at.isoformat(),
+            ),
+        )
+        await db.commit()
+
+
+async def list_advice_snippets(
+    topic: Optional[str] = None,
+    limit: int = 5,
+) -> list[AdviceSnippet]:
+    limit = max(1, min(int(limit), 20))
+    sql = "SELECT payload FROM advice_snippets"
+    args: tuple[Any, ...] = ()
+    if topic:
+        sql += " WHERE topic_tags LIKE ?"
+        args = (f"%{topic}%",)
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    args = (*args, limit)
+    async with await _connect() as db:
+        async with db.execute(sql, args) as cur:
+            rows = await cur.fetchall()
+    return [AdviceSnippet.model_validate_json(r[0]) for r in rows]
+
+
+async def list_memory_inbox(
+    user_id: str,
+    status: MemoryReviewStatus = "pending",
+    limit: int = 100,
+) -> dict[str, list[Any]]:
+    """Return reviewable memory items with source provenance intact."""
+
+    limit = max(1, min(int(limit), 500))
+    async with await _connect() as db:
+        async with db.execute(
+            """
+            SELECT payload FROM experience_atoms
+            WHERE user_id = ? AND review_status = ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (user_id, status, limit),
+        ) as cur:
+            atom_rows = await cur.fetchall()
+        async with db.execute(
+            """
+            SELECT payload FROM story_frames
+            WHERE user_id = ? AND review_status = ?
+            ORDER BY updated_at DESC
+            LIMIT ?
+            """,
+            (user_id, status, limit),
+        ) as cur:
+            story_rows = await cur.fetchall()
+    return {
+        "experience_atoms": [ExperienceAtom.model_validate_json(r[0]) for r in atom_rows],
+        "story_frames": [StoryFrame.model_validate_json(r[0]) for r in story_rows],
+    }
+
+
+async def update_memory_review_status(
+    *,
+    user_id: str,
+    item_kind: str,
+    item_id: str,
+    review_status: MemoryReviewStatus,
+    visibility: Optional[str] = None,
+    text: Optional[str] = None,
+    title: Optional[str] = None,
+    summary: Optional[str] = None,
+    angle_tags: Optional[list[str]] = None,
+    question_types: Optional[list[str]] = None,
+) -> bool:
+    """Update Memory Inbox state/content. Returns False for not-found/not-yours."""
+
+    table = {
+        "experience_atom": "experience_atoms",
+        "story_frame": "story_frames",
+    }.get(item_kind)
+    id_col = {
+        "experience_atom": "atom_id",
+        "story_frame": "story_id",
+    }.get(item_kind)
+    if table is None or id_col is None:
+        return False
+
+    async with await _connect() as db:
+        async with db.execute(
+            f"SELECT payload FROM {table} WHERE {id_col} = ? AND user_id = ?",
+            (item_id, user_id),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return False
+        model = (
+            ExperienceAtom.model_validate_json(row[0])
+            if item_kind == "experience_atom"
+            else StoryFrame.model_validate_json(row[0])
+        )
+        model.review_status = review_status
+        if visibility in {"normal", "private"}:
+            model.visibility = visibility  # type: ignore[assignment]
+        if isinstance(model, ExperienceAtom):
+            if text is not None:
+                model.text = text
+        else:
+            if title is not None:
+                model.title = title
+            if summary is not None:
+                model.summary = summary
+            if angle_tags is not None:
+                model.angle_tags = angle_tags
+            if question_types is not None:
+                model.question_types = question_types  # type: ignore[assignment]
+        model.updated_at = _utcnow()
+        await db.execute(
+            f"""
+            UPDATE {table}
+            SET review_status = ?, visibility = ?, payload = ?, updated_at = ?
+            WHERE {id_col} = ? AND user_id = ?
+            """,
+            (
+                model.review_status,
+                model.visibility,
+                model.model_dump_json(),
+                model.updated_at.isoformat(),
+                item_id,
+                user_id,
+            ),
+        )
+        await db.commit()
+    return True
+
+
+async def hard_delete_memory_item(
+    *,
+    user_id: str,
+    item_kind: str,
+    item_id: str,
+) -> bool:
+    """Physically delete a memory item and its direct graph edges."""
+
+    table = {
+        "experience_atom": "experience_atoms",
+        "story_frame": "story_frames",
+    }.get(item_kind)
+    id_col = {
+        "experience_atom": "atom_id",
+        "story_frame": "story_id",
+    }.get(item_kind)
+    if table is None or id_col is None:
+        return False
+
+    async with await _connect() as db:
+        async with db.execute(
+            f"SELECT 1 FROM {table} WHERE {id_col} = ? AND user_id = ?",
+            (item_id, user_id),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return False
+        await db.execute(
+            """
+            DELETE FROM memory_edges
+            WHERE user_id = ? AND (source_id = ? OR target_id = ?)
+            """,
+            (user_id, item_id, item_id),
+        )
+        await db.execute(
+            f"DELETE FROM {table} WHERE {id_col} = ? AND user_id = ?",
+            (item_id, user_id),
+        )
+        await db.commit()
+    return True
+
+
+async def export_user_memory(
+    *,
+    user_id: str,
+    include_raw: bool = True,
+) -> dict[str, list[Any]]:
+    """Export the user's assist memory graph and answer-attempt provenance."""
+
+    async with await _connect() as db:
+        async with db.execute(
+            "SELECT payload FROM answer_attempts WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        ) as cur:
+            attempt_rows = await cur.fetchall()
+        async with db.execute(
+            "SELECT payload FROM experience_atoms WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        ) as cur:
+            atom_rows = await cur.fetchall()
+        async with db.execute(
+            "SELECT payload FROM story_frames WHERE user_id = ? ORDER BY updated_at DESC",
+            (user_id,),
+        ) as cur:
+            story_rows = await cur.fetchall()
+
+    attempts = [AnswerAttempt.model_validate_json(r[0]) for r in attempt_rows]
+    if not include_raw:
+        for attempt in attempts:
+            attempt.raw_draft = ""
+            attempt.transcript = None
+
+    return {
+        "answer_attempts": attempts,
+        "experience_atoms": [ExperienceAtom.model_validate_json(r[0]) for r in atom_rows],
+        "story_frames": [StoryFrame.model_validate_json(r[0]) for r in story_rows],
+    }
+
+
+async def merge_memory_items(
+    *,
+    user_id: str,
+    item_kind: str,
+    target_item_id: str,
+    source_item_ids: list[str],
+    merged_text: Optional[str] = None,
+    title: Optional[str] = None,
+    visibility: Optional[str] = None,
+) -> int:
+    """Merge same-kind inbox items into a target and tombstone the sources."""
+
+    table = {
+        "experience_atom": "experience_atoms",
+        "story_frame": "story_frames",
+    }.get(item_kind)
+    id_col = {
+        "experience_atom": "atom_id",
+        "story_frame": "story_id",
+    }.get(item_kind)
+    if table is None or id_col is None:
+        return 0
+
+    source_ids = [item_id for item_id in source_item_ids if item_id != target_item_id]
+    if not source_ids:
+        return 0
+
+    async with await _connect() as db:
+        async with db.execute(
+            f"SELECT payload FROM {table} WHERE {id_col} = ? AND user_id = ?",
+            (target_item_id, user_id),
+        ) as cur:
+            target_row = await cur.fetchone()
+        if not target_row:
+            return 0
+
+        source_rows: list[tuple[str, str]] = []
+        for source_id in source_ids:
+            async with db.execute(
+                f"SELECT {id_col}, payload FROM {table} WHERE {id_col} = ? AND user_id = ?",
+                (source_id, user_id),
+            ) as cur:
+                row = await cur.fetchone()
+            if row:
+                source_rows.append(row)
+        if not source_rows:
+            return 0
+
+        if item_kind == "experience_atom":
+            target = ExperienceAtom.model_validate_json(target_row[0])
+            sources = [ExperienceAtom.model_validate_json(row[1]) for row in source_rows]
+            target.text = merged_text or "\n".join(
+                dict.fromkeys([target.text, *(source.text for source in sources)])
+            )
+            target.confidence = max([target.confidence, *(source.confidence for source in sources)])
+            target.sensitive = target.sensitive or any(source.sensitive for source in sources)
+            if visibility in {"normal", "private"}:
+                target.visibility = visibility  # type: ignore[assignment]
+            elif target.sensitive or any(source.visibility == "private" for source in sources):
+                target.visibility = "private"
+        else:
+            target = StoryFrame.model_validate_json(target_row[0])
+            sources = [StoryFrame.model_validate_json(row[1]) for row in source_rows]
+            if title is not None:
+                target.title = title
+            target.summary = merged_text or "\n\n".join(
+                dict.fromkeys([target.summary, *(source.summary for source in sources)])
+            )
+            target.angle_tags = list(dict.fromkeys([
+                *target.angle_tags,
+                *(tag for source in sources for tag in source.angle_tags),
+            ]))
+            target.question_types = list(dict.fromkeys([
+                *target.question_types,
+                *(q for source in sources for q in source.question_types),
+            ]))
+            target.atom_ids = list(dict.fromkeys([
+                *target.atom_ids,
+                *(atom_id for source in sources for atom_id in source.atom_ids),
+            ]))
+            target.sensitive = target.sensitive or any(source.sensitive for source in sources)
+            if visibility in {"normal", "private"}:
+                target.visibility = visibility  # type: ignore[assignment]
+            elif target.sensitive or any(source.visibility == "private" for source in sources):
+                target.visibility = "private"
+
+        target.review_status = "pending"
+        target.updated_at = _utcnow()
+        await db.execute(
+            f"""
+            UPDATE {table}
+            SET payload = ?, visibility = ?, review_status = ?, updated_at = ?
+            WHERE {id_col} = ? AND user_id = ?
+            """,
+            (
+                target.model_dump_json(),
+                target.visibility,
+                target.review_status,
+                target.updated_at.isoformat(),
+                target_item_id,
+                user_id,
+            ),
+        )
+
+        for source_id, payload in source_rows:
+            source = (
+                ExperienceAtom.model_validate_json(payload)
+                if item_kind == "experience_atom"
+                else StoryFrame.model_validate_json(payload)
+            )
+            source.review_status = "deleted"
+            source.updated_at = _utcnow()
+            await db.execute(
+                f"""
+                UPDATE {table}
+                SET payload = ?, review_status = ?, updated_at = ?
+                WHERE {id_col} = ? AND user_id = ?
+                """,
+                (
+                    source.model_dump_json(),
+                    source.review_status,
+                    source.updated_at.isoformat(),
+                    source_id,
+                    user_id,
+                ),
+            )
+        await db.commit()
+    return len(source_rows)
+
+
+async def retrieve_application_memory_suggestions(
+    *,
+    user_id: str,
+    query_text: str,
+    question_type: Optional[QuestionType] = None,
+    k: int = 5,
+    include_private: bool = False,
+) -> list[MemorySuggestion]:
+    """Hybrid memory recall for the live assist path.
+
+    The implementation deliberately prioritises deterministic lexical
+    matching over slower model calls. It also gates private and pending
+    memories by default: only approved, normal-visibility atoms/stories
+    can influence future suggestions unless the caller explicitly opts
+    into private recall.
+    """
+
+    query_tokens = _tokens(query_text)
+    suggestions: list[MemorySuggestion] = []
+
+    # Existing career entries are semantically searchable through the
+    # current FAISS index. Treat them as already user-owned memories.
+    try:
+        career_entries = await retrieve_relevant_entries(
+            user_id=user_id,
+            query_text=query_text,
+            k=max(k, 8),
+            kind_weights=STAR_BOOST_KINDS,
+        )
+    except Exception as exc:
+        logger.info("career-entry semantic recall skipped: %s", exc)
+        career_entries = []
+    for entry in career_entries:
+        lexical = _lexical_score(query_tokens, entry.raw_text)
+        score = 0.55 + lexical
+        if entry.kind in STAR_BOOST_KINDS:
+            score += 0.15
+        suggestions.append(
+            MemorySuggestion(
+                memory_id=entry.entry_id,
+                memory_kind="career_entry",
+                title=entry.kind.replace("_", " ").title(),
+                text=entry.raw_text[:600],
+                score=round(score, 3),
+                rationale="Relevant career-store entry from semantic recall.",
+                warnings=[],
+            )
+        )
+
+    visibility_clause = "" if include_private else " AND visibility = 'normal'"
+    async with await _connect() as db:
+        async with db.execute(
+            f"""
+            SELECT payload FROM experience_atoms
+            WHERE user_id = ?
+              AND review_status = 'approved'
+              {visibility_clause}
+            ORDER BY updated_at DESC
+            LIMIT 200
+            """,
+            (user_id,),
+        ) as cur:
+            atom_rows = await cur.fetchall()
+        async with db.execute(
+            f"""
+            SELECT payload FROM story_frames
+            WHERE user_id = ?
+              AND review_status = 'approved'
+              {visibility_clause}
+            ORDER BY updated_at DESC
+            LIMIT 200
+            """,
+            (user_id,),
+        ) as cur:
+            story_rows = await cur.fetchall()
+
+    for row in atom_rows:
+        atom = ExperienceAtom.model_validate_json(row[0])
+        lexical = _lexical_score(query_tokens, atom.text)
+        if lexical <= 0:
+            continue
+        warnings = ["Private memory"] if atom.visibility == "private" else []
+        suggestions.append(
+            MemorySuggestion(
+                memory_id=atom.atom_id,
+                memory_kind="experience_atom",
+                title=atom.atom_type.replace("_", " ").title(),
+                text=atom.text,
+                score=round(lexical + atom.confidence * 0.2, 3),
+                rationale="Exact terms in this memory match the question/JD.",
+                warnings=warnings,
+            )
+        )
+
+    for row in story_rows:
+        story = StoryFrame.model_validate_json(row[0])
+        lexical = _lexical_score(query_tokens, f"{story.title} {story.summary} {' '.join(story.angle_tags)}")
+        if question_type and question_type in story.question_types:
+            lexical += 0.25
+        lexical += max(-0.3, min(0.3, story.outcome_score * 0.25))
+        warnings = []
+        if story.usage_count >= 3:
+            lexical -= 0.15
+            warnings.append("Used several times already")
+        if story.visibility == "private":
+            warnings.append("Private memory")
+        if lexical <= 0:
+            continue
+        suggestions.append(
+            MemorySuggestion(
+                memory_id=story.story_id,
+                memory_kind="story_frame",
+                title=story.title,
+                text=story.summary,
+                score=round(lexical, 3),
+                rationale="Story angle matches the question type or exact role terms.",
+                warnings=warnings,
+                outcome_signal=(
+                    "positive" if story.outcome_score > 0.2 else
+                    "weak" if story.outcome_score < -0.2 else None
+                ),
+            )
+        )
+
+    # Keep one item per memory id, highest score wins.
+    best: dict[str, MemorySuggestion] = {}
+    for suggestion in suggestions:
+        old = best.get(suggestion.memory_id)
+        if old is None or suggestion.score > old.score:
+            best[suggestion.memory_id] = suggestion
+    ranked = sorted(best.values(), key=lambda s: s.score, reverse=True)
+    return ranked[: max(1, min(int(k), 20))]
+
+
+# ---------------------------------------------------------------------------
 # Storage class — thin wrapper for dependency injection
 # ---------------------------------------------------------------------------
 
@@ -1312,6 +2220,148 @@ class Storage:
 
     async def rebuild_index(self, entries: list[CareerEntry]) -> None:
         await rebuild_faiss_index(entries)
+
+    # ── Application-assist memory graph ───────────────────────────────────
+
+    async def save_application_assist_session(
+        self, session: ApplicationAssistSession,
+    ) -> None:
+        await upsert_application_assist_session(session)
+
+    async def get_application_assist_session(
+        self, assist_session_id: str,
+    ) -> Optional[ApplicationAssistSession]:
+        return await get_application_assist_session(assist_session_id)
+
+    async def save_answer_attempt(self, attempt: AnswerAttempt) -> None:
+        await upsert_answer_attempt(attempt)
+
+    async def get_answer_attempt(self, attempt_id: str) -> Optional[AnswerAttempt]:
+        return await get_answer_attempt(attempt_id)
+
+    async def list_answer_attempts_for_user(
+        self, user_id: str, limit: int = 50,
+    ) -> list[AnswerAttempt]:
+        return await list_answer_attempts_for_user(user_id, limit=limit)
+
+    async def purge_expired_answer_attempt_raw(
+        self,
+        *,
+        user_id: Optional[str] = None,
+        before: Optional[datetime] = None,
+    ) -> int:
+        return await purge_expired_answer_attempt_raw(user_id=user_id, before=before)
+
+    async def save_experience_atom(self, atom: ExperienceAtom) -> None:
+        await upsert_experience_atom(atom)
+
+    async def save_story_frame(self, story: StoryFrame) -> None:
+        await upsert_story_frame(story)
+
+    async def save_memory_edge(self, edge: MemoryEdge) -> None:
+        await insert_memory_edge(edge)
+
+    async def save_advice_snippet(self, snippet: AdviceSnippet) -> None:
+        await upsert_advice_snippet(snippet)
+
+    async def list_advice_snippets(
+        self, topic: Optional[str] = None, limit: int = 5,
+    ) -> list[AdviceSnippet]:
+        return await list_advice_snippets(topic=topic, limit=limit)
+
+    async def list_memory_inbox(
+        self,
+        user_id: str,
+        status: MemoryReviewStatus = "pending",
+        limit: int = 100,
+    ) -> dict[str, list[Any]]:
+        return await list_memory_inbox(user_id=user_id, status=status, limit=limit)
+
+    async def update_memory_review_status(
+        self,
+        *,
+        user_id: str,
+        item_kind: str,
+        item_id: str,
+        review_status: MemoryReviewStatus,
+        visibility: Optional[str] = None,
+        text: Optional[str] = None,
+        title: Optional[str] = None,
+        summary: Optional[str] = None,
+        angle_tags: Optional[list[str]] = None,
+        question_types: Optional[list[str]] = None,
+    ) -> bool:
+        return await update_memory_review_status(
+            user_id=user_id,
+            item_kind=item_kind,
+            item_id=item_id,
+            review_status=review_status,
+            visibility=visibility,
+            text=text,
+            title=title,
+            summary=summary,
+            angle_tags=angle_tags,
+            question_types=question_types,
+        )
+
+    async def hard_delete_memory_item(
+        self,
+        *,
+        user_id: str,
+        item_kind: str,
+        item_id: str,
+    ) -> bool:
+        return await hard_delete_memory_item(
+            user_id=user_id,
+            item_kind=item_kind,
+            item_id=item_id,
+        )
+
+    async def export_user_memory(
+        self,
+        *,
+        user_id: str,
+        include_raw: bool = True,
+    ) -> dict[str, list[Any]]:
+        return await export_user_memory(user_id=user_id, include_raw=include_raw)
+
+    async def merge_memory_items(
+        self,
+        *,
+        user_id: str,
+        item_kind: str,
+        target_item_id: str,
+        source_item_ids: list[str],
+        merged_text: Optional[str] = None,
+        title: Optional[str] = None,
+        visibility: Optional[str] = None,
+    ) -> int:
+        return await merge_memory_items(
+            user_id=user_id,
+            item_kind=item_kind,
+            target_item_id=target_item_id,
+            source_item_ids=source_item_ids,
+            merged_text=merged_text,
+            title=title,
+            visibility=visibility,
+        )
+
+    async def retrieve_application_memory_suggestions(
+        self,
+        *,
+        user_id: str,
+        query_text: str,
+        question_type: Optional[QuestionType] = None,
+        k: int = 5,
+        include_private: bool = False,
+    ) -> list[MemorySuggestion]:
+        return await retrieve_application_memory_suggestions(
+            user_id=user_id,
+            query_text=query_text,
+            question_type=question_type,
+            k=k,
+            include_private=include_private,
+        )
 
     # ── Writing style profiles ─────────────────────────────────────────────
 

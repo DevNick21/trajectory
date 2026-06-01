@@ -12,6 +12,7 @@ On non-Windows platforms it's a no-op pass-through to uvicorn.
 
 Usage:
     python scripts/run_api.py             # defaults: 127.0.0.1:8000, reload on
+    API_RELOAD=0 python scripts/run_api.py # background-friendly, no reloader
 """
 
 from __future__ import annotations
@@ -60,11 +61,12 @@ def main() -> None:
     _patch_uvicorn_asyncio_setup()
 
     port = int(os.environ.get("API_PORT", "8000"))
+    reload = os.environ.get("API_RELOAD", "1").lower() not in {"0", "false", "no"}
     uvicorn.run(
         "askpicky.api.app:app",
         host="127.0.0.1",
         port=port,
-        reload=True,
+        reload=reload,
         log_level="info",
         # CRITICAL on Windows: uvicorn's default `loop="auto"` calls
         # asyncio_setup() which OVERWRITES our ProactorEventLoopPolicy

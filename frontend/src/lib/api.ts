@@ -5,9 +5,16 @@
 import type {
   ApplicationListResponse,
   ApplicationStatus,
+  ApproveAssistResponse,
+  AssistStartResponse,
+  CritiqueDraftResponse,
   BenchmarkReport,
   CareerEntriesResponse,
   CareerEntryKind,
+  MemoryExportResponse,
+  MemoryInboxResponse,
+  MemoryReviewStatus,
+  MemoryVisibility,
   NotificationListResponse,
   OfferAnalysisResponse,
   OnboardingAnswers,
@@ -15,10 +22,12 @@ import type {
   OutcomeKind,
   PackGeneratorName,
   PackResult,
+  PolishAssistResponse,
   QueueItem,
   QueueListResponse,
   SessionDetailResponse,
   SessionListResponse,
+  SuggestMemoryResponse,
   UserProfile,
 } from "./types";
 
@@ -101,6 +110,135 @@ export const listCareerEntries = (kinds?: CareerEntryKind[]) => {
   const qs = kinds && kinds.length > 0 ? `?kinds=${kinds.join(",")}` : "";
   return request<CareerEntriesResponse>(`/api/career-entries${qs}`);
 };
+
+// ---------------------------------------------------------------------------
+// Memory Inbox (application-assist private evidence graph)
+// ---------------------------------------------------------------------------
+
+export const listMemoryInbox = (status: MemoryReviewStatus = "pending") =>
+  request<MemoryInboxResponse>(
+    `/api/memory/inbox?status_filter=${encodeURIComponent(status)}`,
+  );
+
+export const updateMemoryInboxItem = (
+  itemKind: "experience_atom" | "story_frame",
+  itemId: string,
+  payload: {
+    review_status: MemoryReviewStatus;
+    visibility?: MemoryVisibility;
+    text?: string;
+    title?: string;
+    summary?: string;
+    angle_tags?: string[];
+    question_types?: string[];
+  },
+) =>
+  request<{ ok: boolean }>(
+    `/api/memory/inbox/${itemKind}/${encodeURIComponent(itemId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+
+export const hardDeleteMemoryInboxItem = (
+  itemKind: "experience_atom" | "story_frame",
+  itemId: string,
+) =>
+  request<{ ok: boolean }>(
+    `/api/memory/inbox/${itemKind}/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );
+
+export const mergeMemoryInboxItems = (payload: {
+  item_kind: "experience_atom" | "story_frame";
+  target_item_id: string;
+  source_item_ids: string[];
+  merged_text?: string;
+  title?: string;
+  visibility?: MemoryVisibility;
+}) =>
+  request<{ ok: boolean; merged_count: number }>("/api/memory/inbox/merge", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const exportMemory = (includeRaw = true) =>
+  request<MemoryExportResponse>(
+    `/api/memory/export?include_raw=${includeRaw ? "true" : "false"}`,
+  );
+
+export const purgeExpiredMemoryRaw = () =>
+  request<{ purged_attempts: number }>("/api/memory/privacy/purge-expired", {
+    method: "POST",
+  });
+
+// ---------------------------------------------------------------------------
+// Application assist (question -> memory -> nudge -> polish)
+// ---------------------------------------------------------------------------
+
+export const startAssistSession = (payload: {
+  session_id?: string | null;
+  job_id?: string | null;
+  job_url?: string | null;
+  company_name?: string | null;
+  role_title?: string | null;
+  jd_text?: string | null;
+  private_mode?: boolean;
+}) =>
+  request<AssistStartResponse>("/api/assist/start", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export interface AssistDraftPayload {
+  question_text: string;
+  jd_text?: string;
+  raw_draft?: string;
+  transcript?: string | null;
+  word_limit?: number | null;
+  question_type?: string | null;
+  assist_session_id?: string | null;
+  include_private?: boolean;
+  selected_memory_ids?: string[];
+}
+
+export const suggestAssistMemory = (payload: {
+  assist_session_id?: string | null;
+  question_text: string;
+  jd_text?: string;
+  question_type?: string | null;
+  k?: number;
+  include_private?: boolean;
+}) =>
+  request<SuggestMemoryResponse>("/api/assist/suggest-memory", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const critiqueAssistDraft = (payload: AssistDraftPayload) =>
+  request<CritiqueDraftResponse>("/api/assist/critique-draft", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const polishAssistAnswer = (
+  payload: AssistDraftPayload & { attempt_id?: string | null },
+) =>
+  request<PolishAssistResponse>("/api/assist/polish", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const approveAssistAnswer = (payload: {
+  attempt_id: string;
+  final_answer?: string;
+  selected_memory_ids?: string[];
+}) =>
+  request<ApproveAssistResponse>("/api/assist/approve", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 
 // ---------------------------------------------------------------------------
 // Onboarding (Wave 9)

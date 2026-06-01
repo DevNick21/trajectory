@@ -52,6 +52,7 @@ class _Entry:
 _REGISTRY: list[_Entry] = [
     # ── infra (no LLM) ─────────────────────────────────────────────────
     _Entry("storage_crud",       "scripts.smoke_tests.storage_crud",       cheap=True,  category="infra"),
+    _Entry("application_memory", "scripts.smoke_tests.application_memory", cheap=True,  category="infra"),
     _Entry("faiss_retrieval",    "scripts.smoke_tests.faiss_retrieval",    cheap=True,  category="infra"),
     _Entry("ratelimit",          "scripts.smoke_tests.ratelimit",          cheap=True,  category="infra"),
     _Entry("data_freshness",     "scripts.smoke_tests.data_freshness",     cheap=True,  category="infra"),
@@ -76,6 +77,8 @@ _REGISTRY: list[_Entry] = [
     _Entry("api_sessions",       "scripts.smoke_tests.api_sessions",       cheap=True,  category="api"),
     _Entry("api_queue",          "scripts.smoke_tests.api_queue",          cheap=True,  category="api"),
     _Entry("api_onboarding",     "scripts.smoke_tests.api_onboarding",     cheap=True,  category="api"),
+    _Entry("api_assist",         "scripts.smoke_tests.api_assist",         cheap=True,  category="api"),
+    _Entry("api_contract",       "scripts.smoke_tests.api_contract",       cheap=True,  category="api"),
     _Entry("api_pack",           "scripts.smoke_tests.api_pack",           cheap=True,  category="api"),
     _Entry("api_chat",           "scripts.smoke_tests.api_chat",           cheap=True,  category="api"),
     _Entry("cv_parser",          "scripts.smoke_tests.cv_parser",          cheap=False, category="agent-util"),
@@ -103,6 +106,8 @@ _REGISTRY: list[_Entry] = [
     _Entry("intent_router",      "scripts.smoke_tests.intent_router",      cheap=False, category="agent-util"),
     # question_designer + likely_questions merged into interview_questions (2026-05-22).
     _Entry("star_polisher",      "scripts.smoke_tests.star_polisher",      cheap=False, category="agent-util"),
+    _Entry("application_answer_shaper", "scripts.smoke_tests.application_answer_shaper", cheap=False, category="agent-util"),
+    _Entry("memory_extractor",   "scripts.smoke_tests.memory_extractor",   cheap=False, category="agent-util"),
     _Entry("self_audit",         "scripts.smoke_tests.self_audit",         cheap=False, category="agent-util"),
     _Entry("prompt_auditor",     "scripts.smoke_tests.prompt_auditor",     cheap=False, category="agent-util"),
 

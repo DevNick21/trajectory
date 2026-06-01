@@ -262,6 +262,208 @@ export interface CareerEntriesResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Application-assist memory graph
+// ---------------------------------------------------------------------------
+
+export type QuestionType =
+  | "technical"
+  | "competency"
+  | "motivation"
+  | "screening"
+  | "values"
+  | "cover_letter"
+  | "visa"
+  | "salary"
+  | "other";
+
+export type MemoryReviewStatus = "pending" | "approved" | "hidden" | "deleted";
+export type MemoryVisibility = "normal" | "private";
+
+export interface ExperienceAtom {
+  atom_id: string;
+  user_id: string;
+  atom_type:
+    | "skill"
+    | "metric"
+    | "responsibility"
+    | "project"
+    | "result"
+    | "conflict"
+    | "preference"
+    | "credential"
+    | "constraint"
+    | "other";
+  text: string;
+  source_type:
+    | "cv"
+    | "transcript"
+    | "answer"
+    | "uploaded_file"
+    | "manual_edit"
+    | "onboarding"
+    | "generated_answer";
+  source_id?: string | null;
+  source_excerpt?: string | null;
+  confidence: number;
+  sensitive: boolean;
+  visibility: MemoryVisibility;
+  review_status: MemoryReviewStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoryFrame {
+  story_id: string;
+  user_id: string;
+  title: string;
+  summary: string;
+  angle_tags: string[];
+  question_types: QuestionType[];
+  atom_ids: string[];
+  outcome_score: number;
+  usage_count: number;
+  sensitive: boolean;
+  visibility: MemoryVisibility;
+  review_status: MemoryReviewStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemoryInboxResponse {
+  experience_atoms: ExperienceAtom[];
+  story_frames: StoryFrame[];
+}
+
+export interface QuestionPattern {
+  question_type: QuestionType;
+  what_testing: string;
+  ideal_evidence: string[];
+  structure_hint: string;
+  common_failures: string[];
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export interface MemorySuggestion {
+  memory_id: string;
+  memory_kind: "career_entry" | "experience_atom" | "story_frame";
+  title: string;
+  text: string;
+  score: number;
+  rationale: string;
+  warnings: string[];
+  outcome_signal?: "positive" | "weak" | null;
+}
+
+export interface ApplicationAssistSession {
+  assist_session_id: string;
+  user_id: string;
+  session_id?: string | null;
+  job_id?: string | null;
+  job_url?: string | null;
+  company_name?: string | null;
+  role_title?: string | null;
+  jd_text?: string | null;
+  private_mode: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssistStartResponse {
+  assist_session: ApplicationAssistSession;
+}
+
+export interface AdviceSnippet {
+  advice_id: string;
+  title: string;
+  body: string;
+  source_url: string;
+  source_type: "official" | "university" | "employer" | "curated" | "other";
+  topic_tags: string[];
+  licence_status: string;
+  citation_text: string;
+  created_at: string;
+}
+
+export interface AnswerRubricScore {
+  dimension:
+    | "directness"
+    | "evidence"
+    | "specificity"
+    | "result"
+    | "role_fit"
+    | "word_limit"
+    | "voice";
+  score: number;
+  note: string;
+}
+
+export interface AnswerCritique {
+  question_type: QuestionType;
+  what_testing: string;
+  scores: AnswerRubricScore[];
+  targeted_nudge?: string | null;
+  missing_evidence: string[];
+  word_count: number;
+  word_limit_status: "under" | "near" | "over" | "unknown";
+  suggested_angles: MemorySuggestion[];
+  advice_snippets: AdviceSnippet[];
+}
+
+export interface SuggestMemoryResponse {
+  pattern: QuestionPattern;
+  suggestions: MemorySuggestion[];
+  advice_snippets: AdviceSnippet[];
+}
+
+export interface CritiqueDraftResponse {
+  attempt_id: string;
+  critique: AnswerCritique;
+  save_indicator: "Saved privately" | "Pending review" | "Not saved";
+}
+
+export interface ApplicationAnswerOutput {
+  final_answer: string;
+  word_count: number;
+  question_type: QuestionType;
+  structure_used: string;
+  citations: Citation[];
+  memory_ids_used: string[];
+  missing_evidence_flags: string[];
+  save_indicator: "Saved privately" | "Pending review" | "Not saved";
+}
+
+export interface PolishAssistResponse {
+  attempt_id: string;
+  output: ApplicationAnswerOutput;
+}
+
+export interface ApproveAssistResponse {
+  attempt_id: string;
+  memory_items_created: number;
+  inbox_status: "pending_review";
+  save_indicator: "Saved privately" | "Pending review" | "Not saved";
+}
+
+export interface MemoryExportResponse {
+  answer_attempts: Array<{
+    attempt_id: string;
+    user_id: string;
+    question_text: string;
+    question_type: QuestionType;
+    raw_draft: string;
+    transcript?: string | null;
+    final_answer?: string | null;
+    visibility: MemoryVisibility;
+    save_status: "auto_saved" | "approved" | "not_saved";
+    raw_retention_until: string;
+    created_at: string;
+    updated_at: string;
+  }>;
+  experience_atoms: ExperienceAtom[];
+  story_frames: StoryFrame[];
+}
+
+// ---------------------------------------------------------------------------
 // CV pack output (PackResult.output when generator === "cv")
 // Mirrors trajectory.schemas.CVOutput / CVRole / CVBullet.
 // ---------------------------------------------------------------------------

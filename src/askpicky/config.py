@@ -63,11 +63,13 @@ class Settings(BaseSettings):
         "cv_parser": "fast",
         "draft_reply": "fast",
         "content_shield_tier2": "fast",
+        "memory_extractor": "fast",
         # normal tier — quality-sensitive generation
         "cover_letter": "normal",
         "cv_tailor": "normal",
         "cv_tailor_agentic": "normal",
         "salary_strategist": "normal",
+        "application_answer_shaper": "normal",
         # strong tier — high-stakes judgment
         "verdict": "strong",
         "self_audit": "strong",
@@ -121,6 +123,11 @@ class Settings(BaseSettings):
 
     # LangGraph orchestrator (opt-in)
     enable_langgraph_orchestrator: bool = False
+    # Application-assist background memory extraction. The deterministic
+    # extractor runs immediately; this opt-in flag controls whether the
+    # richer LLM extractor runs after approval so hosted deployments can
+    # budget it explicitly.
+    enable_memory_extractor_llm: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

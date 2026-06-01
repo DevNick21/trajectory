@@ -23,11 +23,6 @@ from .base import BackendError, LLMCallResult, LLMUsage
 
 logger = logging.getLogger(__name__)
 
-# Allowed reasoning-effort values per OpenAI spec. DeepSeek translates
-# `effort` into its own reasoning budget internally.
-_VALID_REASONING_EFFORTS = {"low", "medium", "high"}
-
-
 class OpenAICompatBackend:
     """Generic backend for any OpenAI-compatible chat completions endpoint."""
 
@@ -72,6 +67,8 @@ class OpenAICompatBackend:
         output_schema: type[BaseModel],
         model: str,
         effort: str = "xhigh",
+        max_tokens: int = 4_096,
+        provider: str = "deepseek",
     ) -> LLMCallResult:
         """Send a chat completions request and return parsed JSON + usage."""
 
@@ -84,7 +81,7 @@ class OpenAICompatBackend:
         body: dict[str, Any] = {
             "model": model,
             "messages": openai_messages,
-            "max_tokens": 4_096,
+            "max_tokens": max_tokens,
         }
 
         if self._supports_json_schema:
@@ -107,13 +104,26 @@ class OpenAICompatBackend:
                 f"```json\n{schema_text}\n```"
             )
 
-        # DeepSeek: translate Anthropic-style `effort` to reasoning_effort.
-        # xhigh→high, max→high per DeepSeek's documented mapping.
-        if effort in _VALID_REASONING_EFFORTS:
-            body["reasoning_effort"] = effort
-        elif effort == "xhigh" or effort == "max":
-            body["reasoning_effort"] = "high"
-        # "low" and "medium" pass through unchanged.
+        # Map Anthropic-style `effort` to provider-specific reasoning_effort.
+        #
+        # DeepSeek: valid values are "high", "max".
+        #   low/medium → high, high → high, xhigh/max → max.
+        #
+        # OpenAI: valid values are "low", "medium", "high", "xhigh".
+        #   All pass through except "max" → "xhigh".
+        if provider == "openai":
+            if effort == "max":
+                body["reasoning_effort"] = "xhigh"
+            elif effort in {"low", "medium", "high", "xhigh"}:
+                body["reasoning_effort"] = effort
+            else:
+                body["reasoning_effort"] = "medium"
+        else:
+            # deepseek (default)
+            if effort in {"xhigh", "max"}:
+                body["reasoning_effort"] = "max"
+            else:
+                body["reasoning_effort"] = "high"
 
         try:
             resp = await self.client.post(
@@ -160,6 +170,7 @@ class OpenAICompatBackend:
         data = resp.json()
 
         choice = data.get("choices", [{}])[0]
+        finish_reason = choice.get("finish_reason", "stop")
         message = choice.get("message", {})
         raw_text = message.get("content") or "{}"
 
@@ -167,6 +178,14 @@ class OpenAICompatBackend:
         if not raw_text and message.get("refusal"):
             raise BackendError(
                 f"Model refused: {message['refusal'][:300]}"
+            )
+
+        if finish_reason == "length":
+            raise BackendError(
+                f"Model output truncated — max_tokens ({max_tokens}) "
+                f"was too low for this response. "
+                f"First 300 chars: {raw_text[:300]}",
+                retriable=True,
             )
 
         try:

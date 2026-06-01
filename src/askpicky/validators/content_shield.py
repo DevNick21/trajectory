@@ -74,6 +74,8 @@ SourceType = Literal[
     "user_message",
     "recruiter_email",
     "writing_sample",
+    "application_question",
+    "application_answer",
 ]
 
 
@@ -178,6 +180,8 @@ HIGH_STAKES_AGENTS: frozenset[str] = frozenset(
         "cover_letter",
         "likely_questions",
         "draft_reply",
+        "application_answer_shaper",
+        "memory_extractor",
     }
 )
 

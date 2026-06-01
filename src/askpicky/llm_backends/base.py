@@ -37,6 +37,7 @@ class Backend(Protocol):
         output_schema: type[BaseModel],
         model: str,
         effort: str = "xhigh",
+        max_tokens: int = 4_096,
     ) -> LLMCallResult:
         ...
 

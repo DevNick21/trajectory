@@ -36,6 +36,13 @@ from askpicky.sub_agents import prompt_auditor  # noqa: E402
 
 logger = logging.getLogger("audit_prompt")
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # pragma: no cover
+        pass
+
 # The 16 runtime agents that should be audited. Each row declares:
 #   module_name         — file under src/askpicky/sub_agents/
 #   system_prompt_attr  — attribute name holding the system prompt string
@@ -207,6 +214,34 @@ _AGENT_REGISTRY: dict[str, dict] = {
             "relevant_entries: TRUSTED",
         ],
     },
+    "application_answer_shaper": {
+        "module": "askpicky.sub_agents.application_answer_shaper",
+        "system_prompt_attr": "SYSTEM_PROMPT",
+        "output_schema_symbol": "ApplicationAnswerOutput",
+        "input_sources": [
+            "question_text: UNTRUSTED (pasted from application form)",
+            "raw_draft: UNTRUSTED (user draft / voice transcript)",
+            "transcript: UNTRUSTED (speech-to-text output)",
+            "question_pattern: TRUSTED (deterministic classifier output)",
+            "memory_suggestions: TRUSTED (user-owned approved memory)",
+            "advice_snippets: TRUSTED (curated cited advice corpus)",
+            "writing_style_profile: TRUSTED",
+            "job_context: UNTRUSTED (may derive from pasted JD/scrape)",
+        ],
+    },
+    "memory_extractor": {
+        "module": "askpicky.sub_agents.memory_extractor",
+        "system_prompt_attr": "SYSTEM_PROMPT",
+        "output_schema_symbol": "MemoryExtractionOutput",
+        "input_sources": [
+            "question_text: UNTRUSTED (pasted from application form)",
+            "raw_draft: UNTRUSTED (user draft / voice transcript)",
+            "transcript: UNTRUSTED (speech-to-text output)",
+            "final_answer: TRUSTED (application_answer_shaper/user approved)",
+            "selected_memory_ids: TRUSTED",
+            "role/company context: UNTRUSTED (may derive from pasted JD/scrape)",
+        ],
+    },
     "prompt_auditor": {
         "module": "askpicky.sub_agents.prompt_auditor",
         "system_prompt_attr": "SYSTEM_PROMPT",
@@ -301,8 +336,8 @@ def _print_summary(report) -> None:
     highs = [w for w in report.concrete_weaknesses if w.severity == "HIGH"]
     print(
         f"[{report.overall_assessment}] {report.audited_agent_name}: "
-        f"{len(report.concrete_weaknesses)} weakness(es) — {len(highs)} HIGH. "
-        f"Stress test → {report.injection_stress_test.predicted_behaviour}"
+        f"{len(report.concrete_weaknesses)} weakness(es) - {len(highs)} HIGH. "
+        f"Stress test -> {report.injection_stress_test.predicted_behaviour}"
     )
     for w in highs:
         print(f"  HIGH: {w.description}")

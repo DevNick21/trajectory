@@ -7,6 +7,11 @@ applications — what salary the user was offered, accepted, or rejected;
 what tone worked when replying to a recruiter; what interview questions
 came up on a successful loop.
 
+The application-assist layer adds a second memory shape: a private evidence
+graph made of `ExperienceAtom`, `StoryFrame`, `AnswerAttempt`, and
+`MemoryEdge` rows. Its deterministic helpers are exported here so API routes
+can run sub-2s nudges without calling an LLM.
+
 Public surface:
   - record_application_outcome(...)
   - record_recruiter_interaction(...)
@@ -25,6 +30,15 @@ from .recorder import (
     record_negotiation_result,
 )
 from .recall import recall, recall_as_text
+from .application_assist import (
+    build_answer_attempt,
+    build_assist_session,
+    classify_question,
+    critique_draft,
+    default_advice_snippets,
+    detect_sensitive,
+    deterministic_memory_from_attempt,
+)
 
 __all__ = [
     "record_application_outcome",
@@ -32,4 +46,11 @@ __all__ = [
     "record_negotiation_result",
     "recall",
     "recall_as_text",
+    "build_answer_attempt",
+    "build_assist_session",
+    "classify_question",
+    "critique_draft",
+    "default_advice_snippets",
+    "detect_sensitive",
+    "deterministic_memory_from_attempt",
 ]

@@ -2,7 +2,7 @@
 
 *Canonical source of truth. Supersedes CLAUDE.md, AGENTS.md, PROCESS.md, new_claude.md, trajec_notes.md where any contradiction exists.*
 
-*Last updated 2026-05-24 — multi-provider routing (DeepSeek V4 Flash/Pro), 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator, managed agents removed, benchmark harness + CI dashboard.*
+*Last updated 2026-06-01 — web-first assist hardening, private-save memory controls, Chrome V2 / Electron V3 delivery plan, and hosted data moat clarified.*
 
 ---
 
@@ -15,6 +15,23 @@ The free tier delivers the core experience: research a role, get a cited verdict
 The premium tier deepens it: continuous monitoring, salary defensibility against Home Office rules, pre-application benchmarks built from the network's outcomes, and post-rejection analysis.
 
 **The data network — outcomes users report — is the moat.** Code is open (AGPL-3.0 + CLA). The aggregated employer-behaviour database is the closed, operationally-defended layer.
+
+### Product delivery sequence
+
+AskPicky ships in three surfaces, with the hosted web app as the source of
+truth:
+
+| Version | Surface | Role |
+|---|---|---|
+| V1 | Hosted web app | Core paid product: onboarding, verdicts, application assist, Memory Inbox, tracker, outcome reporting. |
+| V2 | Chrome MV3 companion | In-browser coaching overlay for application forms. Detects active fields/questions, sends context to the hosted API, and writes/copies approved answers back. |
+| V3 | Electron companion | Power-user desktop shell for deeper screen/audio/system integration once the hosted loop proves retention and willingness to pay. |
+
+The Chrome extension is not an auto-apply tool. It is the delivery surface for
+the coaching loop already implemented in `/api/assist/*`: detect question,
+retrieve memory, nudge, polish, approve, and save privately. It uses ATS/site
+adapters where available, a generic DOM fallback, confidence labels, and a
+manual highlight/paste fallback when detection is uncertain.
 
 ---
 
@@ -167,6 +184,8 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Salary defensibility (extends salary_advice with full Home Office rules) | **P** | B | Premium feature #2. Visa specialism's killer paid feature |
 | `draft_reply` intent (short + long) | F | S | Recruiter reply friction; users churn back to manual |
 | `full_prep` (4 generators parallel + SSE) | F (capped) / P (uncapped) | S | Single-shot pack generation impossible |
+| Application assist loop (classify, retrieve memory, critique, polish, approve) | F (capped) / P (uncapped) | S | Users still leave the app to answer form questions manually |
+| `application_answer_shaper` agent | F | S | Final answers are not voice-preserved or memory-grounded |
 | Question Designer (3 Qs before pack) | F | S | Tailoring quality drops without role-specific Qs |
 | STAR Polisher | F | S | CV bullets generic, not story-driven |
 | CV tailor — single consolidated adapter (cut multi-provider routing + LaTeX templates) | F | B (consolidate) | Tailoring quality unchanged but maintenance halves |
@@ -185,6 +204,12 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | Style profile downgrade when sample_count < 3 | F | S | Style overconfidence on thin signal |
 | Style injection across all generators + STAR + draft_reply | F | S | Voice cloning broken |
 | Story-bank weighting (STAR_BOOST_KINDS) | F | S | Tailoring picks weak bullets |
+| Private evidence graph (`ExperienceAtom`, `StoryFrame`, `MemoryEdge`) | F | S | Memory stays as unstructured story notes and cannot adapt per question |
+| AnswerAttempt auto-save with raw-retention metadata | F | S | No source trail for application-assist learning |
+| Memory Inbox review gate | F | S | Auto-extracted memory affects suggestions without user approval |
+| Sensitive-memory private default | F | S | Visa/salary/family context leaks into future suggestions too easily |
+| Hybrid application-memory recall | F | S | Live assist becomes too slow or too generic |
+| `memory_extractor` background agent | I | U | Deterministic extraction works, but richer story framing cannot run under budget control |
 | Verdict ignores story-bank weights (separation of concerns) | F | S | Personal optimism bleeds into verdict — verdict no longer honest |
 | Cross-application outcome recorder | F | S | No data flowing into Layer 6 — moat doesn't form |
 | Recruiter-interaction recorder (fires post-draft_reply) | F | S | Negotiation memory cold; salary advice generic |
@@ -352,12 +377,16 @@ These close the gap between current state and the new positioning. Without them,
 2. Light verification of adversarial reports
 3. Personal application tracker + follow-up reminders
 4. Tailored CV version management
-5. Triage-before-verdict layer
-6. Visa eligibility check (front-page tool)
-7. Sponsor register search (front-page tool)
-8. CV tailor consolidation (cut multi-provider routing + LaTeX templates)
-9. Operational debt: fix doc drift, missing canonical docs, license drift, duplicate PROCESS entries, agent-call inventory
-10. Rename: Trajectory → AskPicky across repo, README, brand assets
+5. Hosted application-assist editor UI over the new `/api/assist/*` routes
+6. Hardened private-save controls: raw retention purge, memory export/edit/merge/delete, cross-user isolation tests
+7. Application cockpit + evidence-vault redesign for the web app
+8. Chrome MV3 companion scaffold after web hardening
+9. Triage-before-verdict layer
+10. Visa eligibility check (front-page tool)
+11. Sponsor register search (front-page tool)
+12. CV tailor consolidation (cut multi-provider routing + LaTeX templates)
+13. Operational debt: fix doc drift, missing canonical docs, license drift, duplicate PROCESS entries, agent-call inventory
+14. Rename: Trajectory → AskPicky across repo, README, brand assets
 
 ### P1 — first premium feature ships
 
@@ -429,11 +458,27 @@ This doc is the new canonical reference. All older docs should point here for pr
 - Exact credit costs and price points (calibrate against real compute spend post-first-100-users)
 - Whether AskPicky publishes anonymised market data publicly (free goodwill) vs paid licensing only
 
+Resolved 2026-06-01:
+
+- Private-save is the default for application assist. Private memory recall is
+  opt-in per answer/session through an explicit UI toggle.
+- Chrome MV3 ships before Electron, but uses portable APIs so Edge can follow.
+- Hosted outcome/benchmark intelligence is the commercial moat; forks can run
+  the open core but do not receive hosted aggregate employer data unless they
+  join the hosted contribution loop.
+
 ---
 
 ## 13. Visual / UI direction
 
 Revised 2026-05-22 to match the Picky-as-character voice (see §4).
+
+Application assist revision 2026-06-01: the dedicated web workspace should
+feel like an application cockpit and evidence vault, not a chatbot dashboard.
+The assist screen prioritises the current JD/question, rubric nudges, best
+story angles, answer draft, final answer, and save state. The memory screen
+prioritises provenance, pending/private status, edit/merge/delete controls,
+and outcome-backed story reuse.
 
 - **Brand colour:** **VSCode blue** (`#007ACC` primary) on a deep dark canvas (Zinc-9 cards on Zinc-12 background). Status colours: success green, destructive red, warning amber — saturated, not muted.
 - **Typography is a brand asset.** Three self-hosted families (no third-party CDN — GDPR): **Fraunces** (serif display, for verdict headlines and the brand mark), **Inter** (sans body), **JetBrains Mono** (citations, agent labels, gov-data IDs). Self-hosted via `@fontsource/*` packages — no Google Fonts CDN calls at runtime.

@@ -202,6 +202,257 @@ class WritingStyleProfileLLMOutput(BaseModel):
     low_confidence_reason: Optional[str] = None
 
 
+QuestionType = Literal[
+    "technical",
+    "competency",
+    "motivation",
+    "screening",
+    "values",
+    "cover_letter",
+    "visa",
+    "salary",
+    "other",
+]
+
+MemorySourceType = Literal[
+    "cv",
+    "transcript",
+    "answer",
+    "uploaded_file",
+    "manual_edit",
+    "onboarding",
+    "generated_answer",
+]
+
+MemoryReviewStatus = Literal["pending", "approved", "hidden", "deleted"]
+MemoryVisibility = Literal["normal", "private"]
+
+
+class ExperienceAtom(BaseModel):
+    """Smallest sourced memory unit used by application-assist recall."""
+
+    atom_id: str
+    user_id: str
+    atom_type: Literal[
+        "skill",
+        "metric",
+        "responsibility",
+        "project",
+        "result",
+        "conflict",
+        "preference",
+        "credential",
+        "constraint",
+        "other",
+    ]
+    text: str
+    source_type: MemorySourceType
+    source_id: Optional[str] = None
+    source_excerpt: Optional[str] = None
+    confidence: float = Field(default=0.7, ge=0, le=1)
+    sensitive: bool = False
+    visibility: MemoryVisibility = "normal"
+    review_status: MemoryReviewStatus = "pending"
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoryFrame(BaseModel):
+    """Reusable narrative assembled from atoms, with multiple angles."""
+
+    story_id: str
+    user_id: str
+    title: str
+    summary: str
+    angle_tags: list[str] = Field(default_factory=list)
+    question_types: list[QuestionType] = Field(default_factory=list)
+    atom_ids: list[str] = Field(default_factory=list)
+    outcome_score: float = Field(default=0.0, ge=-1, le=1)
+    usage_count: int = Field(default=0, ge=0)
+    sensitive: bool = False
+    visibility: MemoryVisibility = "normal"
+    review_status: MemoryReviewStatus = "pending"
+    created_at: datetime
+    updated_at: datetime
+
+
+class MemoryEdge(BaseModel):
+    """Weighted relationship between memory nodes."""
+
+    edge_id: str
+    user_id: str
+    source_id: str
+    target_id: str
+    edge_type: Literal[
+        "story_has_skill",
+        "story_used_for_role",
+        "story_led_to_interview",
+        "story_led_to_rejection",
+        "story_matches_question_type",
+        "story_mentions_metric",
+        "story_overused",
+        "atom_supports_story",
+        "answer_used_memory",
+        "other",
+    ]
+    weight: float = Field(default=1.0, ge=-5, le=5)
+    evidence: Optional[str] = None
+    created_at: datetime
+
+
+class AdviceSnippet(BaseModel):
+    """Curated public coaching guidance. Never stores user facts."""
+
+    advice_id: str
+    title: str
+    body: str
+    source_url: str
+    source_type: Literal["official", "university", "employer", "curated", "other"]
+    topic_tags: list[str] = Field(default_factory=list)
+    licence_status: str
+    citation_text: str
+    created_at: datetime
+
+
+class MemorySuggestion(BaseModel):
+    memory_id: str
+    memory_kind: Literal["career_entry", "experience_atom", "story_frame", "advice"]
+    title: str
+    text: str
+    score: float
+    rationale: str
+    warnings: list[str] = Field(default_factory=list)
+    outcome_signal: Optional[str] = None
+
+
+class QuestionPattern(BaseModel):
+    question_type: QuestionType
+    what_testing: str
+    ideal_evidence: list[str] = Field(default_factory=list)
+    structure_hint: str
+    common_failures: list[str] = Field(default_factory=list)
+    confidence: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
+
+
+class AnswerRubricScore(BaseModel):
+    dimension: Literal[
+        "directness",
+        "evidence",
+        "specificity",
+        "result",
+        "role_fit",
+        "word_limit",
+        "voice",
+    ]
+    score: int = Field(ge=0, le=5)
+    note: str
+
+
+class AnswerCritique(BaseModel):
+    question_type: QuestionType
+    what_testing: str
+    scores: list[AnswerRubricScore]
+    missing_evidence: list[str] = Field(default_factory=list)
+    targeted_nudge: Optional[str] = None
+    word_count: int
+    word_limit_status: Literal["under", "near", "over", "unknown"]
+    suggested_angles: list[MemorySuggestion] = Field(default_factory=list)
+    advice_snippets: list[AdviceSnippet] = Field(default_factory=list)
+
+
+class AnswerAttempt(BaseModel):
+    attempt_id: str
+    user_id: str
+    assist_session_id: Optional[str] = None
+    session_id: Optional[str] = None
+    job_id: Optional[str] = None
+    company_name: Optional[str] = None
+    role_title: Optional[str] = None
+    question_text: str
+    question_type: QuestionType
+    word_limit: Optional[int] = None
+    raw_draft: str = ""
+    transcript: Optional[str] = None
+    final_answer: Optional[str] = None
+    selected_memory_ids: list[str] = Field(default_factory=list)
+    critique: Optional[AnswerCritique] = None
+    save_status: Literal["auto_saved", "approved", "not_saved"] = "auto_saved"
+    raw_retention_until: datetime
+    sensitive: bool = False
+    visibility: MemoryVisibility = "normal"
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationAssistSession(BaseModel):
+    assist_session_id: str
+    user_id: str
+    session_id: Optional[str] = None
+    job_id: Optional[str] = None
+    job_url: Optional[str] = None
+    company_name: Optional[str] = None
+    role_title: Optional[str] = None
+    jd_text: Optional[str] = None
+    private_mode: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
+class ApplicationAnswerOutput(BaseModel):
+    final_answer: str
+    word_count: int
+    question_type: QuestionType
+    structure_used: str
+    citations: list[Citation] = Field(default_factory=list)
+    memory_ids_used: list[str] = Field(default_factory=list)
+    missing_evidence_flags: list[str] = Field(default_factory=list)
+    save_indicator: Literal["Saved privately", "Pending review", "Not saved"]
+
+
+class ExperienceAtomDraft(BaseModel):
+    atom_type: Literal[
+        "skill",
+        "metric",
+        "responsibility",
+        "project",
+        "result",
+        "conflict",
+        "preference",
+        "credential",
+        "constraint",
+        "other",
+    ]
+    text: str
+    source_excerpt: Optional[str] = None
+    confidence: float = Field(default=0.7, ge=0, le=1)
+    sensitive: bool = False
+
+
+class StoryFrameDraft(BaseModel):
+    title: str
+    summary: str
+    angle_tags: list[str] = Field(default_factory=list)
+    question_types: list[QuestionType] = Field(default_factory=list)
+    source_atom_texts: list[str] = Field(default_factory=list)
+    sensitive: bool = False
+
+
+class MemoryEdgeDraft(BaseModel):
+    source_ref: str
+    target_ref: str
+    edge_type: str
+    weight: float = Field(default=1.0, ge=-5, le=5)
+    evidence: Optional[str] = None
+
+
+class MemoryExtractionOutput(BaseModel):
+    experience_atoms: list[ExperienceAtomDraft] = Field(default_factory=list)
+    story_frames: list[StoryFrameDraft] = Field(default_factory=list)
+    memory_edges: list[MemoryEdgeDraft] = Field(default_factory=list)
+    missing_evidence_flags: list[str] = Field(default_factory=list)
+    sensitive_detected: bool = False
+
+
 class JobSearchContext(BaseModel):
     """Computed fresh per salary/verdict request. Not stored."""
 
@@ -237,6 +488,7 @@ Intent = Literal[
     # Architecture gap #8 — user disagrees with a verdict. Re-runs the
     # verdict with their pushback text threaded into the prompt.
     "challenge_verdict",
+    "application_assist",
     "profile_query",
     "profile_edit",
     "recent",

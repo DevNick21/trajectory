@@ -132,7 +132,8 @@ def prepare_environment() -> Path:
 
     settings.sqlite_db_path = tmp / "smoke.db"
     settings.faiss_index_path = tmp / "smoke.faiss"
-    settings.enable_managed_company_investigator = False
+    if hasattr(settings, "enable_managed_company_investigator"):
+        settings.enable_managed_company_investigator = False
 
     _ENV_SET_UP = True
     return tmp

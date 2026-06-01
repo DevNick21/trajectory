@@ -98,6 +98,13 @@ async def chat(
             redirect_to=f"/sessions/{target}",
             text="Switching to the session pack runner.",
         )
+    if intent == "application_assist":
+        return ChatResponse(
+            **base,
+            reply_kind="redirect",
+            redirect_to="/assist",
+            text="Opening the question workspace.",
+        )
 
     if routed.confidence == "LOW" and intent != "chitchat":
         return ChatResponse(

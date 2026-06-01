@@ -5,7 +5,7 @@
 
 AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro + OpenAI GPT-5.4) · No auto-apply, ever.
 
-*Last updated 2026-05-24 — full DeepSeek routing, 6-label verdict taxonomy, Firecrawl anti-bot fallback, LangGraph orchestrator, benchmark harness + CI dashboard.*
+*Last updated 2026-06-01 — web-first application assist, private-save memory controls, Chrome V2 companion plan, prompt-audited answer/memory agents.*
 
 ---
 
@@ -26,18 +26,23 @@ Opening number, floor, ceiling, and four negotiation scripts adjust to your urge
 **Tracks what happens after you apply.**
 One-tap outcome reporting in Telegram feeds the data network. The more users report, the better the verdicts get at telling you whether a role is worth your time.
 
+**Builds private application memory while you write.**
+Application assist now saves answer attempts, extracts reviewable memory atoms and story frames, and surfaces relevant approved stories when a similar form question appears again. Raw drafts expire by default; extracted memories sit in a Memory Inbox until the user approves, hides, privatizes, or deletes them.
+
 **Never auto-applies.** Philosophically off-limits. The user is always in the loop. The spam paradox is real.
 
 ---
 
-## Two surfaces, one orchestrator
+## Surfaces, one hosted source of truth
 
 | Surface | Best for | What you get |
 |---|---|---|
-| **Web** (Vite + React) | Desktop. Onboarding, session review, pack editing. | Wizard onboarding, dashboard with live Phase 1 SSE streaming, per-session detail pages with citations + pack generators + downloadable files. |
+| **Web** (Vite + React) | V1 hosted product. Onboarding, verdicts, application assist, memory, tracker. | Wizard onboarding, dashboard with live Phase 1 SSE streaming, per-session detail pages, pack generators, application cockpit, Memory Inbox. |
+| **Chrome MV3 companion** | V2 commercial browser workflow. | In-page coaching overlay for application forms: detect question/field, retrieve memory, nudge, polish, approve, and copy/write back. |
+| **Electron companion** | V3 power-user desktop workflow. | Later screen/audio/system integration once the hosted loop proves retention. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
 
-Both share one FastAPI orchestrator, one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for verdict and voice-sensitive generators), and one SQLite + FAISS state store. A transport-agnostic `ProgressEmitter` protocol (`src/askpicky/progress/`) streams progress over Telegram edits or SSE without duplicating business logic.
+All surfaces call the same FastAPI orchestrator, one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured), and one SQLite + FAISS state store. The hosted web app remains the source of truth for paid users; local/self-hosted forks can run the open core, but hosted aggregate employer/outcome intelligence is the commercial moat.
 
 ---
 
@@ -117,8 +122,11 @@ python -m askpicky.bot.app
 ## Smoke tests
 
 ```bash
-# 33 tests, ~5 min, $0 — no LLM calls, must stay green
+# Cheap suite, $0 — no LLM calls, must stay green
 python -m scripts.smoke_tests.run_all --cheap
+
+# Application-assist memory/API contract only
+python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract
 
 # Full live suite (~$5, ~10 min)
 python -m scripts.smoke_tests.run_all
@@ -142,6 +150,8 @@ The cheap suite is the regression net every change has to hold. Each LLM-backed 
 ## Docs
 
 - [ASKPICKY.md](./ASKPICKY.md) — canonical product definition (free/premium split, roadmap, four-question test)
+- [ASKPICKY_AUDIT_EXPORT.md](./ASKPICKY_AUDIT_EXPORT.md) — current done/needed export and verification checklist
+- [MEMORY_ARCHITECTURE.md](./MEMORY_ARCHITECTURE.md) — application-assist memory graph, privacy, API, and tests
 - [CLAUDE.md](./CLAUDE.md) — operating manual for AI-assisted dev
 - [AGENTS.md](./AGENTS.md) — agent prompt inventory + adapter assignments
 - [PROCESS.md](./PROCESS.md) — decision log
