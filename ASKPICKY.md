@@ -229,7 +229,7 @@ Tier: **F** = free, **P** = premium, **I** = infrastructure (invisible to user).
 | **Aggregated employer-behaviour database** | **P** (read) / F (contribute) | B | Premium feature #4 (benchmarks). The closed moat |
 | Pre-application employer benchmarks (response rate / interview→offer / ghost frequency / time-to-response) | **P** | B | Premium feature #4 |
 | Methodology transparency on benchmarks (sample size, takedown, employer-invite-to-comment) | F | B | Legal exposure (defamation, GDPR); user trust |
-| "Trajectory-relative" benchmark framing (honest about selection bias) | F | B | Misleading benchmarks degrade trust |
+| Product-relative benchmark framing (honest about selection bias) | F | B | Misleading benchmarks degrade trust |
 | Sponsor licence change alerts on saved roles | F | B | Visa-aware retention hook missing; users churn between job searches |
 | Hosted continuous monitoring (compute SaaS) | **P** (heavy) | D | Premium tier infrastructure — wait for usage |
 | Anonymised market-data licensing | **P** (future) | D | Future tier; not v1 |
@@ -386,7 +386,7 @@ These close the gap between current state and the new positioning. Without them,
 11. Sponsor register search (front-page tool)
 12. CV tailor consolidation (cut multi-provider routing + LaTeX templates)
 13. Operational debt: fix doc drift, missing canonical docs, license drift, duplicate PROCESS entries, agent-call inventory
-14. Rename: Trajectory → AskPicky across repo, README, brand assets
+14. Keep AskPicky naming consistent across repo, README, brand assets
 
 ### P1 — first premium feature ships
 
@@ -413,6 +413,11 @@ These close the gap between current state and the new positioning. Without them,
 
 ### Deferred indefinitely (until evidence demands it)
 
+V2 is security-gated before Chrome is treated as a commercial release:
+Supabase hosted auth/storage, tenant isolation, SSRF protection, quota ledger,
+privacy retention jobs, generated API contract, and cleanup of removed
+compatibility paths. See `V2_SECURITY_CHROME_PLAN.md`.
+
 - Real Batch API dispatch (cost optimisation only)
 - Daily Sponsor Register refresh (weekly fine)
 - Verdict ensemble (parallel x2) — voice-incompatible with Picky's confidence
@@ -423,8 +428,8 @@ These close the gap between current state and the new positioning. Without them,
 ### Cut entirely
 
 - LaTeX CV renderer + LaTeX writer/repairer agents + LaTeX sandbox
-- Anthropic provider entirely — all models via DeepSeek + OpenAI (2026-05-25)
-- Managed Agents (company_investigator, reviews_investigator, verdict_deep_research) — dead stubs, removed
+- Legacy single-provider runtime entirely — all models via DeepSeek + OpenAI tiers (2026-05-25)
+- Legacy live-research sandbox stubs (company_investigator, reviews_investigator, verdict_deep_research) — removed
 - Multi-provider CV tailor v1 — replaced by unified agent_model_map routing
 - Binary GO/NO_GO verdict — replaced by 6-label VerdictLabel taxonomy
 - Cohere provider — dead code, no integration
@@ -452,7 +457,7 @@ This doc is the new canonical reference. All older docs should point here for pr
 ## 12. Open strategic questions (decisions deferred)
 
 - Reporting opt-in vs opt-out at nudge level (current bias: opt-out at nudge, never silent reporting)
-- Trajectory Interview → AskPicky Interview brand: shared account, separate product
+- AskPicky Interview brand: shared account, separate product
 - Auth mechanism for multi-user (ADR not yet written)
 - Cross-surface identity unification (web user identity)
 - Exact credit costs and price points (calibrate against real compute spend post-first-100-users)

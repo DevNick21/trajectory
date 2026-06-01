@@ -4,7 +4,7 @@
 Usage:
     python scripts/benchmarks/run.py                    # live run (needs keys)
     python scripts/benchmarks/run.py --mock             # CI-safe mock mode
-    python scripts/benchmarks/run.py --providers anthropic,deepseek,openai
+    python scripts/benchmarks/run.py --providers deepseek,openai
     python scripts/benchmarks/run.py --output-json data/benchmarks/latest.json
 
 Output: JSON lines per task + a summary block written to
@@ -131,7 +131,7 @@ TASKS: list[BenchmarkTask] = [
         min_output_fields=["classification", "reasoning_brief"],
     ),
     # Tool-use benchmark: model must call a dummy tool + emit structured output.
-    # Verifies that the provider supports Anthropic-format tool_use correctly.
+    # Verifies that the provider supports OpenAI-compatible tool use.
     BenchmarkTask(
         name="tool_use_extract",
         agent_name="jd_extractor",
@@ -158,17 +158,12 @@ class ProviderConfig:
     name: str
     model_id: str
     env_key_name: str
-    """Settings attribute holding the API key. E.g. 'anthropic_api_key'."""
+    """Settings attribute holding the API key. E.g. 'deepseek_api_key'."""
 
 
 # Benchmark-specific model choices (intentionally pinned, not derived
 # from the per-agent routing config in config.py).
 PROVIDERS: dict[str, ProviderConfig] = {
-    "anthropic": ProviderConfig(
-        name="anthropic",
-        model_id="claude-sonnet-4-6",
-        env_key_name="anthropic_api_key",
-    ),
     "deepseek": ProviderConfig(
         name="deepseek",
         model_id="deepseek-v4-flash",
@@ -361,8 +356,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Model benchmark runner")
     parser.add_argument(
         "--providers",
-        default="anthropic",
-        help="Comma-separated provider names (anthropic,deepseek,openai).",
+        default="deepseek",
+        help="Comma-separated provider names (deepseek,openai).",
     )
     parser.add_argument(
         "--tasks",

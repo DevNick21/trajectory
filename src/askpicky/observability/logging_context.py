@@ -20,10 +20,10 @@ from typing import Optional
 
 
 _request_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "trajectory_request_id", default="-"
+    "askpicky_request_id", default="-"
 )
 _session_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "trajectory_session_id", default="-"
+    "askpicky_session_id", default="-"
 )
 
 

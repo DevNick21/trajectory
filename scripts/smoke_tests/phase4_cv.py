@@ -20,7 +20,7 @@ from ._common import (
     build_test_user,
     load_fixture_bundle,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -31,7 +31,7 @@ ESTIMATED_COST_USD = 1.50
 
 async def _body() -> tuple[list[str], list[str], float]:
     tmp = prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 

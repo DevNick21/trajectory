@@ -3,7 +3,7 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-05-25 — three-tier model config (TIER_FAST/NORMAL/STRONG), Anthropic removed, all models via DeepSeek + OpenAI, agent_tier_map replaces agent_model_map. See config.py for tier routing.*
+*Last updated 2026-06-01 — V2 removes backward-compat shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes all hosted models via DeepSeek + OpenAI. Hosted V2 is Supabase-authenticated; see config.py for tier routing and auth mode.*
 
 ## Agent inventory
 
@@ -56,10 +56,10 @@ Cuts since the original inventory:
 
 New since 2026-05-23:
 - Three-tier model config — `TIER_FAST`/`TIER_NORMAL`/`TIER_STRONG` in config.py. Per-agent `agent_tier_map` maps agent name to tier string. `call_agent` resolves tier → (model_id, provider) automatically.
-- Anthropic provider removed. All models via DeepSeek (primary) and OpenAI (strong tier). `anthropic_backend.py`, `server_tools.py`, Citations API, Files API, Managed Agents all deleted.
+- Legacy provider shims removed. All models route via DeepSeek (primary) and OpenAI (strong tier).
 - Multi-turn tool use is provider-agnostic via OpenAI-compat tool calling. `call_agent_with_tools` works with both DeepSeek and OpenAI.
-- Citation-grounded output uses inline document context instead of the Anthropic Citations API.
-- Offer analysis uses local pypdf text extraction instead of the Anthropic Files API.
+- Citation-grounded output uses inline document context and local validation.
+- Offer analysis uses local pypdf text extraction.
 - Application assist adds two agents: `application_answer_shaper` on the
   normal tier for user-facing final answers, and `memory_extractor` on the
   fast tier for optional background Memory Inbox enrichment.

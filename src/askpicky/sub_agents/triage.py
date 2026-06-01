@@ -17,7 +17,7 @@ import os
 from typing import Optional
 
 from ..config import settings
-from ..llm import call_structured
+from ..llm import call_agent
 from ..schemas import (
     CareerEntry,
     ExtractedJobDescription,
@@ -143,7 +143,7 @@ async def classify(
         default=str,
     )
 
-    return await call_structured(
+    return await call_agent(
         agent_name="triage",
         system_prompt=TRIAGE_SYSTEM_PROMPT,
         user_input=user_input,

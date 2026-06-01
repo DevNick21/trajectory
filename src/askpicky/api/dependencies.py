@@ -1,9 +1,8 @@
 """FastAPI dependency providers.
 
-`get_storage` reads from `app.state` (set up by the lifespan). The
-identity providers (`get_current_user_id`, `get_current_user`) use
-`settings.demo_user_id` since the API is single-user localhost
-(ADR-001). Multi-user auth is post-hackathon scope.
+`get_storage` reads from `app.state` (set up by the lifespan). Identity is
+resolved through the configured auth mode: local OSS/dev can use demo identity,
+while hosted V2 uses Supabase bearer JWTs.
 
 `get_current_user` raises 404 when the demo user hasn't completed
 onboarding — the frontend interprets this as "redirect to
@@ -17,9 +16,10 @@ from typing import Any
 from fastapi import Depends, HTTPException, Request, status
 
 from ..config import settings
-from ..ratelimit import RateLimiter
+from ..ratelimit import RateLimiter, intent_to_category
 from ..schemas import UserProfile
 from ..storage import Storage
+from .auth import resolve_identity
 
 
 # Module-level singleton — shared across requests in one FastAPI process.
@@ -39,25 +39,43 @@ def rate_limit(intent: str) -> Any:
     runs stay unthrottled.
     """
 
-    def _dep(
+    async def _dep(
         user_id: str = Depends(get_current_user_id),
+        storage: Storage = Depends(get_storage),
         limiter: RateLimiter = Depends(get_rate_limiter),
     ) -> None:
-        if not settings.enforce_rate_limit:
-            return
-        decision = limiter.check(user_id, intent)
-        if not decision.allowed:
-            retry_after = max(1, int(decision.retry_after_s + 0.5))
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail={
-                    "code": "rate_limited",
-                    "intent": intent,
-                    "category": decision.category,
-                    "retry_after_s": retry_after,
-                },
-                headers={"Retry-After": str(retry_after)},
+        if settings.enforce_rate_limit:
+            decision = limiter.check(user_id, intent)
+            if not decision.allowed:
+                retry_after = max(1, int(decision.retry_after_s + 0.5))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "code": "rate_limited",
+                        "intent": intent,
+                        "category": decision.category,
+                        "retry_after_s": retry_after,
+                    },
+                    headers={"Retry-After": str(retry_after)},
+                )
+        if settings.enforce_hosted_quotas:
+            result = await storage.record_quota_usage(
+                user_id=user_id,
+                category=intent_to_category(intent),
+                units=1,
             )
+            if not result["allowed"]:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "code": "quota_exceeded",
+                        "intent": intent,
+                        "category": result["category"],
+                        "period": result["period"],
+                        "limit": result["limit"],
+                        "used": result["used"],
+                    },
+                )
 
     return _dep
 
@@ -78,21 +96,13 @@ def get_storage(request: Request) -> Storage:
     return storage
 
 
-def get_current_user_id() -> str:
-    """Return the configured demo user id.
+def get_current_user_id(request: Request) -> str:
+    """Return the authenticated AskPicky user id.
 
-    Single-user localhost only — both surfaces resolve to the same
-    `user_profiles` row keyed by this value (MIGRATION_PLAN.md §3).
+    Demo mode returns `settings.demo_user_id`; hosted mode requires a valid
+    Supabase bearer JWT and maps the token `sub` to `user_id`.
     """
-    if not settings.demo_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=(
-                "DEMO_USER_ID is not set. Add it to your .env "
-                "before starting the API."
-            ),
-        )
-    return settings.demo_user_id
+    return resolve_identity(request).user_id
 
 
 async def get_current_user(

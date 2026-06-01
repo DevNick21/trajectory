@@ -1,6 +1,6 @@
 """Inline document context builder for citation-grounded agents.
 
-Replaces the old Anthropic Citations API document block format. Instead of
+Replaces the old external citations API document block format. Instead of
 sending separate document blocks per the Citations API, we inline all source
 context into the user prompt so the model can ground its output against
 specific document indices. Agents reference documents by index and emit

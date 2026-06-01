@@ -1,8 +1,7 @@
 """GET /health — liveness probe.
 
-Returns enough metadata to confirm the lifespan ran (storage attached)
-and the configured identity is wired (demo_user_id non-empty). Does
-NOT touch the database — kept cheap so smoke tests + frontend boot
+Returns enough metadata to confirm the lifespan ran (storage attached).
+Does NOT touch user data — kept cheap so smoke tests + frontend boot
 checks can hit it freely.
 """
 
@@ -24,7 +23,8 @@ async def health(storage: Storage = Depends(get_storage)) -> dict:
         "service": "askpicky.api",
         "version": "0.1.0",
         "storage_initialised": storage is not None,
-        "demo_user_id_configured": bool(settings.demo_user_id),
+        "auth_mode": settings.auth_mode,
+        "storage_backend": settings.storage_backend,
     }
 
 

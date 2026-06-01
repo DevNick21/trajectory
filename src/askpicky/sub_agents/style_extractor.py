@@ -42,12 +42,12 @@ async def extract(
     for s in samples:
         pii_result = scrub_pii(s)
         pii_redactions.extend(pii_result.redactions)
-        cleaned, _ = await shield_content(
+        shielded_sample = await shield_content(
             content=pii_result.cleaned_text,
             source_type="writing_sample",
             downstream_agent="style_extractor",
         )
-        cleaned_samples.append(cleaned)
+        cleaned_samples.append(shielded_sample.cleaned_text)
 
     if pii_redactions:
         import logging

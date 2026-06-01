@@ -39,7 +39,8 @@ def test_health_returns_200_with_expected_shape(client):
         "service",
         "version",
         "storage_initialised",
-        "demo_user_id_configured",
+        "auth_mode",
+        "storage_backend",
     ):
         assert required in body, f"missing field {required!r} in {body}"
 
@@ -48,17 +49,15 @@ def test_health_returns_200_with_expected_shape(client):
     assert body["storage_initialised"] is True
 
 
-def test_health_reports_demo_user_id_configured_state(client, monkeypatch):
-    """The flag flips with settings.demo_user_id."""
+def test_health_reports_auth_and_storage_mode(client, monkeypatch):
+    """The health payload exposes public mode metadata only."""
     from askpicky.config import settings
 
-    monkeypatch.setattr(settings, "demo_user_id", "")
+    monkeypatch.setattr(settings, "auth_mode", "supabase")
+    monkeypatch.setattr(settings, "storage_backend", "supabase_postgres")
     body = client.get("/health").json()
-    assert body["demo_user_id_configured"] is False
-
-    monkeypatch.setattr(settings, "demo_user_id", "12345")
-    body = client.get("/health").json()
-    assert body["demo_user_id_configured"] is True
+    assert body["auth_mode"] == "supabase"
+    assert body["storage_backend"] == "supabase_postgres"
 
 
 def test_unknown_route_returns_404(client):

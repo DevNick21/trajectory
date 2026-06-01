@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "tsc -b --noEmit"
+    "lint": "tsc -b --noEmit",
+    "api:contract": "python ../scripts/export_openapi.py --out src/generated/openapi.json --ts-out src/generated/api-types.ts"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.0.0",

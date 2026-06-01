@@ -1,11 +1,11 @@
 """Smoke test — Content Shield end-to-end.
 
 Tier 1 is covered exhaustively by tests/test_content_shield.py. This
-smoke test exercises Tier 2 — the Sonnet 4.6 classifier — with one
+smoke test exercises Tier 2 — the fast-tier classifier — with one
 clearly-malicious payload and one clearly-benign JD, to confirm the
 classifier prompt is giving sensible answers against the live model.
 
-Cost: ~$0.01 per Sonnet call (Tier 2 runs twice here).
+Cost: ~$0.01 per fast-tier call (Tier 2 runs twice here).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from ._common import (
     SmokeResult,
     get_logger,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -41,7 +41,7 @@ _BENIGN_JD = (
 
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 
@@ -53,11 +53,13 @@ async def _body() -> tuple[list[str], list[str], float]:
     cost = 0.0
 
     # ---- Malicious → expect Tier 1 flags + Tier 2 classifies MALICIOUS ---
-    cleaned, verdict = await shield(
+    malicious_result = await shield(
         content=_MALICIOUS_PAYLOAD,
         source_type="scraped_jd",
         downstream_agent="verdict",
     )
+    cleaned = malicious_result.cleaned_text
+    verdict = malicious_result.verdict
     cost += ESTIMATED_COST_USD / 2
     if verdict is None:
         failures.append(
@@ -80,11 +82,13 @@ async def _body() -> tuple[list[str], list[str], float]:
         failures.append("Tier 1 did not redact any of the malicious payload.")
 
     # ---- Benign JD → Tier 1 shouldn't flag, Tier 2 shouldn't even run ----
-    benign_cleaned, benign_verdict = await shield(
+    benign_result = await shield(
         content=_BENIGN_JD,
         source_type="scraped_jd",
         downstream_agent="verdict",
     )
+    benign_cleaned = benign_result.cleaned_text
+    benign_verdict = benign_result.verdict
     messages.append(
         f"benign JD → tier1_flagged={benign_verdict is not None}, "
         f"cleaned_equal_input={benign_cleaned.strip() == _BENIGN_JD.strip()}"
@@ -100,11 +104,12 @@ async def _body() -> tuple[list[str], list[str], float]:
         cost += ESTIMATED_COST_USD / 2
 
     # ---- Tier 1 tiering for low-stakes agents ----------------------------
-    cleaned_lo, verdict_lo = await shield(
+    low_result = await shield(
         content=_MALICIOUS_PAYLOAD,
         source_type="scraped_jd",
         downstream_agent="jd_extractor",  # low-stakes — Tier 2 must NOT run
     )
+    verdict_lo = low_result.verdict
     if verdict_lo is not None:
         failures.append(
             "Tier 2 ran for a low-stakes downstream agent (jd_extractor). "

@@ -94,12 +94,12 @@ async def _call_parser(
     agent_name: str,
 ) -> T:
     capped = _truncate(user_text)
-    cleaned, _ = await shield_content(
+    shielded_input = await shield_content(
         content=capped,
         source_type="user_message",
         downstream_agent="onboarding_parser",
     )
-    user_input = f"USER REPLY:\n\n{cleaned.strip()}"
+    user_input = f"USER REPLY:\n\n{shielded_input.cleaned_text.strip()}"
     # Sonnet 4.6 at effort="low" is the right rung for this job: the
     # parser does no reasoning, just structured extraction from a short
     # reply. Opus was overkill (~$0.15/reply) when Sonnet low handles

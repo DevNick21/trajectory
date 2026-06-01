@@ -1365,14 +1365,12 @@ class ContentShieldVerdict(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Managed Agents — company investigator output
+# Company investigator output
 #
-# See `src/askpicky/managed/company_investigator.py`. The MA agent
-# returns an `InvestigatorOutput` JSON object. The investigator module
-# converts it to `CompanyResearch` + `ExtractedJobDescription` and the
-# conversion is the citation-enforcement boundary: every finding's
-# `verbatim_snippet` must appear in one of the pages actually fetched
-# during the session.
+# Kept for legacy stored research bundles and future scraper replacements.
+# Conversion to `CompanyResearch` + `ExtractedJobDescription` is the
+# citation-enforcement boundary: every finding's `verbatim_snippet` must
+# appear in one of the pages actually fetched during the session.
 # ---------------------------------------------------------------------------
 
 

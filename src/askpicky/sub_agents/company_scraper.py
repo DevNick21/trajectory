@@ -26,7 +26,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import tldextract
@@ -40,6 +40,11 @@ from ..schemas import (
     ScrapedPage,
 )
 from ..storage import cache_scraped_page, get_cached_page
+from ..validators.url_safety import (
+    UnsafeURL,
+    assert_obviously_public_url,
+    validate_public_fetch_url,
+)
 from .jsonld_extractor import extract_jsonld_jobposting
 
 logger = logging.getLogger(__name__)
@@ -80,8 +85,7 @@ _DYNAMIC_HOSTS = {
 _FETCH_TIMEOUT = 25.0
 
 # Real browser User-Agent strings — rotated per-session to avoid
-# fingerprinting. Never identify as a bot. The old "TrajectoryBot"
-# string was an instant WAF block on CloudFlare/Akamai-protected ATSes.
+# fingerprinting. Never identify as a bot.
 _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
@@ -133,6 +137,12 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
         is_anti_bot_host,
         is_thin_content,
     )
+
+    try:
+        url = await validate_public_fetch_url(url)
+    except UnsafeURL as exc:
+        logger.warning("Blocked unsafe fetch URL %s: %s", url, exc)
+        return None
 
     host = _host(url)
     is_anti = is_anti_bot_host(url)
@@ -204,15 +214,28 @@ async def _fetch_html(url: str) -> Optional[str]:
 
 
 async def _fetch_with_httpx(url: str) -> Optional[str]:
+    current_url = await validate_public_fetch_url(url)
     async with httpx.AsyncClient(
         timeout=_FETCH_TIMEOUT,
-        follow_redirects=True,
+        follow_redirects=False,
         headers={"User-Agent": _random_ua()},
     ) as client:
-        resp = await client.get(url)
-        if resp.status_code >= 400:
-            return None
-        return resp.text
+        for _ in range(5):
+            resp = await client.get(current_url)
+            if resp.is_redirect:
+                location = resp.headers.get("location")
+                if not location:
+                    return None
+                current_url = await validate_public_fetch_url(
+                    urljoin(str(resp.url), location)
+                )
+                continue
+            if resp.status_code >= 400:
+                return None
+            return resp.text
+
+    logger.warning("Too many redirects while fetching %s", url)
+    return None
 
 
 async def _fetch_with_playwright(url: str) -> Optional[str]:
@@ -223,6 +246,8 @@ async def _fetch_with_playwright(url: str) -> Optional[str]:
     size, and persists cookies per domain so repeat visits don't trigger
     CloudFlare/DataDome/Akamai bot challenges.
     """
+    url = await validate_public_fetch_url(url)
+
     try:
         from playwright.async_api import async_playwright
     except ImportError:
@@ -275,6 +300,16 @@ async def _fetch_with_playwright(url: str) -> Optional[str]:
                 logger.debug("Stealth not applied (non-fatal): %s", exc)
 
             page = await context.new_page()
+
+            async def _guard_route(route, request) -> None:
+                try:
+                    assert_obviously_public_url(request.url)
+                except UnsafeURL:
+                    await route.abort()
+                    return
+                await route.continue_()
+
+            await page.route("**/*", _guard_route)
 
             # Randomize the navigation — humans don't load pages instantly.
             # A 200-800ms delay before navigation mimics natural behavior.
@@ -890,12 +925,12 @@ async def _extract_jd(
     # inside the scraped text before it ever reaches the prompt.
     from ..validators.content_shield import shield as shield_content
 
-    cleaned_jd, _ = await shield_content(
+    shielded_jd = await shield_content(
         content=jd_text[:20_000],
         source_type="scraped_jd",
         downstream_agent="jd_extractor",
     )
-    safe_jd = _sanitise_untrusted(cleaned_jd)
+    safe_jd = _sanitise_untrusted(shielded_jd.cleaned_text)
     # Optional Tier 0 ground-truth block: when JSON-LD is present, the
     # Sonnet extractor sees authoritative fields (datePosted, baseSalary)
     # and should prefer them over body-text inference.
@@ -972,12 +1007,12 @@ async def _summarise_company(
 
     page_blocks: list[str] = []
     for p in pages:
-        cleaned, _ = await shield_content(
+        shielded_page = await shield_content(
             content=p.text[:8_000],
             source_type="scraped_company_page",
             downstream_agent="company_scraper_summariser",
         )
-        safe_text = _sanitise_untrusted(cleaned)
+        safe_text = _sanitise_untrusted(shielded_page.cleaned_text)
         page_blocks.append(
             f'<untrusted_content url="{p.url}">\n{safe_text}\n</untrusted_content>'
         )

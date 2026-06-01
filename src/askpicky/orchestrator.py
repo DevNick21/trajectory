@@ -302,8 +302,7 @@ async def handle_forward_job(
     timeout = settings.phase1_agent_timeout_s
 
     async def run_reviews() -> list:
-        # Reviews were handled by Anthropic Managed Agents (reviews_investigator),
-        # removed 2026-05-24. Company research is now served by the Playwright +
+        # Reviews aggregation was removed 2026-05-24. Company research is now served by the Playwright +
         # Firecrawl pipeline in company_scraper. Glassdoor/Indeed reviews are
         # scraped via Firecrawl fallback when available.
         await mark_started("reviews")
@@ -1008,7 +1007,7 @@ async def handle_draft_cv(
 ) -> tuple[CVOutput, Path, Path]:
     """Returns (cv, docx_path, pdf_path).
 
-    Anthropic-only agentic FAISS-retrieval path. The multi-provider
+    Agentic FAISS-retrieval path. The multi-provider
     routing and LaTeX-typeset branches were cut in the 2026-05-22
     overhaul (ASKPICKY.md §10).
     """
@@ -1276,11 +1275,13 @@ async def handle_draft_reply(
 
     # CLAUDE.md Rule 10: pasted recruiter email is the primary injection
     # vector — shield before the high-stakes generator.
-    cleaned_msg, shield_verdict = await shield_content(
+    shielded_msg = await shield_content(
         content=incoming_message,
         source_type="recruiter_email",
         downstream_agent="draft_reply",
     )
+    cleaned_msg = shielded_msg.cleaned_text
+    shield_verdict = shielded_msg.verdict
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         raise ContentIntegrityRejected(shield_verdict, "recruiter_email")
 

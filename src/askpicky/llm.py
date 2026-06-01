@@ -249,10 +249,6 @@ async def call_agent(
     )
 
 
-# Backwards-compat aliases
-call_structured = call_agent
-
-
 # ---------------------------------------------------------------------------
 # Multi-turn tool use — provider-agnostic (OpenAI-compat tool calling)
 # ---------------------------------------------------------------------------
@@ -299,7 +295,7 @@ async def call_agent_with_tools(
 
     backend = get_backend(provider)
 
-    # Convert tools from Anthropic-style to OpenAI function format
+    # Convert local tool defs to OpenAI function format
     openai_tools = _to_openai_tools(tools) + [_EMIT_TOOL]
 
     raw, usage = await _tool_loop(
@@ -328,7 +324,7 @@ async def call_agent_with_tools(
 
 
 def _to_openai_tools(tools: list[dict]) -> list[dict]:
-    """Convert Anthropic-style tool defs to OpenAI function format."""
+    """Convert local tool defs to OpenAI function format."""
     result = []
     for t in tools:
         params = t.get("input_schema", {})
@@ -458,13 +454,13 @@ async def _enforce_credit_budget(priority: Priority) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Managed agent placeholder (not yet implemented)
+# Live session placeholder (not yet implemented)
 # ---------------------------------------------------------------------------
 
 
 async def call_in_session(**_kwargs: Any) -> Any:
-    """Placeholder for managed-agent in-session calls (not yet implemented)."""
+    """Placeholder for future live-audit session calls."""
     raise NotImplementedError(
         "call_in_session is not yet implemented. "
-        "Managed agents are on the roadmap but not wired in this release."
+        "Live-audit sessions are on the roadmap but not wired in this release."
     )

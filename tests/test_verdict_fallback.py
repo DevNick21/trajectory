@@ -189,9 +189,11 @@ async def test_verdict_falls_back_to_deepseek_pro(monkeypatch):
     fallback_calls: list[dict] = []
 
     async def fake_call_agent(**kwargs):
+        tier = settings.agent_tier_map.get(kwargs["agent_name"], "normal")
+        model = getattr(settings, f"TIER_{tier.upper()}")[0]
         call_record = {
             "agent_name": kwargs["agent_name"],
-            "model": kwargs["model"],
+            "model": model,
             "attempts": kwargs["max_retries"],
         }
         if kwargs["agent_name"] == "verdict":
@@ -206,10 +208,10 @@ async def test_verdict_falls_back_to_deepseek_pro(monkeypatch):
 
     assert result.decision == "GO"
     assert primary_calls == [
-        {"agent_name": "verdict", "model": settings.openai_pro_model_id, "attempts": 2}
+        {"agent_name": "verdict", "model": settings.TIER_STRONG[0], "attempts": 2}
     ]
     assert fallback_calls == [
-        {"agent_name": "verdict_fallback", "model": settings.deepseek_pro_model_id, "attempts": 2}
+        {"agent_name": "verdict_fallback", "model": settings.TIER_NORMAL[0], "attempts": 2}
     ]
     assert len(result.reasoning) >= 3
 
@@ -223,9 +225,11 @@ async def test_verdict_raises_when_both_primary_and_fallback_fail(monkeypatch):
     fallback_calls: list[dict] = []
 
     async def fake_call_agent(**kwargs):
+        tier = settings.agent_tier_map.get(kwargs["agent_name"], "normal")
+        model = getattr(settings, f"TIER_{tier.upper()}")[0]
         call_record = {
             "agent_name": kwargs["agent_name"],
-            "model": kwargs["model"],
+            "model": model,
             "attempts": kwargs["max_retries"],
         }
         if kwargs["agent_name"] == "verdict":
@@ -240,8 +244,8 @@ async def test_verdict_raises_when_both_primary_and_fallback_fail(monkeypatch):
         await verdict_agent.generate(bundle, user, [])
 
     assert primary_calls == [
-        {"agent_name": "verdict", "model": settings.openai_pro_model_id, "attempts": 2}
+        {"agent_name": "verdict", "model": settings.TIER_STRONG[0], "attempts": 2}
     ]
     assert fallback_calls == [
-        {"agent_name": "verdict_fallback", "model": settings.deepseek_pro_model_id, "attempts": 2}
+        {"agent_name": "verdict_fallback", "model": settings.TIER_NORMAL[0], "attempts": 2}
     ]

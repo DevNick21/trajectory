@@ -1,4 +1,4 @@
-// Mirrors PHASE_1_AGENTS in src/trajectory/orchestrator.py — keep
+// Mirrors PHASE_1_AGENTS in src/askpicky/orchestrator.py — keep
 // the order in sync. The dashboard uses this list to render pending
 // agents (○) and infer the "currently running" spinner row from
 // "first agent in PHASE_1_AGENTS not yet in completed[]".

@@ -24,7 +24,7 @@ The design follows the audit-prompt lenses:
 sequenceDiagram
     participant U as User
     participant API as FastAPI assist routes
-    participant Store as SQLite + hybrid recall
+    participant Store as Hosted Postgres/pgvector or local SQLite + hybrid recall
     participant Agent as Answer shaper
     participant Inbox as Memory Inbox
 
@@ -60,6 +60,9 @@ are delivery surfaces over the same memory/API contract, not separate products.
 | V1 | Hosted web app | User pastes JD/question, drafts answer, approves output, reviews Memory Inbox. |
 | V2 | Chrome MV3 companion | Detects the active application form/question, opens an overlay, calls `/api/assist/*`, and copies/writes approved text back. |
 | V3 | Electron companion | Later screen/audio/system control for power users after the hosted loop is proven. |
+
+Hosted V2 uses Supabase Auth and Supabase Postgres/pgvector for canonical
+multi-user memory. SQLite/FAISS remains the local OSS/dev storage path.
 
 Chrome detection is confidence-based:
 

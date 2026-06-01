@@ -18,7 +18,7 @@ from datetime import date, datetime, timezone
 from ._common import (
     SmokeResult,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -40,7 +40,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         return messages, failures, 0.0
 
     prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 
@@ -62,9 +62,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     # D5 (2026-04-24): the agentic path is now the only CV tailor.
     # The `cv_tailor` module is a thin re-export of `cv_tailor_agentic`.
-    # PROCESS Entry 44 renamed the flag to `enable_managed_cv_tailor`
-    # (default off) — it now toggles the Managed Agents wrapping, not
-    # the agentic-vs-legacy choice.
+    # This smoke directly exercises the agentic path.
 
     # Seed a realistic 20-entry career history.
     seeded_ids: list[str] = []

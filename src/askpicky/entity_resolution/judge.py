@@ -29,7 +29,7 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from ..config import settings
-from ..llm import call_structured
+from ..llm import call_agent
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ async def judge_candidates(
     user_input = "\n".join(user_input_lines)
 
     try:
-        verdict: JudgeVerdict = await call_structured(
+        verdict: JudgeVerdict = await call_agent(
             agent_name="entity_judge",
             system_prompt=_SYSTEM_PROMPT,
             user_input=user_input,

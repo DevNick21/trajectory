@@ -73,7 +73,7 @@ class _CapturingEmitter:
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
-    # Mocked verdict so the test runs without an Anthropic key. Cleared
+    # Mocked verdict so the test runs without a live LLM key. Cleared
     # in `finally` so a subsequent test in the same process is unaffected.
     prior_mock = os.environ.get("SMOKE_TEST_MOCK")
     os.environ["SMOKE_TEST_MOCK"] = "1"
@@ -83,6 +83,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     try:
         from askpicky import orchestrator, llm as askpicky_llm
+        from askpicky.config import settings
         from askpicky.storage import Storage
         from askpicky.sub_agents import (
             companies_house as ch_agent,
@@ -93,10 +94,13 @@ async def _body() -> tuple[list[str], list[str], float]:
             soc_check as soc_agent,
             sponsor_register as sr_agent,
         )
+        from askpicky.entity_resolution import judge as entity_judge
 
         bundle = load_fixture_bundle()
         user = build_test_user("uk_resident")
         session = build_test_session(user.user_id)
+        prior_triage = settings.enable_triage_before_verdict
+        settings.enable_triage_before_verdict = False
 
         storage = Storage()
         await storage.initialise()
@@ -114,6 +118,8 @@ async def _body() -> tuple[list[str], list[str], float]:
             "soc_agent.verify": soc_agent.verify,
             "ghost_job_detector.score": ghost_job_detector.score,
             "rf_agent.detect": rf_agent.detect,
+            "entity_judge.should_invoke_judge": entity_judge.should_invoke_judge,
+            "entity_judge.judge_candidates": entity_judge.judge_candidates,
         }
 
         # Replace each sub-agent with a coroutine that returns the
@@ -125,19 +131,18 @@ async def _body() -> tuple[list[str], list[str], float]:
                 await on_jd_extracted()
             return bundle.company_research, bundle.extracted_jd
 
-        async def _fake_ch(*, company_name):
+        async def _fake_ch(*, company_name=None, crn=None, aliases=None):
             return bundle.companies_house
 
-        # Reviews now flow through managed/reviews_investigator via
-        # llm.call_in_session. Stub that to return an empty excerpts
-        # bag — orchestrator handles [] downstream.
+        # Review aggregation is stubbed to an empty excerpts bag —
+        # orchestrator handles [] downstream.
         class _StubReviewsOut:
             excerpts: list = []
 
         async def _fake_call_in_session(name, **kwargs):
             if name == "reviews_investigator":
                 return _StubReviewsOut()
-            raise NotImplementedError(f"unexpected managed session {name!r}")
+            raise NotImplementedError(f"unexpected live session {name!r}")
 
         async def _fake_gazette(*, company_name, canonical_name=None, crn=None):
             # No insolvency notices for the fixture company — the Phase 1
@@ -166,6 +171,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         soc_agent.verify = _fake_soc
         ghost_job_detector.score = _fake_ghost
         rf_agent.detect = _fake_red_flags
+        entity_judge.should_invoke_judge = lambda **_kwargs: False
+        entity_judge.judge_candidates = lambda **_kwargs: None
 
         emitter = _CapturingEmitter()
 
@@ -290,6 +297,9 @@ async def _body() -> tuple[list[str], list[str], float]:
             soc_agent.verify = originals["soc_agent.verify"]
             ghost_job_detector.score = originals["ghost_job_detector.score"]
             rf_agent.detect = originals["rf_agent.detect"]
+            entity_judge.should_invoke_judge = originals["entity_judge.should_invoke_judge"]
+            entity_judge.judge_candidates = originals["entity_judge.judge_candidates"]
+            settings.enable_triage_before_verdict = prior_triage
             await storage.close()
     finally:
         if prior_mock is None:

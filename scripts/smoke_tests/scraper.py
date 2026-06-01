@@ -22,7 +22,7 @@ import os
 from ._common import (
     SmokeResult,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -40,7 +40,7 @@ _DEFAULT_URL = os.getenv(
 
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 

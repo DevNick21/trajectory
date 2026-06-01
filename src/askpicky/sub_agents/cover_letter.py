@@ -1,7 +1,7 @@
 """Phase 4 — Cover Letter Writer.
 
 Source-grounded prose with inline citation-grounded output. Replaces
-the old Anthropic Citations API path (removed 2026-05-25). Now uses
+the old external citations API path (removed 2026-05-25). Now uses
 `call_agent` with inline document context and structured JSON output.
 """
 

@@ -294,20 +294,14 @@ TIER2_SYSTEM_PROMPT = load_prompt("content_shield_tier2")
 class ShieldResult:
     """Wrapper for the public `shield()` return shape.
 
-    Back-compat note: older call sites unpacked `(text, verdict)` from
-    shield(); we retain tuple-iteration (see __iter__) so those callers
-    continue to work without a flag day, but prefer attribute access
-    (.cleaned_text, .verdict, .truncated) in new code. A5 plumbs
-    `truncated` up into ResearchBundle.sources_truncated.
+    Callers must use explicit attribute access
+    (`.cleaned_text`, `.verdict`, `.truncated`). A5 plumbs `truncated`
+    up into ResearchBundle.sources_truncated.
     """
 
     cleaned_text: str
     verdict: Optional[ContentShieldVerdict]
     truncated: bool = False
-
-    def __iter__(self):
-        yield self.cleaned_text
-        yield self.verdict
 
 
 def _is_retryable_error(exc: BaseException) -> bool:
@@ -439,9 +433,7 @@ async def shield(
     """Full shield pipeline.
 
     Returns a `ShieldResult` with cleaned_text, optional Tier 2 verdict,
-    and a `truncated` flag propagated from Tier 1. The result is
-    iterable as `(cleaned_text, verdict)` for back-compat with the
-    old tuple return.
+    and a `truncated` flag propagated from Tier 1.
 
     - Tier 1 always runs.
     - Tier 2 runs only if Tier 1 flagged AND `downstream_agent` is

@@ -17,7 +17,7 @@ from __future__ import annotations
 from ._common import (
     SmokeResult,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -28,7 +28,7 @@ ESTIMATED_COST_USD = 0.02
 
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 

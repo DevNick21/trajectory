@@ -99,11 +99,12 @@ async def _body() -> tuple[list[str], list[str], float]:
     from askpicky.validators.content_shield import shield as shield_content
 
     async def _fake_parse_stage(stage: str, user_text: str):
-        cleaned, _verdict = await shield_content(
+        shielded_text = await shield_content(
             content=user_text,
             source_type="user_message",
             downstream_agent="onboarding_parser",
         )
+        cleaned = shielded_text.cleaned_text
         if stage == "motivations":
             sents = _split_sentences(cleaned)
             if len(sents) < 2:

@@ -38,7 +38,35 @@ def _make_entry(kind: str, text: str, user_id: str):
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
 
+    from askpicky.config import settings
+    from askpicky import storage as storage_module
     from askpicky.storage import Storage
+
+    settings.embedding_dim = 8
+
+    def _vec(text: str) -> list[float]:
+        lower = text.lower()
+        return [
+            1.0 if "latency" in lower or "p99" in lower else 0.0,
+            1.0 if "postmortem" in lower or "incident" in lower else 0.0,
+            1.0 if "python" in lower or "django" in lower else 0.0,
+            1.0 if "payment" in lower or "kubernetes" in lower else 0.0,
+            1.0 if "rust" in lower or "tui" in lower else 0.0,
+            1.0 if "production" in lower else 0.0,
+            1.0 if "debug" in lower or "regression" in lower else 0.0,
+            0.1,
+        ]
+
+    async def _fake_embed(text: str) -> list[float]:
+        return _vec(text)
+
+    async def _fake_embed_batch(texts: list[str]) -> list[list[float]]:
+        return [_vec(text) for text in texts]
+
+    storage_module._embed = _fake_embed
+    storage_module._embed_batch = _fake_embed_batch
+    storage_module._faiss_index = None
+    storage_module._faiss_id_map = []
 
     messages: list[str] = []
     failures: list[str] = []

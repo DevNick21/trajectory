@@ -78,11 +78,12 @@ async def detect(
             _summarise_reviews(reviews or []),
         ]
     )
-    user_input, _ = await shield_content(
+    shielded_input = await shield_content(
         content=raw_input,
         source_type="scraped_company_page",
         downstream_agent="red_flags_detector",
     )
+    user_input = shielded_input.cleaned_text
 
     return await call_agent(
         agent_name="phase_1_red_flags",

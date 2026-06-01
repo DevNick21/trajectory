@@ -5,7 +5,7 @@ Exercises:
   - Retries once, surfacing feedback to the retry closure.
   - Raises SchemaRetryExhausted after max_retries.
 
-Cost: $0 (uses stub async functions, no Anthropic calls).
+Cost: $0 (uses stub async functions, no live LLM calls).
 """
 
 from __future__ import annotations

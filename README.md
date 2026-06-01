@@ -5,7 +5,7 @@
 
 AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro + OpenAI GPT-5.4) · No auto-apply, ever.
 
-*Last updated 2026-06-01 — web-first application assist, private-save memory controls, Chrome V2 companion plan, prompt-audited answer/memory agents.*
+*Last updated 2026-06-01 — V2 security gate, Supabase hosted auth/storage plan, Chrome companion scaffold, private-save application memory.*
 
 ---
 
@@ -42,7 +42,9 @@ Application assist now saves answer attempts, extracts reviewable memory atoms a
 | **Electron companion** | V3 power-user desktop workflow. | Later screen/audio/system integration once the hosted loop proves retention. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
 
-All surfaces call the same FastAPI orchestrator, one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured), and one SQLite + FAISS state store. The hosted web app remains the source of truth for paid users; local/self-hosted forks can run the open core, but hosted aggregate employer/outcome intelligence is the commercial moat.
+All surfaces call the same FastAPI orchestrator and one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured). Hosted V2 uses Supabase Auth plus Supabase Postgres/pgvector as the source of truth. Local/self-hosted forks keep SQLite + FAISS for OSS/dev mode, while hosted aggregate employer/outcome intelligence remains the commercial moat.
+
+The canonical V2 release plan is in [V2_SECURITY_CHROME_PLAN.md](V2_SECURITY_CHROME_PLAN.md).
 
 ---
 
@@ -56,11 +58,11 @@ All surfaces call the same FastAPI orchestrator, one multi-provider agent pipeli
 | Companies House | Dissolution, administration, overdue filings, wind-up resolutions |
 | Salary benchmarking | Offered vs. personal floor vs. market 10th percentile (ASHE) |
 | Red flags | Layoffs, lawsuits, Glassdoor patterns, regulatory actions, leaver signals |
-| Reviews investigator | Public-page review aggregation (Managed Agents sandbox) |
+| Reviews signals | Public-page review aggregation via scraper + Firecrawl fallback |
 | JSON-LD pre-LLM extractor | Avoids an Opus call when the page exposes Schema.org JobPosting |
 | Company scrape + summariser | Site-wide signal feed for the verdict |
 
-Then the verdict agent reasons over all of it. The Citations API guarantees every quoted snippet is verbatim from the source.
+Then the verdict agent reasons over all of it. Inline citation validation checks every quoted snippet against source text.
 
 ---
 

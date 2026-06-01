@@ -67,7 +67,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
             for required in ("status", "service", "version",
                              "storage_initialised",
-                             "demo_user_id_configured"):
+                             "auth_mode", "storage_backend"):
                 if required not in body:
                     failures.append(f"/health missing field: {required}")
 

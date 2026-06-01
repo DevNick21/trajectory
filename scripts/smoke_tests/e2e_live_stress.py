@@ -44,7 +44,7 @@ from ._common import (
     build_test_user,
     load_fixture_bundle,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -284,7 +284,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         return messages, failures, 0.0
 
     prepare_environment()
-    missing = require_anthropic_key()
+    missing = require_live_llm_key()
     if missing:
         return [], [missing], 0.0
 

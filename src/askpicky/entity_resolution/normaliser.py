@@ -79,7 +79,7 @@ __all__ = [
     "discriminator_blocks_match",
     "ensemble_score",
     "slugify",
-    # back-compat:
+    # common historic suffixes:
     "_normalise",
     "_strip_legal_suffix",
     "_expand_query_aliases",

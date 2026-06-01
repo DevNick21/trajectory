@@ -83,7 +83,7 @@ export default function DeepWork({ sessionId, bundle, initialCV }: Props) {
       const result = await generatePack(sessionId, "cv");
       // PackResult.output is loosely typed at the API edge; cast to
       // CVOutput here since the cv generator's contract is fixed
-      // (trajectory.schemas.CVOutput).
+      // (askpicky.schemas.CVOutput).
       const cv = result.output as unknown as CVOutput;
       dispatch({ kind: "generate_complete", cv });
       // Park output in the SPA's session cache so the hub knows this

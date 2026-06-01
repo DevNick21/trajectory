@@ -18,6 +18,9 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     process_md = Path(__file__).resolve().parents[2] / "PROCESS.md"
+    if not process_md.exists():
+        messages.append("PROCESS.md not present; numbering check skipped")
+        return messages, failures, 0.0
     text = process_md.read_text(encoding="utf-8")
     pattern = re.compile(r"^## Entry (\d+[a-z]*)", re.MULTILINE)
     numbers = [m.group(1) for m in pattern.finditer(text)]

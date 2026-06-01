@@ -121,6 +121,32 @@ CREATE TABLE IF NOT EXISTS llm_cost_log (
 );
 CREATE INDEX IF NOT EXISTS idx_cost_agent ON llm_cost_log(agent_name);
 
+CREATE TABLE IF NOT EXISTS quota_usage_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    period TEXT NOT NULL,
+    units INTEGER NOT NULL,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_quota_user_period
+    ON quota_usage_events(user_id, category, period);
+
+CREATE TABLE IF NOT EXISTS security_audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    event_type TEXT NOT NULL,
+    resource_type TEXT,
+    resource_id TEXT,
+    payload TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_security_audit_user_time
+    ON security_audit_events(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_security_audit_event_time
+    ON security_audit_events(event_type, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS queued_jobs (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -1004,33 +1030,13 @@ async def get_cached_page(url: str, max_age_hours: int = 24) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
-# Approximate $/token prices (verify before production).
-# Opus 4.7 and Sonnet 4.6 pricing intentionally conservative here.
-# Public Anthropic list prices in USD per 1M tokens. Cross-checked
-# against https://www.anthropic.com/pricing on 2026-04-25 for:
-#   - claude-opus-4-7
-#   - claude-sonnet-4-6
-#   - claude-haiku-4-5
-# These feed `estimate_cost_usd` to populate `llm_cost_log.cost_usd`
-# at every `log_llm_cost(...)` call. Update this table when Anthropic
-# revises list prices, or when a new model bucket lands. The runtime
-# already records the upstream `usage` block (real Anthropic-side
-# token counts) — only the per-token-class USD rate is local.
-#
-# Anthropic also exposes a retrospective billing API at
-# `/v1/organizations/usage_report/messages` for true post-hoc
-# reconciliation; this codebase doesn't pull from it (the local
-# computation is good enough for credit-budget refusal and the
-# smoke rollup, both of which run pre-billing-cycle). If the
-# numbers in `llm_cost_log` ever diverge meaningfully from the
-# admin API, that's the cue to wire a reconciliation job rather
-# than nudge these constants.
-_PRICING_LAST_VERIFIED = "2026-04-26"
+# Approximate $/token prices (verify before production). These feed
+# `estimate_cost_usd` to populate `llm_cost_log.cost_usd` at every
+# `log_llm_cost(...)` call. Hosted V2 reconciles actual usage through
+# the quota ledger; this local estimate is for dev budgets and smoke
+# rollups.
+_PRICING_LAST_VERIFIED = "2026-06-01"
 _PRICING_USD_PER_MTOK = {
-    # Anthropic
-    "opus":   {"input": 15.0, "output": 75.0},
-    "sonnet": {"input":  3.0, "output": 15.0},
-    "haiku":  {"input":  0.80, "output":  4.0},
     # DeepSeek (May 2026 — 75% promo active through 2026-05-31)
     # Post-promo: flash $0.14/$0.28, pro $1.74/$3.48
     "deepseek-flash": {"input": 0.14, "output": 0.28},
@@ -1046,13 +1052,6 @@ _PRICING_USD_PER_MTOK = {
 
 def _price_bucket(model: str) -> dict[str, float]:
     m = model.lower()
-    # Anthropic family
-    if "opus" in m:
-        return _PRICING_USD_PER_MTOK["opus"]
-    if "sonnet" in m:
-        return _PRICING_USD_PER_MTOK["sonnet"]
-    if "haiku" in m:
-        return _PRICING_USD_PER_MTOK["haiku"]
     # DeepSeek family
     if "deepseek" in m:
         if "pro" in m:
@@ -1067,10 +1066,10 @@ def _price_bucket(model: str) -> dict[str, float]:
         return _PRICING_USD_PER_MTOK["gpt-5"]
     if "gpt-4o" in m or "gpt4o" in m:
         return _PRICING_USD_PER_MTOK["gpt-4o"]
-    # Unknown — use Sonnet pricing as a conservative default. Better to
+    # Unknown — use GPT-5 pricing as a conservative default. Better to
     # overestimate than have an unknown-priced call sneak under the
     # credit-budget refusal.
-    return _PRICING_USD_PER_MTOK["sonnet"]
+    return _PRICING_USD_PER_MTOK["gpt-5"]
 
 
 def estimate_cost_usd(
@@ -1080,10 +1079,10 @@ def estimate_cost_usd(
     cache_read_tokens: int = 0,
     cache_creation_tokens: int = 0,
 ) -> float:
-    """Anthropic prompt-caching pricing (B1/B2):
+    """Estimate model usage cost.
 
-    - cache_creation_tokens: ~1.25x the base input rate (write).
-    - cache_read_tokens: ~0.1x the base input rate (read hit).
+    - cache_creation_tokens: estimated at 1.25x the base input rate.
+    - cache_read_tokens: estimated at 0.1x the base input rate.
     - regular input_tokens: full input rate.
 
     `input_tokens` from the API is the "fresh input" count — cache reads
@@ -1145,6 +1144,108 @@ async def total_cost_usd() -> float:
         async with db.execute("SELECT COALESCE(SUM(cost_usd), 0) FROM llm_cost_log") as cur:
             row = await cur.fetchone()
     return float(row[0]) if row else 0.0
+
+
+def _quota_limit_for(category: str) -> int:
+    if category == "forward_job":
+        return settings.quota_forward_job_monthly
+    if category == "generator":
+        return settings.quota_generator_monthly
+    if category == "assist":
+        return settings.quota_assist_monthly
+    return settings.quota_chitchat_monthly
+
+
+def _quota_period(now: Optional[datetime] = None) -> str:
+    now = now or _utcnow()
+    return f"{now.year:04d}-{now.month:02d}"
+
+
+async def record_quota_usage(
+    *,
+    user_id: str,
+    category: str,
+    units: int = 1,
+    metadata: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Atomically record quota usage if the user's monthly bucket permits it."""
+    category = category or "chitchat"
+    units = max(1, int(units))
+    limit = _quota_limit_for(category)
+    period = _quota_period()
+    async with await _connect() as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT COALESCE(SUM(units), 0)
+            FROM quota_usage_events
+            WHERE user_id = ? AND category = ? AND period = ?
+            """,
+            (user_id, category, period),
+        ) as cur:
+            row = await cur.fetchone()
+        used = int(row[0] or 0) if row else 0
+        if used + units > limit:
+            await db.rollback()
+            return {
+                "allowed": False,
+                "user_id": user_id,
+                "category": category,
+                "period": period,
+                "limit": limit,
+                "used": used,
+            }
+        await db.execute(
+            """
+            INSERT INTO quota_usage_events
+                (user_id, category, period, units, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                category,
+                period,
+                units,
+                json.dumps(metadata or {}, default=str),
+                _utcnow().isoformat(),
+            ),
+        )
+        await db.commit()
+    return {
+        "allowed": True,
+        "user_id": user_id,
+        "category": category,
+        "period": period,
+        "limit": limit,
+        "used": used + units,
+    }
+
+
+async def append_security_audit_event(
+    *,
+    event_type: str,
+    user_id: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    payload: Optional[dict[str, Any]] = None,
+) -> None:
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO security_audit_events
+                (user_id, event_type, resource_type, resource_id, payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                event_type,
+                resource_type,
+                resource_id,
+                json.dumps(payload or {}, default=str),
+                _utcnow().isoformat(),
+            ),
+        )
+        await db.commit()
 
 
 async def session_cost_summary(session_id: str) -> dict:
@@ -2396,6 +2497,38 @@ class Storage:
 
     async def session_cost_summary(self, session_id: str) -> dict:
         return await session_cost_summary(session_id=session_id)
+
+    async def record_quota_usage(
+        self,
+        *,
+        user_id: str,
+        category: str,
+        units: int = 1,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        return await record_quota_usage(
+            user_id=user_id,
+            category=category,
+            units=units,
+            metadata=metadata,
+        )
+
+    async def append_security_audit_event(
+        self,
+        *,
+        event_type: str,
+        user_id: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+        payload: Optional[dict[str, Any]] = None,
+    ) -> None:
+        await append_security_audit_event(
+            event_type=event_type,
+            user_id=user_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            payload=payload,
+        )
 
     # ── Queued jobs ────────────────────────────────────────────────────────
 

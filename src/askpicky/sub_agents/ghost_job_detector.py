@@ -31,7 +31,7 @@ from datetime import date
 from typing import Optional
 
 from ..config import settings
-from ..llm import call_structured
+from ..llm import call_agent
 from ..schemas import (
     Citation,
     CompaniesHouseSnapshot,
@@ -78,7 +78,7 @@ async def _score_jd(
     session_id: Optional[str] = None,
 ) -> GhostJobJDScore:
     """5-dim JD specificity score via Haiku. ~$0.005, ~2-3s."""
-    return await call_structured(
+    return await call_agent(
         agent_name="ghost_job_jd_scorer",
         system_prompt=_JD_SCORER_PROMPT,
         user_input=jd.jd_text_full,

@@ -319,7 +319,7 @@ def test_empty_html_returns_none():
 @pytest.mark.asyncio
 async def test_extract_jd_prepends_ground_truth_block():
     """When jsonld is passed, the Sonnet user_input starts with a
-    GROUND-TRUTH FIELDS block. Mock out the Anthropic call."""
+    GROUND-TRUTH FIELDS block. Mock out the LLM call."""
     from askpicky.sub_agents import company_scraper
     from askpicky.schemas import ExtractedJobDescription
 

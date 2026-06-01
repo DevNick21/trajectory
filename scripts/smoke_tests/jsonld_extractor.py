@@ -28,7 +28,7 @@ ESTIMATED_COST_USD = 0.0
 # the search page, which also carries JobPosting JSON-LD for the first
 # few results.
 _SMOKE_URL = "https://www.civilservicejobs.service.gov.uk/csr/index.cgi"
-_USER_AGENT = "Mozilla/5.0 (compatible; TrajectoryBot/0.1)"
+_USER_AGENT = "Mozilla/5.0 (compatible; AskPickyBot/0.1)"
 
 logger = logging.getLogger("smoke.jsonld_extractor")
 

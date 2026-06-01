@@ -28,6 +28,7 @@ REQUIRES_LIVE_LLM = False
 
 async def _body() -> tuple[list[str], list[str], float]:
     prepare_environment()
+    from askpicky.config import settings
 
     from askpicky.storage import Storage
 
@@ -76,7 +77,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     await log_llm_cost(
         session_id=session.session_id,
         agent_name="smoke_crud",
-        model=settings.sonnet_model_id,
+        model=settings.TIER_FAST[0],
         input_tokens=1_000,
         output_tokens=500,
     )

@@ -109,7 +109,7 @@ export default function CVPreview({
              <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-widest">Grounding: High</span>
           </div>
         </div>
-        <span className="text-[8px] font-mono text-muted-foreground/30 uppercase">Trajectory // Lab-ID: {Math.random().toString(36).substring(7).toUpperCase()}</span>
+        <span className="text-[8px] font-mono text-muted-foreground/30 uppercase">AskPicky // Lab-ID: {Math.random().toString(36).substring(7).toUpperCase()}</span>
       </div>
     </Card>
   );

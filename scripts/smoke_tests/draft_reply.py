@@ -17,7 +17,7 @@ from ._common import (
     build_synthetic_writing_style,
     build_test_user,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -38,7 +38,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     mock = os.getenv("SMOKE_DRAFT_REPLY_MOCK", "").lower() in {"1", "true", "yes"}
     if not mock:
-        missing = require_anthropic_key()
+        missing = require_live_llm_key()
         if missing:
             return [], [missing], 0.0
 

@@ -210,19 +210,20 @@ async def route(
     # only (the router only decides a label, so residual risk is capped).
     from ..validators.content_shield import shield as shield_content
 
-    cleaned_msg, _ = await shield_content(
+    shielded_msg = await shield_content(
         content=user_message,
         source_type="user_message",
         downstream_agent="intent_router",
     )
+    cleaned_msg = shielded_msg.cleaned_text
     cleaned_recent: list[str] = []
     for m in recent_messages[-4:]:
-        c, _ = await shield_content(
+        shielded_recent = await shield_content(
             content=m,
             source_type="user_message",
             downstream_agent="intent_router",
         )
-        cleaned_recent.append(c)
+        cleaned_recent.append(shielded_recent.cleaned_text)
 
     context_lines = [f"USER MESSAGE: {cleaned_msg}"]
     if cleaned_recent:

@@ -1,6 +1,6 @@
 """Onboarding CV parser — Haiku-driven structured extraction.
 
-`parse()` runs the user's CV text through Haiku via `call_structured`
+`parse()` runs the user's CV text through the fast tier via `call_agent`
 and returns the full structured CVImport (name, location, contact
 email, roles with bullets, education, projects, skills, narrative).
 ~$0.02, ~5s. This is the only path the `/api/onboarding/cv_import`
@@ -20,7 +20,7 @@ from io import BytesIO
 from typing import Optional
 
 from ..config import settings
-from ..llm import call_structured
+from ..llm import call_agent
 from ..schemas import CVImport, CVImportLLMOutput
 from ..validators.content_shield import tier1 as _shield_tier1
 
@@ -93,7 +93,7 @@ async def parse(
 
     shielded = _shield_tier1(cv_text).cleaned_text
 
-    extracted: CVImportLLMOutput = await call_structured(
+    extracted: CVImportLLMOutput = await call_agent(
         agent_name="cv_parser",
         system_prompt=_SYSTEM_PROMPT,
         user_input=shielded,

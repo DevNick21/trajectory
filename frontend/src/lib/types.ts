@@ -1,7 +1,6 @@
-// TypeScript mirrors of the FastAPI response shapes (api/schemas.py +
-// trajectory/schemas.py). Keep these synced manually for now —
-// MIGRATION_PLAN.md §9 deferred a codegen step. If a backend Pydantic
-// field renames, find and update here.
+// TypeScript mirrors of the FastAPI response shapes. The generated OpenAPI
+// contract in frontend/src/generated is now canonical for new routes; keep
+// these legacy hand-written shapes in sync until callers are migrated.
 
 // ---------------------------------------------------------------------------
 // Profile
@@ -465,7 +464,7 @@ export interface MemoryExportResponse {
 
 // ---------------------------------------------------------------------------
 // CV pack output (PackResult.output when generator === "cv")
-// Mirrors trajectory.schemas.CVOutput / CVRole / CVBullet.
+// Mirrors askpicky.schemas.CVOutput / CVRole / CVBullet.
 // ---------------------------------------------------------------------------
 
 export interface CVBullet {

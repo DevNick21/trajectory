@@ -104,7 +104,7 @@ class OpenAICompatBackend:
                 f"```json\n{schema_text}\n```"
             )
 
-        # Map Anthropic-style `effort` to provider-specific reasoning_effort.
+        # Map the local `effort` hint to provider-specific reasoning_effort.
         #
         # DeepSeek: valid values are "high", "max".
         #   low/medium → high, high → high, xhigh/max → max.

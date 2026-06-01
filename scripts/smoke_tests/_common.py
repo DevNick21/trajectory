@@ -6,8 +6,6 @@ Responsibilities:
   - Redirect `settings.sqlite_db_path` and `settings.faiss_index_path`
     to a fresh temp dir per run so real-API smoke tests never touch the
     project's SQLite DB / FAISS index.
-  - Disable Managed Agents by default — the plain Messages API is easier
-    to debug when a smoke test fails.
   - Provide a uniform `SmokeResult` + `run_smoke(name, coro)` wrapper so
     `run_all.py` can aggregate results without boilerplate.
 
@@ -114,9 +112,9 @@ _ENV_SET_UP = False
 
 
 def prepare_environment() -> Path:
-    """Redirect SQLite + FAISS paths to a per-run tempdir and disable
-    Managed Agents. Safe to call multiple times — only the first call
-    mutates `settings`.
+    """Redirect SQLite + FAISS paths to a per-run tempdir.
+
+    Safe to call multiple times; only the first call mutates `settings`.
 
     Returns the tempdir path so callers can inspect / clean up.
     """
@@ -125,33 +123,34 @@ def prepare_environment() -> Path:
     if _ENV_SET_UP:
         return tmp
 
-    # Import `settings` lazily — pydantic-settings reads .env at import
-    # time, and we want .env-driven keys (ANTHROPIC_API_KEY,
-    # COMPANIES_HOUSE_API_KEY) to flow through.
+    # Import `settings` lazily because pydantic-settings reads .env at import
+    # time, and we want .env-driven keys to flow through.
     from askpicky.config import settings
 
     settings.sqlite_db_path = tmp / "smoke.db"
     settings.faiss_index_path = tmp / "smoke.faiss"
-    if hasattr(settings, "enable_managed_company_investigator"):
-        settings.enable_managed_company_investigator = False
 
     _ENV_SET_UP = True
     return tmp
 
 
-def require_anthropic_key() -> Optional[str]:
-    """Return an error message if the Anthropic key isn't wired anywhere,
-    else None.
-    """
+def require_live_llm_key() -> Optional[str]:
+    """Return an error message if no configured live LLM key is available."""
     from askpicky.config import settings
 
-    if not settings.anthropic_api_key:
-        return (
-            "ANTHROPIC_API_KEY is not set in .env or the environment. "
-            "This smoke test makes a real Opus call and cannot run "
-            "without it."
-        )
-    return None
+    provider_keys = {
+        "deepseek": settings.deepseek_api_key,
+        "openai": settings.openai_api_key,
+    }
+    configured_provider = settings.TIER_FAST[1]
+    if provider_keys.get(configured_provider):
+        return None
+    if any(provider_keys.values()):
+        return None
+    return (
+        "No live LLM API key is set. Configure DEEPSEEK_API_KEY or "
+        "OPENAI_API_KEY before running this smoke test."
+    )
 
 
 def require_env(name: str) -> Optional[str]:

@@ -15,7 +15,7 @@ keep the queue entry with `status="failed"` + an `error` blurb so the
 user can retry or delete from the web UI.
 
 Concurrency cap defaults to 3 — high enough to feel parallel, low
-enough to stay polite on Anthropic's rate limits for the demo budget.
+enough to stay inside provider rate limits for the demo budget.
 Bumped via the `QUEUE_BATCH_CONCURRENCY` env var if needed.
 """
 

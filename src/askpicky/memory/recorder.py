@@ -5,7 +5,7 @@ Persists structured cross-application events to the local SQLite DB
 client-side memory tool registered with agents that need recall.
 
 Design choice: we do NOT use `beta.memory_stores` here because that
-surface is scoped to a single Managed Agents *session* — it doesn't
+surface is scoped to a single live-assist *session* — it doesn't
 persist across conversations. Cross-application learning needs
 durable, queryable storage; SQLite is the right primitive.
 """

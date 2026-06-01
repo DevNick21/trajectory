@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "AskPicky Companion",
+  "description": "Send highlighted job questions to AskPicky and write back approved answers.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "clipboardWrite"],
+  "host_permissions": ["https://askpicky.com/*"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel.html"
+  },
+  "action": {
+    "default_title": "AskPicky"
+  },
+  "commands": {
+    "send-selection-to-askpicky": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "Send selected text to AskPicky"
+    }
+  }
+}

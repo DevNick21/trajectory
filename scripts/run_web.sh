@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Trajectory frontend — local dev launcher.
+# AskPicky frontend — local dev launcher.
 # Vite serves on :5173 by default; proxies /api → http://localhost:8000.
 set -euo pipefail
 

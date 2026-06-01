@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 import httpx
 
 from .config import settings
+from .validators.url_safety import UnsafeURL, validate_public_fetch_url
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,12 @@ async def firecrawl_scrape(url: str) -> Optional[str]:
     primary fetch path has already failed and the page is critical for
     verdict or red-flag evidence.
     """
+    try:
+        url = await validate_public_fetch_url(url)
+    except UnsafeURL as exc:
+        logger.warning("Blocked unsafe Firecrawl URL %s: %s", url, exc)
+        return None
+
     if not settings.firecrawl_api_key:
         logger.warning(
             "FIRECRAWL_API_KEY not set — skipping Firecrawl fallback for %s",

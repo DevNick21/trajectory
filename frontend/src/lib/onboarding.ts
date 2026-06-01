@@ -6,7 +6,7 @@ import type { OnboardingFinalisePayload } from "./api";
 // session). This hook is the single source of truth: read-on-mount,
 // write-on-change. Resume-on-refresh is free.
 
-const STORAGE_KEY = "trajectory.onboarding";
+const STORAGE_KEY = "askpicky.onboarding";
 
 export const initialAnswers: OnboardingAnswers = {
   name: "",

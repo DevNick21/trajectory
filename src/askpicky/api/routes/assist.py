@@ -48,7 +48,7 @@ from ...schemas import (
     WritingStyleProfile,
 )
 from ...storage import Storage
-from ..dependencies import get_current_user, get_storage
+from ..dependencies import get_current_user, get_storage, rate_limit
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -240,7 +240,11 @@ async def _load_assist_session_owned(
     return session
 
 
-@router.post("/assist/start", response_model=AssistStartResponse)
+@router.post(
+    "/assist/start",
+    response_model=AssistStartResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
 async def start_assist(
     body: AssistStartRequest,
     user: UserProfile = Depends(get_current_user),
@@ -260,14 +264,25 @@ async def start_assist(
     return AssistStartResponse(assist_session=assist_session)
 
 
-@router.post("/assist/classify-question", response_model=ClassifyQuestionResponse)
-async def classify_question_route(body: ClassifyQuestionRequest) -> ClassifyQuestionResponse:
+@router.post(
+    "/assist/classify-question",
+    response_model=ClassifyQuestionResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
+async def classify_question_route(
+    body: ClassifyQuestionRequest,
+    _user: UserProfile = Depends(get_current_user),
+) -> ClassifyQuestionResponse:
     return ClassifyQuestionResponse(
         pattern=classify_question(body.question_text, body.jd_text),
     )
 
 
-@router.post("/assist/suggest-memory", response_model=SuggestMemoryResponse)
+@router.post(
+    "/assist/suggest-memory",
+    response_model=SuggestMemoryResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
 async def suggest_memory(
     body: SuggestMemoryRequest,
     user: UserProfile = Depends(get_current_user),
@@ -299,7 +314,11 @@ async def suggest_memory(
     )
 
 
-@router.post("/assist/critique-draft", response_model=CritiqueDraftResponse)
+@router.post(
+    "/assist/critique-draft",
+    response_model=CritiqueDraftResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
 async def critique_draft_route(
     body: CritiqueDraftRequest,
     user: UserProfile = Depends(get_current_user),
@@ -352,7 +371,11 @@ async def critique_draft_route(
     )
 
 
-@router.post("/assist/polish", response_model=PolishResponse)
+@router.post(
+    "/assist/polish",
+    response_model=PolishResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
 async def polish_answer(
     body: PolishRequest,
     user: UserProfile = Depends(get_current_user),
@@ -497,7 +520,11 @@ async def _run_optional_memory_extractor(
         log.exception("optional memory_extractor failed for attempt=%s", attempt.attempt_id)
 
 
-@router.post("/assist/approve", response_model=ApproveAnswerResponse)
+@router.post(
+    "/assist/approve",
+    response_model=ApproveAnswerResponse,
+    dependencies=[Depends(rate_limit("application_assist"))],
+)
 async def approve_answer(
     body: ApproveAnswerRequest,
     user: UserProfile = Depends(get_current_user),
@@ -567,6 +594,12 @@ async def export_memory(
         user_id=user.user_id,
         include_raw=include_raw,
     )
+    await storage.append_security_audit_event(
+        event_type="privacy.memory_export",
+        user_id=user.user_id,
+        resource_type="memory",
+        payload={"include_raw": include_raw},
+    )
     return MemoryExportResponse(**data)
 
 
@@ -576,6 +609,12 @@ async def purge_expired_memory_raw(
     storage: Storage = Depends(get_storage),
 ) -> MemoryPurgeResponse:
     purged = await storage.purge_expired_answer_attempt_raw(user_id=user.user_id)
+    await storage.append_security_audit_event(
+        event_type="privacy.raw_retention_purge",
+        user_id=user.user_id,
+        resource_type="answer_attempts",
+        payload={"purged_attempts": purged, "scheduled": False},
+    )
     return MemoryPurgeResponse(purged_attempts=purged)
 
 
@@ -607,6 +646,20 @@ async def update_memory_inbox_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "memory_item_not_found"},
         )
+    await storage.append_security_audit_event(
+        event_type="privacy.memory_review_update",
+        user_id=user.user_id,
+        resource_type=item_kind,
+        resource_id=item_id,
+        payload={
+            "review_status": body.review_status,
+            "visibility": body.visibility,
+            "edited": any(
+                value is not None
+                for value in (body.text, body.title, body.summary)
+            ),
+        },
+    )
     return MemoryInboxUpdateResponse(ok=True)
 
 
@@ -630,6 +683,12 @@ async def hard_delete_memory_inbox_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "memory_item_not_found"},
         )
+    await storage.append_security_audit_event(
+        event_type="privacy.memory_hard_delete",
+        user_id=user.user_id,
+        resource_type=item_kind,
+        resource_id=item_id,
+    )
     return MemoryInboxDeleteResponse(ok=True)
 
 
@@ -653,4 +712,11 @@ async def merge_memory_inbox_items(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "memory_item_not_found"},
         )
+    await storage.append_security_audit_event(
+        event_type="privacy.memory_merge",
+        user_id=user.user_id,
+        resource_type=body.item_kind,
+        resource_id=body.target_item_id,
+        payload={"source_count": len(body.source_item_ids), "merged_count": merged_count},
+    )
     return MemoryMergeResponse(ok=True, merged_count=merged_count)

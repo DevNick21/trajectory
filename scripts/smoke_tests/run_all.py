@@ -128,11 +128,6 @@ _REGISTRY: list[_Entry] = [
     _Entry("scraper",            "scripts.smoke_tests.scraper",            cheap=False, category="e2e"),
     _Entry("verdict",            "scripts.smoke_tests.verdict",            cheap=False, category="e2e"),
     _Entry("phase4_cv",          "scripts.smoke_tests.phase4_cv",          cheap=False, category="e2e"),
-    # Managed Agents paths — each gated behind its own SMOKE_* env var
-    # inside the test body; runs ~$1-3 when enabled, no-ops otherwise.
-    _Entry("managed_investigator",  "scripts.smoke_tests.managed_investigator",  cheap=False, category="e2e"),
-    _Entry("managed_reviews",       "scripts.smoke_tests.managed_reviews",       cheap=False, category="e2e"),
-    _Entry("managed_cover_letter",  "scripts.smoke_tests.managed_cover_letter",  cheap=False, category="e2e"),
     _Entry("e2e_live_stress",       "scripts.smoke_tests.e2e_live_stress",       cheap=False, category="e2e"),
     # Agentic CV tailor: gated behind SMOKE_AGENTIC_CV=1 (~$0.35).
     _Entry("cv_tailor_agentic",  "scripts.smoke_tests.cv_tailor_agentic",  cheap=False, category="e2e"),
@@ -146,7 +141,7 @@ def _configure_logging(verbose: bool) -> None:
     )
     # Silence noisy third-party loggers unless --verbose.
     if not verbose:
-        for noisy in ("httpx", "httpcore", "anthropic",
+        for noisy in ("httpx", "httpcore",
                       "urllib3", "filelock", "sentence_transformers"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
@@ -274,7 +269,7 @@ def _print_rollup(results, total_cost: float) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run Trajectory smoke tests.")
+    parser = argparse.ArgumentParser(description="Run AskPicky smoke tests.")
     parser.add_argument("--list", action="store_true", help="List registered tests and exit.")
     parser.add_argument("--only", help="Comma-separated tests to run (whitelist).")
     parser.add_argument("--skip", help="Comma-separated tests to skip.")

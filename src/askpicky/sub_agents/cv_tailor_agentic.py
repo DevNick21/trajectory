@@ -47,7 +47,7 @@ _MIN_SEARCH_CALLS = 3
 
 
 # ---------------------------------------------------------------------------
-# Tool schemas (Anthropic-style input_schema — converted by llm.py)
+# Tool schemas (local input_schema — converted by llm.py)
 # ---------------------------------------------------------------------------
 
 
@@ -194,7 +194,7 @@ class CVTailorToolExecutor:
 
         results = []
         for e in entries:
-            cleaned, _ = await shield_content(
+            shielded_entry = await shield_content(
                 content=e.raw_text[:1500],
                 source_type="user_message",
                 downstream_agent="cv_tailor",
@@ -202,7 +202,7 @@ class CVTailorToolExecutor:
             results.append({
                 "entry_id": e.entry_id,
                 "kind": e.kind,
-                "raw_text": cleaned,
+                "raw_text": shielded_entry.cleaned_text,
             })
         return json.dumps({"results": results})
 

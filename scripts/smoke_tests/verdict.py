@@ -1,7 +1,7 @@
 """Smoke test — verdict agent against the fixture bundle.
 
 Exercises:
-  - Anthropic SDK auth + tool_use + extended thinking wiring
+  - provider routing + tool use wiring
   - verdict system prompt end-to-end against a realistic bundle
   - post_validate: citation validator, reasoning-point floor,
     GO-with-hard-blockers rejection + retry feedback
@@ -25,7 +25,7 @@ from ._common import (
     build_test_user,
     load_fixture_bundle,
     prepare_environment,
-    require_anthropic_key,
+    require_live_llm_key,
     run_smoke,
 )
 
@@ -39,7 +39,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     mock = os.getenv("SMOKE_TEST_MOCK", "").lower() in {"1", "true", "yes"}
     if not mock:
-        missing = require_anthropic_key()
+        missing = require_live_llm_key()
         if missing:
             return [], [missing], 0.0
 

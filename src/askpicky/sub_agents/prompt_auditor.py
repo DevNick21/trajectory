@@ -1,7 +1,7 @@
 """Prompt Auditor — build-time-only agent.
 
 AGENTS.md §17. Critiques another agent's system prompt against
-Trajectory's discipline checklist. Not part of the runtime pipeline;
+AskPicky's discipline checklist. Not part of the runtime pipeline;
 developers invoke it via `scripts/audit_prompt.py`.
 
 Never sees production user data. Never runs at runtime.

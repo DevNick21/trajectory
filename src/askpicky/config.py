@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -35,13 +36,6 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     # OpenAI — GPT-5.4 for verdict, benchmarking, and optional routing
     openai_api_key: str = ""
-    # Backward-compatible aliases used by legacy tests/smokes while the
-    # runtime routes through TIER_* and agent_tier_map.
-    anthropic_api_key: str = ""
-    openai_pro_model_id: str = "gpt-5.4"
-    deepseek_pro_model_id: str = "deepseek-v4-pro"
-    opus_model_id: str = "gpt-5.4"
-    sonnet_model_id: str = "deepseek-v4-flash"
     # Firecrawl — anti-bot page scraping fallback
     firecrawl_api_key: str = ""
     firecrawl_base_url: str = "https://api.firecrawl.dev/v2"
@@ -77,6 +71,7 @@ class Settings(BaseSettings):
         "cv_tailor_agentic": "normal",
         "salary_strategist": "normal",
         "application_answer_shaper": "normal",
+        "verdict_fallback": "normal",
         # strong tier — high-stakes judgment
         "verdict": "strong",
         "self_audit": "strong",
@@ -101,8 +96,23 @@ class Settings(BaseSettings):
     enable_splink_sponsor_match: bool = False
     # Pre-verdict triage
     enable_triage_before_verdict: bool = True
-    enable_managed_company_investigator: bool = False
-    enable_batch_queue_runner: bool = False
+
+    # --- hosted V2 security gates
+    # Local OSS/dev defaults to demo identity. Hosted V2 must use
+    # auth_mode="supabase" and provide SUPABASE_JWT_SECRET.
+    auth_mode: Literal["demo", "supabase"] = "demo"
+    supabase_project_url: str = ""
+    supabase_jwt_secret: str = ""
+    supabase_jwt_audience: str = "authenticated"
+    internal_api_token: str = ""
+    storage_backend: Literal["sqlite", "supabase_postgres"] = "sqlite"
+    enforce_hosted_quotas: bool = False
+    quota_forward_job_monthly: int = 25
+    quota_generator_monthly: int = 80
+    quota_assist_monthly: int = 250
+    quota_chitchat_monthly: int = 1000
+    privacy_purge_interval_hours: int = 24
+    privacy_purge_on_startup: bool = True
 
     # --- paths
     data_dir: Path = Path("./data")
@@ -160,8 +170,24 @@ class Settings(BaseSettings):
         missing: list[str] = []
         if not self.deepseek_api_key:
             missing.append("DEEPSEEK_API_KEY")
-        if not self.demo_user_id:
+        if self.auth_mode == "demo" and not self.demo_user_id:
             missing.append("DEMO_USER_ID")
+        if self.auth_mode == "supabase":
+            if not self.supabase_project_url:
+                missing.append("SUPABASE_PROJECT_URL")
+            if not self.supabase_jwt_secret:
+                missing.append("SUPABASE_JWT_SECRET")
+            if not self.internal_api_token:
+                missing.append("INTERNAL_API_TOKEN")
+        if self.storage_backend == "supabase_postgres":
+            # The first V2 implementation keeps SQLite for local OSS and
+            # uses this flag as a hosted deployment contract until the
+            # Postgres adapter lands.
+            if self.auth_mode != "supabase":
+                raise ValueError(
+                    "STORAGE_BACKEND=supabase_postgres requires "
+                    "AUTH_MODE=supabase."
+                )
         if missing:
             raise ValueError(
                 "Missing required environment variables: "

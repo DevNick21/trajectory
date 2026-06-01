@@ -71,6 +71,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             Verdict,
         )
         from askpicky import llm as askpicky_llm
+        from askpicky.config import settings
         from askpicky.storage import Storage
         from askpicky.sub_agents import (
             companies_house as ch_agent,
@@ -82,10 +83,13 @@ async def _body() -> tuple[list[str], list[str], float]:
             sponsor_register as sr_agent,
             verdict as verdict_module,
         )
+        from askpicky.entity_resolution import judge as entity_judge
 
         bundle = load_fixture_bundle()
         user = build_test_user("visa_holder")
         session = build_test_session(user.user_id)
+        prior_triage = settings.enable_triage_before_verdict
+        settings.enable_triage_before_verdict = False
 
         storage = Storage()
         await storage.initialise()
@@ -160,6 +164,8 @@ async def _body() -> tuple[list[str], list[str], float]:
             "ghost_job_detector.score": ghost_job_detector.score,
             "rf_agent.detect": rf_agent.detect,
             "verdict_module._mock_verdict": verdict_module._mock_verdict,
+            "entity_judge.should_invoke_judge": entity_judge.should_invoke_judge,
+            "entity_judge.judge_candidates": entity_judge.judge_candidates,
         }
 
         async def _fake_scraper(*, job_url, session_id, on_jd_extracted=None):
@@ -167,7 +173,7 @@ async def _body() -> tuple[list[str], list[str], float]:
                 await on_jd_extracted()
             return bundle.company_research, bundle.extracted_jd
 
-        async def _fake_ch(*, company_name):
+        async def _fake_ch(*, company_name=None, crn=None, aliases=None):
             return bundle.companies_house
 
         class _StubReviewsOut:
@@ -176,7 +182,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         async def _fake_call_in_session(name, **kwargs):
             if name == "reviews_investigator":
                 return _StubReviewsOut()
-            raise NotImplementedError(f"unexpected managed session {name!r}")
+            raise NotImplementedError(f"unexpected live session {name!r}")
 
         async def _fake_gazette(*, company_name, canonical_name=None, crn=None):
             return []
@@ -202,6 +208,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         ghost_job_detector.score = _fake_ghost
         rf_agent.detect = _fake_red_flags
         verdict_module._mock_verdict = lambda user, bundle: wrong_verdict
+        entity_judge.should_invoke_judge = lambda **_kwargs: False
+        entity_judge.judge_candidates = lambda **_kwargs: None
 
         emitter = _CapturingEmitter()
 
@@ -283,6 +291,9 @@ async def _body() -> tuple[list[str], list[str], float]:
             ghost_job_detector.score = originals["ghost_job_detector.score"]
             rf_agent.detect = originals["rf_agent.detect"]
             verdict_module._mock_verdict = originals["verdict_module._mock_verdict"]
+            entity_judge.should_invoke_judge = originals["entity_judge.should_invoke_judge"]
+            entity_judge.judge_candidates = originals["entity_judge.judge_candidates"]
+            settings.enable_triage_before_verdict = prior_triage
             await storage.close()
     finally:
         if prior_mock is None:

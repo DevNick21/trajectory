@@ -1,6 +1,6 @@
 """Tests for cv_tailor_agentic + call_agent_with_tools + dispatcher.
 
-Fully mocked — no Anthropic SDK, no FAISS, no SQLite. Exercises:
+Fully mocked — no provider SDK, no FAISS, no SQLite. Exercises:
   - call_agent_with_tools loop mechanics (tool_use → tool_result →
     final emit)
   - CVTailorToolExecutor tracks retrieved_ids
@@ -35,6 +35,7 @@ from askpicky.schemas import (
     WritingStyleProfile,
 )
 from askpicky.sub_agents import cv_tailor_agentic
+from askpicky.validators.content_shield import ShieldResult
 
 
 # ---------------------------------------------------------------------------
@@ -175,25 +176,26 @@ def _cv_output(entry_ids: list[str]) -> CVOutput:
 
 
 # ---------------------------------------------------------------------------
-# Scripted SDK mock for call_agent_with_tools
+# Scripted provider mock for call_agent_with_tools
 # ---------------------------------------------------------------------------
 
 
-class _Block:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
-def _tool_use(name: str, tool_input: dict, tool_id: str = "tu_x") -> _Block:
-    return _Block(type="tool_use", name=name, input=tool_input, id=tool_id)
+def _tool_use(name: str, tool_input: dict, tool_id: str = "tu_x") -> dict:
+    return {
+        "id": tool_id,
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": json.dumps(tool_input),
+        },
+    }
 
 
 def _make_response(*blocks, input_tokens: int = 100, output_tokens: int = 50):
-    resp = MagicMock()
-    resp.content = list(blocks)
-    resp.usage = MagicMock(input_tokens=input_tokens, output_tokens=output_tokens)
-    resp.stop_reason = "tool_use"
-    return resp
+    return {
+        "choices": [{"message": {"content": "", "tool_calls": list(blocks)}}],
+        "usage": {"prompt_tokens": input_tokens, "completion_tokens": output_tokens},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -235,12 +237,12 @@ async def test_happy_path_emits_cv(monkeypatch):
     ]
     call_iter = iter(responses)
 
-    async def fake_create(**kwargs):
+    async def fake_post(_path, _body):
         return next(call_iter)
 
-    client = MagicMock()
-    client.messages.create = fake_create
-    monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
+    backend = MagicMock()
+    backend._post = fake_post
+    monkeypatch.setattr(llm, "get_backend", lambda _provider: backend)
 
     # Fake search returns two entries per call.
     async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
@@ -250,7 +252,7 @@ async def test_happy_path_emits_cv(monkeypatch):
 
     # Bypass tier1 shield — passthrough.
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)
 
@@ -310,12 +312,12 @@ async def test_hallucinated_citation_raises(monkeypatch):
     responses = one_attempt_responses + one_attempt_responses
     call_iter = iter(responses)
 
-    async def fake_create(**kwargs):
+    async def fake_post(_path, _body):
         return next(call_iter)
 
-    client = MagicMock()
-    client.messages.create = fake_create
-    monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
+    backend = MagicMock()
+    backend._post = fake_post
+    monkeypatch.setattr(llm, "get_backend", lambda _provider: backend)
 
     async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
@@ -323,7 +325,7 @@ async def test_hallucinated_citation_raises(monkeypatch):
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
 
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)
 
@@ -396,12 +398,12 @@ async def test_early_emission_under_min_searches_raises(monkeypatch):
     responses = one_attempt_responses + one_attempt_responses
     call_iter = iter(responses)
 
-    async def fake_create(**kwargs):
+    async def fake_post(_path, _body):
         return next(call_iter)
 
-    client = MagicMock()
-    client.messages.create = fake_create
-    monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
+    backend = MagicMock()
+    backend._post = fake_post
+    monkeypatch.setattr(llm, "get_backend", lambda _provider: backend)
 
     async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
@@ -409,7 +411,7 @@ async def test_early_emission_under_min_searches_raises(monkeypatch):
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
 
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)
 
@@ -449,12 +451,12 @@ async def test_max_iterations_raises(monkeypatch):
             "search_career_entries", {"query": "never ending"}, tool_id="tu_x",
         ))
 
-    async def fake_create(**kwargs):
+    async def fake_post(_path, _body):
         return make_search()
 
-    client = MagicMock()
-    client.messages.create = fake_create
-    monkeypatch.setattr(llm, "_get_anthropic_client", lambda: client)
+    backend = MagicMock()
+    backend._post = fake_post
+    monkeypatch.setattr(llm, "get_backend", lambda _provider: backend)
 
     async def fake_search(user_id, query, kind_filter="ANY", top_k=5, **_kw):
         return [_entry("e1")]
@@ -462,7 +464,7 @@ async def test_max_iterations_raises(monkeypatch):
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
 
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)
 
@@ -484,7 +486,7 @@ async def test_max_iterations_raises(monkeypatch):
             retrieved_entries=[],
             style_profile=_style(),
         )
-    assert "max_iterations" in str(exc.value)
+    assert "max iterations" in str(exc.value)
 
 
 # ---------------------------------------------------------------------------
@@ -498,7 +500,7 @@ async def test_executor_tracks_retrieved_and_count(monkeypatch):
         return [_entry("a"), _entry("b")]
 
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)
@@ -531,7 +533,7 @@ async def test_executor_enforces_retrieval_budget(monkeypatch):
         return [_entry(f"e{call_count[0]}_{i}") for i in range(5)]
 
     async def fake_shield(*, content, source_type, downstream_agent):
-        return content, None
+        return ShieldResult(cleaned_text=content, verdict=None)
 
     monkeypatch.setattr(cv_tailor_agentic, "search_career_entries_semantic", fake_search)
     monkeypatch.setattr(cv_tailor_agentic, "shield_content", fake_shield)

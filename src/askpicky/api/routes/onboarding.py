@@ -45,7 +45,10 @@ log = logging.getLogger(__name__)
 
 
 @router.post("/onboarding/parse")
-async def parse(req: OnboardingParseRequest) -> dict:
+async def parse(
+    req: OnboardingParseRequest,
+    _user_id: str = Depends(get_current_user_id),
+) -> dict:
     """Run the onboarding parser for a single free-text stage.
 
     Returns the raw ParseResult shape (status + fields + follow_up).
@@ -334,6 +337,7 @@ _MAX_CV_BYTES = 5 * 1024 * 1024
 @router.post("/onboarding/cv_import")
 async def cv_import(
     file: UploadFile = File(...),
+    _user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """Extract structured data from an uploaded CV (PDF / DOCX / TXT).
 

@@ -113,7 +113,7 @@ def test_profile_500_when_demo_user_id_unset(client, monkeypatch):
     monkeypatch.setattr(settings, "demo_user_id", "")
     resp = client.get("/api/profile")
     assert resp.status_code == 500
-    assert "DEMO_USER_ID" in resp.json()["detail"]
+    assert resp.json()["detail"]["code"] == "demo_user_not_configured"
 
 
 # ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ def test_session_detail_returns_full_payload(client, tmp_path: Path):
     _seed(log_llm_cost(
         session_id="full",
         agent_name="verdict",
-        model=settings.opus_model_id,
+        model=settings.TIER_STRONG[0],
         input_tokens=1000,
         output_tokens=500,
     ))

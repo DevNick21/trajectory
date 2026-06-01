@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Trajectory API — local dev launcher.
+# AskPicky API — local dev launcher.
 # Wraps uvicorn via scripts/run_api.py so the Windows asyncio policy
 # is set BEFORE uvicorn creates the event loop. Without this, Playwright's
 # subprocess_exec raises NotImplementedError on Windows.

@@ -1,7 +1,7 @@
 """Smoke tests — live-API sanity checks for each system slice.
 
 Not a replacement for `tests/` (pytest, fixture-only, zero API cost).
-These exercise the real Anthropic / Companies House / gov.uk / scrape
+These exercise the real LLM / Companies House / gov.uk / scrape
 paths so defects that only surface against real traffic come out here
 rather than during the demo.
 
