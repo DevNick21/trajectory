@@ -37,6 +37,8 @@ identity.
    user, then the extension stores the Supabase bearer in `chrome.storage.local`.
 
 The manifest allows external messages only from `https://askpicky.com/*`.
+The hosted connect route is intentionally outside the main workspace shell and
+onboarding gate; it only creates the one-time token and hands it to Chrome.
 
 ## Detection Tests
 

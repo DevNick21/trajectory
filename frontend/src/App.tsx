@@ -1,7 +1,7 @@
 import CommandPalette from "@/components/CommandPalette";
 import PickyAvatar from "@/components/PickyAvatar";
 import SidebarStatus from "@/components/SidebarStatus";
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
 import OnboardingGate from "@/components/OnboardingGate";
@@ -9,6 +9,7 @@ import Applications from "@/pages/Applications";
 import Assist from "@/pages/Assist";
 import Benchmarks from "@/pages/Benchmarks";
 import Dashboard from "@/pages/Dashboard";
+import ExtensionConnect from "@/pages/ExtensionConnect";
 import Memory from "@/pages/Memory";
 import Offer from "@/pages/Offer";
 import Onboarding from "@/pages/Onboarding";
@@ -26,6 +27,12 @@ const navLink = ({ isActive }: { isActive: boolean }) =>
   );
 
 export default function App() {
+  const location = useLocation();
+
+  if (location.pathname === "/extension/connect") {
+    return <ExtensionConnect />;
+  }
+
   return (
     <div className="min-h-screen flex bg-background text-foreground overflow-hidden">
       <aside className="w-64 border-r border-canvas flex flex-col bg-card/30 backdrop-blur-xl">

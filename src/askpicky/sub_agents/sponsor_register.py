@@ -758,7 +758,7 @@ def _match_path(best_score: float, threshold: float) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Public lookup — signature unchanged for backwards compat
+# Public lookup with a stable signature for current callers.
 # ---------------------------------------------------------------------------
 
 

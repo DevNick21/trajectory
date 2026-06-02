@@ -15,7 +15,7 @@
 - **Decision log:** [PROCESS.md](./PROCESS.md)
 - **History (no longer authoritative):** [docs/history/](./docs/history/)
 
-Package name: `askpicky` (was `trajectory`; rename landed 2026-05-22, no backward compat). Python imports are `from askpicky.X import Y`. Frontend brand strings say "AskPicky" / "Picky".
+Package name: `askpicky` (was `trajectory`; rename landed 2026-05-22, no legacy import aliases). Python imports are `from askpicky.X import Y`. Frontend brand strings say "AskPicky" / "Picky".
 
 Test-mode opt-out for required-secret validation: `ASKPICKY_TEST_MODE=1` (was `TRAJECTORY_TEST_MODE`).
 
