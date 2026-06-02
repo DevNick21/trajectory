@@ -61,8 +61,10 @@ are delivery surfaces over the same memory/API contract, not separate products.
 | V2 | Chrome MV3 companion | Detects the active application form/question, opens an overlay, calls `/api/assist/*`, and copies/writes approved text back. |
 | V3 | Electron companion | Later screen/audio/system control for power users after the hosted loop is proven. |
 
-Hosted V2 uses Supabase Auth and Supabase Postgres/pgvector for canonical
-multi-user memory. SQLite/FAISS remains the local OSS/dev storage path.
+Hosted V2 targets Supabase Auth and Supabase Postgres/pgvector for canonical
+multi-user memory. The migration/RLS contract is committed under
+`supabase/migrations/`; runtime Postgres mode fails closed until the async
+adapter lands. SQLite/FAISS remains the local OSS/dev storage path.
 
 Chrome detection is confidence-based:
 

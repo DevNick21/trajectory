@@ -42,7 +42,7 @@ Application assist now saves answer attempts, extracts reviewable memory atoms a
 | **Electron companion** | V3 power-user desktop workflow. | Later screen/audio/system integration once the hosted loop proves retention. |
 | **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
 
-All surfaces call the same FastAPI orchestrator and one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured). Hosted V2 uses Supabase Auth plus Supabase Postgres/pgvector as the source of truth. Local/self-hosted forks keep SQLite + FAISS for OSS/dev mode, while hosted aggregate employer/outcome intelligence remains the commercial moat.
+All surfaces call the same FastAPI orchestrator and one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured). Hosted V2 targets Supabase Auth plus Supabase Postgres/pgvector as the source of truth; the migration/RLS contract is committed, and the app fails closed if `STORAGE_BACKEND=supabase_postgres` is enabled before the runtime adapter lands. Local/self-hosted forks keep SQLite + FAISS for OSS/dev mode, while hosted aggregate employer/outcome intelligence remains the commercial moat.
 
 The canonical V2 release plan is in [V2_SECURITY_CHROME_PLAN.md](V2_SECURITY_CHROME_PLAN.md).
 

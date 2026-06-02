@@ -2393,6 +2393,14 @@ class Storage:
             settings.sqlite_db_path = Path(db_path)
 
     async def initialise(self) -> None:
+        if settings.storage_backend == "supabase_postgres":
+            raise RuntimeError(
+                "STORAGE_BACKEND=supabase_postgres is a hosted V2 release "
+                "gate, but the async Supabase Postgres storage adapter is "
+                "not implemented yet. Apply supabase/migrations first and "
+                "keep hosted deploys blocked until the adapter replaces the "
+                "SQLite/FAISS path."
+            )
         await _ensure_db()
 
     async def close(self) -> None:

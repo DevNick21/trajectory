@@ -65,6 +65,8 @@ what remains next.
     and smoke scripts to tier-based routing
 - Added V2 hosted security foundation:
   - Supabase bearer-auth dependency for hosted mode
+  - `SUPABASE_DATABASE_URL` config
+  - Supabase Postgres/pgvector migration contract with RLS policies
   - hosted quota ledger and route-level assist quotas
   - protected internal purge and quota reconciliation endpoints
   - scheduled raw-retention purge with privacy audit events
@@ -85,6 +87,7 @@ what remains next.
 - Added Chrome companion pairing bridge:
   - `/api/extension/pairing-token`
   - `/api/extension/exchange`
+  - hosted `/extension/connect` page outside the workspace and onboarding gate
   - extension external-message completion from the hosted connect page
   - one-time hashed pairing tokens with audit events
 - Added Chrome detector fixture tests and manifest permission checks.
@@ -117,7 +120,8 @@ what remains next.
   - ghost-frequency trends
   - hosted-only managed sync and consented aggregate outcomes
 - Supabase Postgres/pgvector repository adapter is still needed; this pass adds
-  the hosted config/auth gate but local storage remains SQLite-backed.
+  the migration/RLS contract and fails closed when
+  `STORAGE_BACKEND=supabase_postgres` is configured before the adapter lands.
 - Storage-level tenant isolation needs a full route audit and cross-user tests.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
   broadening the hosted route-isolation and Playwright/axe suites.
@@ -130,7 +134,7 @@ what remains next.
 python -m compileall src\askpicky scripts\smoke_tests
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract --fail-fast
 python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_extractor --fail-fast
-python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py
+python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py
 npm run api:contract
 npm run lint
 git diff --check

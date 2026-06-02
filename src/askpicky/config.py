@@ -104,6 +104,7 @@ class Settings(BaseSettings):
     supabase_project_url: str = ""
     supabase_jwt_secret: str = ""
     supabase_jwt_audience: str = "authenticated"
+    supabase_database_url: str = ""
     internal_api_token: str = ""
     storage_backend: Literal["sqlite", "supabase_postgres"] = "sqlite"
     enforce_hosted_quotas: bool = False
@@ -181,14 +182,13 @@ class Settings(BaseSettings):
             if not self.internal_api_token:
                 missing.append("INTERNAL_API_TOKEN")
         if self.storage_backend == "supabase_postgres":
-            # The first V2 implementation keeps SQLite for local OSS and
-            # uses this flag as a hosted deployment contract until the
-            # Postgres adapter lands.
             if self.auth_mode != "supabase":
                 raise ValueError(
                     "STORAGE_BACKEND=supabase_postgres requires "
                     "AUTH_MODE=supabase."
                 )
+            if not self.supabase_database_url:
+                missing.append("SUPABASE_DATABASE_URL")
         if missing:
             raise ValueError(
                 "Missing required environment variables: "

@@ -40,6 +40,8 @@ secret scanning. The Chrome companion uses a one-time hosted pairing flow:
 `/api/extension/pairing-token` creates a short-lived token for the signed-in
 Supabase user, `/api/extension/exchange` accepts it only with a matching
 Supabase access token, and the extension stores that bearer locally.
+The Supabase Postgres/pgvector migration and RLS policy contract is committed;
+hosted Postgres mode fails closed until the async storage adapter targets it.
 
 ---
 
