@@ -1193,6 +1193,8 @@ def _quota_limit_for(category: str) -> int:
         return settings.quota_generator_monthly
     if category == "assist":
         return settings.quota_assist_monthly
+    if category == "firecrawl":
+        return settings.quota_firecrawl_monthly
     return settings.quota_chitchat_monthly
 
 

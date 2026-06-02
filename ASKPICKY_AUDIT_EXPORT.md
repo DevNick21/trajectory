@@ -91,6 +91,8 @@ what remains next.
 - Added hosted quota coverage for `/api/chat`, `/api/queue`, and batch
   `/api/queue/process`; queue processing charges forward-job quota by the
   number of pending jobs.
+- Added a dedicated Firecrawl fallback quota bucket and direct quota-denial
+  test so anti-bot fallback spend is isolated from normal verdict quotas.
 - Added CI schema-drift enforcement for generated OpenAPI/types and CI
   execution of the extension fixture tests.
 
@@ -136,5 +138,6 @@ python scripts/audit_prompt.py application_answer_shaper
 python scripts/audit_prompt.py memory_extractor
 python -m pytest tests\test_api_health.py tests\test_api_queue.py tests\test_api_pack.py tests\test_verdict_fallback.py tests\test_api_read_routes.py -q
 python -m pytest tests\test_extension_pairing.py -q
+python -m pytest tests\test_firecrawl_quota.py -q
 npm run --prefix extension test
 ```

@@ -204,7 +204,13 @@ def mock_phase1(monkeypatch):
         verdict,
     )
 
-    async def fake_scraper_run(job_url, session_id=None, on_jd_extracted=None):
+    async def fake_scraper_run(
+        job_url,
+        session_id=None,
+        on_jd_extracted=None,
+        user_id=None,
+        storage=None,
+    ):
         if on_jd_extracted is not None:
             await on_jd_extracted()
         return _synthetic_company_research(), _synthetic_jd()

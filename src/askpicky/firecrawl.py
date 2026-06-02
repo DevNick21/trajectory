@@ -10,7 +10,7 @@ Docs: https://docs.firecrawl.dev/api-reference/scrape
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -43,7 +43,13 @@ _MIN_CONTENT_CHARS = 200
 _FIRECRAWL_TIMEOUT = 30.0
 
 
-async def firecrawl_scrape(url: str) -> Optional[str]:
+async def firecrawl_scrape(
+    url: str,
+    *,
+    user_id: Optional[str] = None,
+    storage: Optional[Any] = None,
+    metadata: Optional[dict[str, Any]] = None,
+) -> Optional[str]:
     """Scrape a single URL via Firecrawl. Returns cleaned text or None.
 
     Charges 1 credit per page. Only call this as a fallback when the
@@ -62,6 +68,22 @@ async def firecrawl_scrape(url: str) -> Optional[str]:
             url,
         )
         return None
+    if settings.enforce_hosted_quotas and user_id and storage is not None:
+        quota = await storage.record_quota_usage(
+            user_id=user_id,
+            category="firecrawl",
+            units=1,
+            metadata={"url": url, **(metadata or {})},
+        )
+        if not quota["allowed"]:
+            logger.warning(
+                "Firecrawl quota exceeded for user=%s period=%s used=%s limit=%s",
+                user_id,
+                quota["period"],
+                quota["used"],
+                quota["limit"],
+            )
+            return None
 
     endpoint = f"{settings.firecrawl_base_url.rstrip('/')}/scrape"
     headers = {

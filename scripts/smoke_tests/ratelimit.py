@@ -34,6 +34,7 @@ async def _body() -> tuple[list[str], list[str], float]:
         "salary_advice": "generator",
         "full_prep": "generator",
         "draft_reply": "generator",
+        "firecrawl": "firecrawl",
         "profile_query": "chitchat",
         "recent": "chitchat",
         "chitchat": "chitchat",

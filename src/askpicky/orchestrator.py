@@ -138,6 +138,8 @@ async def handle_forward_job(
             job_url=job_url,
             session_id=session.session_id,
             on_jd_extracted=on_jd_extracted,
+            user_id=user.user_id,
+            storage=storage,
         )
     except Exception as exc:
         if company_scraper_summariser_started:

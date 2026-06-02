@@ -168,7 +168,14 @@ async def _body() -> tuple[list[str], list[str], float]:
             "entity_judge.judge_candidates": entity_judge.judge_candidates,
         }
 
-        async def _fake_scraper(*, job_url, session_id, on_jd_extracted=None):
+        async def _fake_scraper(
+            *,
+            job_url,
+            session_id,
+            on_jd_extracted=None,
+            user_id=None,
+            storage=None,
+        ):
             if on_jd_extracted is not None:
                 await on_jd_extracted()
             return bundle.company_research, bundle.extracted_jd

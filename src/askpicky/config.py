@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     quota_forward_job_monthly: int = 25
     quota_generator_monthly: int = 80
     quota_assist_monthly: int = 250
+    quota_firecrawl_monthly: int = 100
     quota_chitchat_monthly: int = 1000
     privacy_purge_interval_hours: int = 24
     privacy_purge_on_startup: bool = True

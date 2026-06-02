@@ -121,7 +121,12 @@ def _host(url: str) -> str:
     return (urlparse(url).hostname or "").lower()
 
 
-async def _fetch_raw_html(url: str) -> Optional[str]:
+async def _fetch_raw_html(
+    url: str,
+    *,
+    firecrawl_user_id: Optional[str] = None,
+    firecrawl_storage: Optional[Any] = None,
+) -> Optional[str]:
     """Fetch and return RAW HTML (no trafilatura cleaning).
 
     The JSON-LD extractor needs the original `<script type="application/
@@ -165,7 +170,12 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
                         "trying Firecrawl",
                         len(pw_result or ""), url,
                     )
-                    fc_result = await firecrawl_scrape(url)
+                    fc_result = await firecrawl_scrape(
+                        url,
+                        user_id=firecrawl_user_id,
+                        storage=firecrawl_storage,
+                        metadata={"caller": "company_scraper.raw_html"},
+                    )
                     if fc_result is not None:
                         return fc_result
                 return None
@@ -181,7 +191,12 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
                 "None" if result is None else f"thin content ({len(result)} chars)",
                 url,
             )
-            fc_result = await firecrawl_scrape(url)
+            fc_result = await firecrawl_scrape(
+                url,
+                user_id=firecrawl_user_id,
+                storage=firecrawl_storage,
+                metadata={"caller": "company_scraper.raw_html"},
+            )
             if fc_result is not None:
                 return fc_result
         return None
@@ -190,19 +205,33 @@ async def _fetch_raw_html(url: str) -> Optional[str]:
         logger.warning("Failed to fetch %s: %s", url, e)
         # Last resort: try Firecrawl for any page
         try:
-            return await firecrawl_scrape(url)
+            return await firecrawl_scrape(
+                url,
+                user_id=firecrawl_user_id,
+                storage=firecrawl_storage,
+                metadata={"caller": "company_scraper.raw_html"},
+            )
         except Exception as fc_e:
             logger.warning("Firecrawl also failed for %s: %s", url, fc_e)
         return None
 
 
-async def _fetch_html(url: str) -> Optional[str]:
+async def _fetch_html(
+    url: str,
+    *,
+    firecrawl_user_id: Optional[str] = None,
+    firecrawl_storage: Optional[Any] = None,
+) -> Optional[str]:
     """Fetch and return cleaned page text. Cached."""
     cached = await get_cached_page(url)
     if cached is not None:
         return cached
 
-    html = await _fetch_raw_html(url)
+    html = await _fetch_raw_html(
+        url,
+        firecrawl_user_id=firecrawl_user_id,
+        firecrawl_storage=firecrawl_storage,
+    )
     if html:
         # trafilatura.extract + the BeautifulSoup fallback are CPU-bound
         # parsing operations that can take hundreds of ms on large pages —
@@ -724,6 +753,8 @@ async def run(
     *,
     session_id: Optional[str] = None,
     on_jd_extracted: Optional[Any] = None,
+    user_id: Optional[str] = None,
+    storage: Optional[Any] = None,
 ) -> tuple[CompanyResearch, ExtractedJobDescription]:
     """Full pipeline: fetch JD, extract, scrape company pages, summarise.
 
@@ -743,7 +774,11 @@ async def run(
         jd_text: Optional[str] = cached_text
         jsonld: Optional[JsonLdExtraction] = None
     else:
-        raw_html = await _fetch_raw_html(job_url)
+        raw_html = await _fetch_raw_html(
+            job_url,
+            firecrawl_user_id=user_id,
+            firecrawl_storage=storage,
+        )
         if not raw_html:
             raise RuntimeError(f"Could not fetch job description from {job_url}")
         jsonld = await asyncio.to_thread(extract_jsonld_jobposting, raw_html)
@@ -783,7 +818,11 @@ async def run(
     ]
 
     if company_domain:
-        candidate_texts = await _fetch_candidates(_candidate_urls(company_domain))
+        candidate_texts = await _fetch_candidates(
+            _candidate_urls(company_domain),
+            firecrawl_user_id=user_id,
+            firecrawl_storage=storage,
+        )
         for url, text in candidate_texts:
             scraped_pages.append(
                 ScrapedPage(
@@ -853,13 +892,26 @@ def _verify_not_on_careers_page(
     return research.model_copy(update={"not_on_careers_page": True})
 
 
-async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
+async def _fetch_candidates(
+    urls: list[str],
+    *,
+    firecrawl_user_id: Optional[str] = None,
+    firecrawl_storage: Optional[Any] = None,
+) -> list[tuple[str, str]]:
     """Fetch candidate company pages in parallel. Firecrawl fallback on
     sparse/empty results so the verdict has complete company research."""
     from ..firecrawl import firecrawl_scrape, is_thin_content
 
     results = await asyncio.gather(
-        *[_fetch_html(u) for u in urls], return_exceptions=True
+        *[
+            _fetch_html(
+                u,
+                firecrawl_user_id=firecrawl_user_id,
+                firecrawl_storage=firecrawl_storage,
+            )
+            for u in urls
+        ],
+        return_exceptions=True,
     )
     out: list[tuple[str, str]] = []
     for url, r in zip(urls, results):
@@ -869,7 +921,12 @@ async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
             logger.warning("Candidate fetch failed for %s: %s", url, r)
             # Try Firecrawl for the failed page
             try:
-                fc_result = await firecrawl_scrape(url)
+                fc_result = await firecrawl_scrape(
+                    url,
+                    user_id=firecrawl_user_id,
+                    storage=firecrawl_storage,
+                    metadata={"caller": "company_scraper.candidate"},
+                )
                 if fc_result and not is_thin_content(fc_result):
                     out.append((url, fc_result))
                     logger.info(
@@ -880,7 +937,12 @@ async def _fetch_candidates(urls: list[str]) -> list[tuple[str, str]]:
         else:
             # r is empty string or None — try Firecrawl
             try:
-                fc_result = await firecrawl_scrape(url)
+                fc_result = await firecrawl_scrape(
+                    url,
+                    user_id=firecrawl_user_id,
+                    storage=firecrawl_storage,
+                    metadata={"caller": "company_scraper.candidate"},
+                )
                 if fc_result and not is_thin_content(fc_result):
                     out.append((url, fc_result))
                     logger.info(

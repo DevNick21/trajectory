@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-IntentCategory = Literal["forward_job", "generator", "assist", "chitchat"]
+IntentCategory = Literal["forward_job", "generator", "assist", "firecrawl", "chitchat"]
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,7 @@ DEFAULT_LIMITS: dict[str, Limit] = {
     "forward_job": Limit(max_calls=5, window_s=60.0),
     "generator": Limit(max_calls=10, window_s=3600.0),
     "assist": Limit(max_calls=60, window_s=3600.0),
+    "firecrawl": Limit(max_calls=30, window_s=3600.0),
     "chitchat": Limit(max_calls=30, window_s=60.0),
 }
 
@@ -63,6 +64,7 @@ _INTENT_CATEGORY: dict[str, IntentCategory] = {
     "salary_advice": "generator",
     "full_prep": "generator",
     "draft_reply": "generator",
+    "firecrawl": "firecrawl",
     "application_assist": "assist",
     # PROCESS Entry 43, Workstream F — analyse_offer is generator-class
     # (one Opus xhigh call + Files API upload).
