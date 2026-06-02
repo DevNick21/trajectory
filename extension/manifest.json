@@ -3,8 +3,11 @@
   "name": "AskPicky Companion",
   "description": "Send highlighted job questions to AskPicky and write back approved answers.",
   "version": "0.1.0",
-  "permissions": ["activeTab", "scripting", "storage", "sidePanel", "clipboardWrite"],
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
   "host_permissions": ["https://askpicky.com/*"],
+  "externally_connectable": {
+    "matches": ["https://askpicky.com/*"]
+  },
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

@@ -171,8 +171,19 @@ async def finalise(
     """
     import asyncio as _asyncio
     from ...sub_agents.style_extractor import extract as extract_style
+    from ...validators.content_shield import shield as shield_content
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cleaned_writing_samples = [
+        (
+            await shield_content(
+                content=sample,
+                source_type="user_message",
+                downstream_agent="style_extractor",
+            )
+        ).cleaned_text
+        for sample in req.writing_samples
+    ]
 
     # Style extraction + voice-stage parsing are independent — fan them
     # out in parallel instead of sequencing two slow LLM calls. The
@@ -180,11 +191,11 @@ async def finalise(
     # 2026-05-22 model audit, so this section now runs ~3x faster
     # than the original sequential Opus path.
     async def _run_style() -> Optional[WritingStyleProfile]:
-        if not req.writing_samples:
+        if not cleaned_writing_samples:
             return None
         try:
             profile = await extract_style(
-                user_id=user_id, samples=req.writing_samples,
+                user_id=user_id, samples=cleaned_writing_samples,
             )
             return profile
         except Exception as exc:
@@ -296,7 +307,7 @@ async def finalise(
             created_at=now,
         ))
 
-    for text in req.writing_samples:
+    for text in cleaned_writing_samples:
         pending_entries.append(CareerEntry(
             entry_id=str(uuid.uuid4()),
             user_id=user_id,

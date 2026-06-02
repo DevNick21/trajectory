@@ -1,6 +1,6 @@
 # AskPicky Audit Export
 
-*Last updated 2026-06-01.*
+*Last updated 2026-06-02.*
 
 This is the working export of what is done, what was hardened in this pass, and
 what remains next.
@@ -82,6 +82,17 @@ what remains next.
 - Hardened `.dockerignore` so `.env.*`, SQLite/DB, and FAISS artifacts do not
   enter Docker build context.
 - Added regression tests for `/api/version` and API security headers.
+- Added Chrome companion pairing bridge:
+  - `/api/extension/pairing-token`
+  - `/api/extension/exchange`
+  - extension external-message completion from the hosted connect page
+  - one-time hashed pairing tokens with audit events
+- Added Chrome detector fixture tests and manifest permission checks.
+- Added hosted quota coverage for `/api/chat`, `/api/queue`, and batch
+  `/api/queue/process`; queue processing charges forward-job quota by the
+  number of pending jobs.
+- Added CI schema-drift enforcement for generated OpenAPI/types and CI
+  execution of the extension fixture tests.
 
 ---
 
@@ -93,9 +104,7 @@ what remains next.
   - UI should feel closer to Linear/Superhuman/1Password/Grammarly than a
     chatbot dashboard.
 - Chrome MV3 companion:
-  - hosted pairing-token auth bridge
   - ATS adapters
-  - DOM fixture tests
   - generic DOM fallback hardening
   - manual highlight/send hardening
 - Electron V3 companion after Chrome/web retention is proven.
@@ -108,7 +117,8 @@ what remains next.
 - Supabase Postgres/pgvector repository adapter is still needed; this pass adds
   the hosted config/auth gate but local storage remains SQLite-backed.
 - Storage-level tenant isolation needs a full route audit and cross-user tests.
-- CI still needs secret scanning and schema drift enforcement as required gates.
+- CI now has secret scanning and schema drift enforcement; remaining CI work is
+  broadening the hosted route-isolation and Playwright/axe suites.
 
 ---
 
@@ -125,4 +135,6 @@ git diff --check
 python scripts/audit_prompt.py application_answer_shaper
 python scripts/audit_prompt.py memory_extractor
 python -m pytest tests\test_api_health.py tests\test_api_queue.py tests\test_api_pack.py tests\test_verdict_fallback.py tests\test_api_read_routes.py -q
+python -m pytest tests\test_extension_pairing.py -q
+npm run --prefix extension test
 ```

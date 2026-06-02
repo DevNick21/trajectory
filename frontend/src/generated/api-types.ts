@@ -1545,6 +1545,79 @@ export const openApiSchema = {
         "title": "ExperienceAtom",
         "type": "object"
       },
+      "ExtensionExchangeRequest": {
+        "properties": {
+          "pairing_token": {
+            "minLength": 16,
+            "title": "Pairing Token",
+            "type": "string"
+          },
+          "supabase_access_token": {
+            "minLength": 16,
+            "title": "Supabase Access Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pairing_token",
+          "supabase_access_token"
+        ],
+        "title": "ExtensionExchangeRequest",
+        "type": "object"
+      },
+      "ExtensionExchangeResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "user_id",
+          "expires_at"
+        ],
+        "title": "ExtensionExchangeResponse",
+        "type": "object"
+      },
+      "ExtensionPairingTokenResponse": {
+        "properties": {
+          "connect_url": {
+            "title": "Connect Url",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "pairing_token": {
+            "title": "Pairing Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pairing_token",
+          "expires_at",
+          "connect_url"
+        ],
+        "title": "ExtensionPairingTokenResponse",
+        "type": "object"
+      },
       "ForwardJobRequest": {
         "description": "POST /api/sessions/forward_job body.",
         "properties": {
@@ -3716,6 +3789,62 @@ export const openApiSchema = {
           }
         },
         "summary": "Chat"
+      }
+    },
+    "/api/extension/exchange": {
+      "post": {
+        "operationId": "exchange_extension_pairing_token_api_extension_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtensionExchangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionExchangeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange Extension Pairing Token"
+      }
+    },
+    "/api/extension/pairing-token": {
+      "post": {
+        "operationId": "create_extension_pairing_token_api_extension_pairing_token_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtensionPairingTokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Create Extension Pairing Token"
       }
     },
     "/api/files/{session_id}/{filename}": {

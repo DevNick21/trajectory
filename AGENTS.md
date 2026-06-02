@@ -3,7 +3,7 @@
 > Source of truth for every LLM-driven component in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-06-01 — V2 removes backward-compat shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes all hosted models via DeepSeek + OpenAI. Hosted V2 is Supabase-authenticated; see config.py for tier routing and auth mode.*
+*Last updated 2026-06-02 — V2 removes backward-compat shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes all hosted models via DeepSeek + OpenAI. Hosted V2 is Supabase-authenticated, quota-gated, and uses the Chrome pairing bridge documented in V2_SECURITY_CHROME_PLAN.md.*
 
 ## Agent inventory
 

@@ -24,6 +24,7 @@ async function callAssist() {
     "askpickyApiBase",
     "askpickyAccessToken"
   ]);
+  const apiBase = askpickyApiBase || "https://askpicky.com";
   if (!askpickyAccessToken) {
     setStatus("Connect AskPicky before sending context.");
     return;
@@ -34,7 +35,7 @@ async function callAssist() {
   const includePrivate = document.getElementById("includePrivate").checked;
   const { askpickyLastContext } = await getSession(["askpickyLastContext"]);
 
-  const startResponse = await fetch(`${askpickyApiBase}/api/assist/start`, {
+  const startResponse = await fetch(`${apiBase}/api/assist/start`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${askpickyAccessToken}`,
@@ -54,7 +55,7 @@ async function callAssist() {
   }
   const started = await startResponse.json();
 
-  const critiqueResponse = await fetch(`${askpickyApiBase}/api/assist/critique-draft`, {
+  const critiqueResponse = await fetch(`${apiBase}/api/assist/critique-draft`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${askpickyAccessToken}`,
@@ -81,7 +82,9 @@ async function callAssist() {
 
 async function connect() {
   const { askpickyApiBase } = await getStored(["askpickyApiBase"]);
-  await chrome.tabs.create({ url: `${askpickyApiBase}/extension/connect` });
+  const url = new URL(`${askpickyApiBase || "https://askpicky.com"}/extension/connect`);
+  url.searchParams.set("extension_id", chrome.runtime.id);
+  await chrome.tabs.create({ url: url.toString() });
 }
 
 async function copyAnswer() {

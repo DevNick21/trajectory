@@ -31,10 +31,11 @@ from typing import AsyncIterator
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sse_starlette.sse import EventSourceResponse
 
+from ...config import settings
 from ...progress import SSEEmitter
 from ...schemas import QueuedJob, Session, UserProfile
 from ...storage import Storage
-from ..dependencies import get_current_user, get_storage
+from ..dependencies import get_current_user, get_storage, rate_limit
 from ..schemas import (
     QueueAddRequest,
     QueueItem,
@@ -58,7 +59,12 @@ def _default_concurrency() -> int:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/queue", response_model=list[QueueItem], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/queue",
+    response_model=list[QueueItem],
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rate_limit("chitchat"))],
+)
 async def add_to_queue(
     req: QueueAddRequest,
     user: UserProfile = Depends(get_current_user),
@@ -261,8 +267,6 @@ async def _run_batch_via_api(
 
     Processes pending jobs concurrently with a semaphore for load control.
     """
-    from ...config import settings as _settings
-
     log.info(
         "Batch runner: %d pending jobs. Running in-process with concurrency %d.",
         len(pending), _default_concurrency(),
@@ -280,13 +284,14 @@ async def _run_batch(
     storage: Storage,
     queue: asyncio.Queue,
     emitter: SSEEmitter,
+    pending: list[QueuedJob] | None = None,
 ) -> None:
     try:
-        from ...config import settings as _settings
-
-        pending = await storage.list_queued_jobs(
-            user_id=user.user_id, status_filter="pending",
-        )
+        if pending is None:
+            pending = await storage.list_queued_jobs(
+                user_id=user.user_id,
+                status_filter="pending",
+            )
         if not pending:
             await queue.put({
                 "type": "done",
@@ -295,7 +300,7 @@ async def _run_batch(
             })
             return
 
-        if _settings.enable_batch_queue_runner:
+        if settings.enable_batch_queue_runner:
             await _run_batch_via_api(user, storage, queue, emitter, pending)
         else:
             sem = asyncio.Semaphore(_default_concurrency())
@@ -327,11 +332,35 @@ async def process_queue(
     """Run every pending queue item in parallel, streaming per-job
     started/completed/failed events. Up to 3 concurrent Phase 1
     pipelines by default (tunable via QUEUE_BATCH_CONCURRENCY)."""
+    pending = await storage.list_queued_jobs(
+        user_id=user.user_id,
+        status_filter="pending",
+    )
+    if settings.enforce_hosted_quotas and pending:
+        result = await storage.record_quota_usage(
+            user_id=user.user_id,
+            category="forward_job",
+            units=len(pending),
+            metadata={"route": "/api/queue/process"},
+        )
+        if not result["allowed"]:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "code": "quota_exceeded",
+                    "intent": "forward_job",
+                    "category": result["category"],
+                    "period": result["period"],
+                    "limit": result["limit"],
+                    "used": result["used"],
+                },
+            )
+
     queue: asyncio.Queue = asyncio.Queue()
     emitter = SSEEmitter(queue)
 
     runner_task = asyncio.create_task(
-        _run_batch(user, storage, queue, emitter)
+        _run_batch(user, storage, queue, emitter, pending)
     )
 
     async def stream() -> AsyncIterator[dict]:

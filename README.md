@@ -5,7 +5,7 @@
 
 AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro + OpenAI GPT-5.4) · No auto-apply, ever.
 
-*Last updated 2026-06-01 — V2 security gate, Supabase hosted auth/storage plan, Chrome companion scaffold, private-save application memory.*
+*Last updated 2026-06-02 — V2 security gate, Supabase hosted auth/storage plan, Chrome pairing bridge, private-save application memory.*
 
 ---
 
@@ -130,6 +130,9 @@ python -m scripts.smoke_tests.run_all --cheap
 # Application-assist memory/API contract only
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract
 
+# Chrome companion generic detector fixtures
+npm run --prefix extension test
+
 # Full live suite (~$5, ~10 min)
 python -m scripts.smoke_tests.run_all
 ```
@@ -145,7 +148,8 @@ The cheap suite is the regression net every change has to hold. Each LLM-backed 
 - AI-content detection (adversarial, unwinnable)
 - Identity verification (different problem)
 - Employer-facing ATS (different sales motion)
-- Postgres or Redis (SQLite + FAISS is enough for current scale)
+- Redis-backed distributed rate limiting (the current limiter is in-process)
+- Supabase Postgres in local OSS/dev mode (SQLite + FAISS remain local defaults)
 
 ---
 

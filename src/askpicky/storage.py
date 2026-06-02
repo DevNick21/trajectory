@@ -12,9 +12,11 @@ Skeleton notes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
+import secrets
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -146,6 +148,16 @@ CREATE INDEX IF NOT EXISTS idx_security_audit_user_time
     ON security_audit_events(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_security_audit_event_time
     ON security_audit_events(event_type, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS extension_pairing_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_extension_pairing_user
+    ON extension_pairing_tokens(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS queued_jobs (
     id TEXT PRIMARY KEY,
@@ -753,29 +765,57 @@ async def retrieve_relevant_entries(
 
     # Keep (faiss_position, score, entry_id) so we can re-rank by
     # score × kind_weight when weights are supplied.
-    hits: list[tuple[int, float, str]] = []
-    for pos, (i, score) in enumerate(zip(idxs[0], scores[0])):
-        if 0 <= i < len(id_map):
-            hits.append((pos, float(score), id_map[i]))
+    def _hits_from_search(limit: int) -> list[tuple[int, float, str]]:
+        search_scores, search_idxs = index.search(query_vec, limit)
+        found: list[tuple[int, float, str]] = []
+        for pos, (i, score) in enumerate(zip(search_idxs[0], search_scores[0])):
+            if 0 <= i < len(id_map):
+                found.append((pos, float(score), id_map[i]))
+        return found
+
+    hits = [
+        (pos, float(score), id_map[i])
+        for pos, (i, score) in enumerate(zip(idxs[0], scores[0]))
+        if 0 <= i < len(id_map)
+    ]
     if not hits:
         return []
 
-    hit_ids = [eid for (_, _, eid) in hits]
-    placeholders = ",".join("?" for _ in hit_ids)
-    async with await _connect() as db:
-        async with db.execute(
-            f"""
-            SELECT payload FROM career_entries
-            WHERE user_id = ? AND entry_id IN ({placeholders})
-            """,
-            (user_id, *hit_ids),
-        ) as cur:
-            rows = await cur.fetchall()
+    async def _entries_for_hits(
+        candidate_hits: list[tuple[int, float, str]]
+    ) -> dict[str, CareerEntry]:
+        hit_ids = [eid for (_, _, eid) in candidate_hits]
+        if not hit_ids:
+            return {}
+        placeholders = ",".join("?" for _ in hit_ids)
+        async with await _connect() as db:
+            async with db.execute(
+                f"""
+                SELECT payload FROM career_entries
+                WHERE user_id = ? AND entry_id IN ({placeholders})
+                """,
+                (user_id, *hit_ids),
+            ) as cur:
+                rows = await cur.fetchall()
 
-    by_id: dict[str, CareerEntry] = {}
-    for r in rows:
-        entry = CareerEntry.model_validate_json(r[0])
-        by_id[entry.entry_id] = entry
+        entries: dict[str, CareerEntry] = {}
+        for r in rows:
+            entry = CareerEntry.model_validate_json(r[0])
+            entries[entry.entry_id] = entry
+        return entries
+
+    by_id = await _entries_for_hits(hits)
+    if not by_id and over_fetch < index.ntotal:
+        # Local SQLite/FAISS keeps one process-wide index and filters by
+        # user_id after vector search. In multi-user smoke/dev fixtures, a
+        # user's entries may not appear in the first global top-N even though
+        # ownership filtering is correct. Hosted pgvector should partition by
+        # user_id; local mode falls back to the full index only on an empty
+        # same-user first pass.
+        hits = _hits_from_search(index.ntotal)
+        by_id = await _entries_for_hits(hits)
+        if not by_id:
+            return []
 
     # Re-rank. Without weights, FAISS order is preserved by using the
     # original position as the sort key. With weights, multiply score
@@ -1246,6 +1286,83 @@ async def append_security_audit_event(
             ),
         )
         await db.commit()
+
+
+def _hash_extension_pairing_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def create_extension_pairing_token(
+    *,
+    user_id: str,
+    ttl_minutes: int = 10,
+) -> dict[str, Any]:
+    """Create a one-time extension pairing token for an authenticated user.
+
+    The hosted web app requests this after Supabase sign-in, then the Chrome
+    companion exchanges the token plus the current Supabase access token. The
+    API stores only a hash and consumes the token on first exchange.
+    """
+    token = secrets.token_urlsafe(32)
+    now = _utcnow()
+    expires_at = now + timedelta(minutes=max(1, int(ttl_minutes)))
+    async with await _connect() as db:
+        await db.execute(
+            """
+            INSERT INTO extension_pairing_tokens
+                (token_hash, user_id, expires_at, consumed_at, created_at)
+            VALUES (?, ?, ?, NULL, ?)
+            """,
+            (
+                _hash_extension_pairing_token(token),
+                user_id,
+                expires_at.isoformat(),
+                now.isoformat(),
+            ),
+        )
+        await db.commit()
+    return {"token": token, "expires_at": expires_at}
+
+
+async def consume_extension_pairing_token(token: str) -> Optional[dict[str, Any]]:
+    """Consume and return a valid extension pairing token, if present."""
+    token_hash = _hash_extension_pairing_token(token.strip())
+    now = _utcnow()
+    async with await _connect() as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            """
+            SELECT user_id, expires_at, consumed_at
+            FROM extension_pairing_tokens
+            WHERE token_hash = ?
+            """,
+            (token_hash,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await db.rollback()
+            return None
+
+        user_id, expires_at_raw, consumed_at = row
+        try:
+            expires_at = datetime.fromisoformat(expires_at_raw)
+        except ValueError:
+            await db.rollback()
+            return None
+        if consumed_at or expires_at <= now:
+            await db.rollback()
+            return None
+
+        await db.execute(
+            """
+            UPDATE extension_pairing_tokens
+            SET consumed_at = ?
+            WHERE token_hash = ?
+            """,
+            (now.isoformat(), token_hash),
+        )
+        await db.commit()
+    return {"user_id": user_id, "expires_at": expires_at}
 
 
 async def session_cost_summary(session_id: str) -> dict:
@@ -2529,6 +2646,23 @@ class Storage:
             resource_id=resource_id,
             payload=payload,
         )
+
+    async def create_extension_pairing_token(
+        self,
+        *,
+        user_id: str,
+        ttl_minutes: int = 10,
+    ) -> dict[str, Any]:
+        return await create_extension_pairing_token(
+            user_id=user_id,
+            ttl_minutes=ttl_minutes,
+        )
+
+    async def consume_extension_pairing_token(
+        self,
+        token: str,
+    ) -> Optional[dict[str, Any]]:
+        return await consume_extension_pairing_token(token)
 
     # ── Queued jobs ────────────────────────────────────────────────────────
 

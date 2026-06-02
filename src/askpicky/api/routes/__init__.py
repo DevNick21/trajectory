@@ -14,6 +14,7 @@ from .assist import router as assist_router
 from .benchmarks import router as benchmarks_router
 from .career import router as career_router
 from .chat import router as chat_router
+from .extension import router as extension_router
 from .files import router as files_router
 from .health import router as health_router
 from .internal import router as internal_router
@@ -44,6 +45,7 @@ api_router.include_router(outcomes_router, prefix="/api")
 api_router.include_router(notifications_router, prefix="/api")
 api_router.include_router(applications_router, prefix="/api")
 api_router.include_router(assist_router, prefix="/api")
+api_router.include_router(extension_router, prefix="/api")
 api_router.include_router(benchmarks_router)
 api_router.include_router(internal_router, prefix="/api")
 

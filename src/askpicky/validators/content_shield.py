@@ -125,6 +125,10 @@ INJECTION_PATTERNS: list[tuple[str, str]] = [
         "role_marker_square",
         r"(?i)\[\s*/?\s*(system|assistant|human|user)\s*\]",
     ),
+    (
+        "role_marker_chatml",
+        r"(?i)<\|im_(start|end)\|>",
+    ),
     # Delimiter injection
     (
         "hash_delimiter",

@@ -1,6 +1,6 @@
 # AskPicky Memory Architecture
 
-*Last updated 2026-06-01.*
+*Last updated 2026-06-02.*
 
 This document is the implementation reference for application-assist memory.
 It turns the planning concept of a "living profile" into a private evidence
@@ -70,6 +70,10 @@ Chrome detection is confidence-based:
 - generic DOM label/textarea fallback second
 - manual highlight/send-to-AskPicky fallback when confidence is low
 - no auto-apply and no silent submission
+
+Chrome auth uses the hosted Supabase session. The hosted web app creates a
+short-lived pairing token, the extension exchanges it with the matching
+Supabase access token, and all assist calls continue to use bearer auth.
 
 ---
 
@@ -182,15 +186,16 @@ All routes are mounted under `/api`.
 | `POST` | `/memory/inbox/merge` | Merge same-kind inbox items into a target item. |
 | `GET` | `/memory/export` | Export answer attempts, atoms, and story frames for the current user. |
 | `POST` | `/memory/privacy/purge-expired` | Clear expired raw drafts/transcripts. |
+| `POST` | `/extension/pairing-token` | Create a one-time Chrome pairing token for the signed-in user. |
+| `POST` | `/extension/exchange` | Exchange pairing token plus matching Supabase bearer for extension storage. |
 
 The first hosted product uses these routes directly from the web app. The
 Chrome companion uses the same routes after sign-in. A desktop app later can
 call the hosted API or swap storage for a local BYOK mode using the same schema
 boundaries.
 
-An OpenAPI smoke test (`api_contract`) now checks the assist/memory route and
-schema presence to reduce backend/frontend drift until full TypeScript codegen
-is introduced.
+OpenAPI export and generated TypeScript types are checked in CI; schema drift
+fails when generated files are not committed.
 
 ---
 

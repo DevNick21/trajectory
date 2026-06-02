@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from ...schemas import Session, UserProfile
 from ...storage import Storage
-from ..dependencies import get_current_user, get_storage
+from ..dependencies import get_current_user, get_storage, rate_limit
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -43,7 +43,11 @@ class ChatResponse(BaseModel):
     reasoning_brief: Optional[str] = None
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    dependencies=[Depends(rate_limit("chitchat"))],
+)
 async def chat(
     req: ChatRequest,
     user: UserProfile = Depends(get_current_user),

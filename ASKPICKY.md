@@ -2,7 +2,7 @@
 
 *Canonical source of truth. Supersedes CLAUDE.md, AGENTS.md, PROCESS.md, new_claude.md, trajec_notes.md where any contradiction exists.*
 
-*Last updated 2026-06-01 — web-first assist hardening, private-save memory controls, Chrome V2 / Electron V3 delivery plan, and hosted data moat clarified.*
+*Last updated 2026-06-02 — V2 security gate, hosted quotas, Chrome pairing bridge, and extension detector tests clarified.*
 
 ---
 
@@ -32,6 +32,14 @@ the coaching loop already implemented in `/api/assist/*`: detect question,
 retrieve memory, nudge, polish, approve, and save privately. It uses ATS/site
 adapters where available, a generic DOM fallback, confidence labels, and a
 manual highlight/paste fallback when detection is uncertain.
+
+V2 is security-gated before it is feature-gated. Hosted usage requires
+Supabase bearer auth, route and storage ownership checks, quota recording,
+retention purge jobs, SSRF-safe fetch paths, generated API contracts, and
+secret scanning. The Chrome companion uses a one-time hosted pairing flow:
+`/api/extension/pairing-token` creates a short-lived token for the signed-in
+Supabase user, `/api/extension/exchange` accepts it only with a matching
+Supabase access token, and the extension stores that bearer locally.
 
 ---
 
