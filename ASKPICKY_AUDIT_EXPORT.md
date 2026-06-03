@@ -91,6 +91,11 @@ what remains next.
   - extension external-message completion from the hosted connect page
   - one-time hashed pairing tokens with audit events
 - Added Chrome detector fixture tests and manifest permission checks.
+- Hardened the Chrome side-panel assist loop:
+  - renders question type, what the question tests, missing evidence, memory
+    angles, and save state
+  - calls suggest-memory, critique, polish, and approve before copy/write-back
+  - keeps private-memory recall off by default and covered by fixtures
 - Added hosted quota coverage for `/api/chat`, `/api/queue`, and batch
   `/api/queue/process`; queue processing charges forward-job quota by the
   number of pending jobs.
@@ -111,7 +116,7 @@ what remains next.
 - Chrome MV3 companion:
   - ATS adapters
   - generic DOM fallback hardening
-  - manual highlight/send hardening
+  - browser-level integration tests for the side-panel flow
 - Electron V3 companion after Chrome/web retention is proven.
 - Hosted commercial data layer:
   - outcome reporting

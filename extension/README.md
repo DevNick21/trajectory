@@ -6,8 +6,8 @@ V2 Companion starts with a manual, low-permission MV3 flow:
 
 - User highlights a JD or application question, or focuses an answer field.
 - The side panel sends selected text, detected field context, page URL, and optional JD context to the hosted AskPicky API.
-- AskPicky returns question classification, rubric nudges, memory suggestions, polish, and final answer.
-- User explicitly copies or writes the approved answer back.
+- AskPicky returns question classification, what the question tests, rubric nudges, missing evidence, memory suggestions, polish, and final answer.
+- User explicitly polishes, approves, copies, or writes the approved answer back.
 
 Permanent constraints:
 
@@ -50,4 +50,5 @@ npm run --prefix extension test
 ```
 
 The fixture suite covers explicit labels, contenteditable fields, nearby-label
-fallback, uncertain-field write-back, and manifest permission shape.
+fallback, uncertain-field write-back, manifest permission shape, API request
+contracts, private-memory default-off behaviour, polish, and approve.

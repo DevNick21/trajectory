@@ -37,7 +37,9 @@ section {
 }
 
 label,
-#confidence {
+#confidence,
+#questionType,
+#saveIndicator {
   font-size: 12px;
   font-weight: 650;
 }
@@ -79,4 +81,20 @@ button.secondary,
 
 #nudge {
   margin: 0;
+}
+
+#testing,
+#saveIndicator {
+  margin: 0;
+  color: #4c5863;
+}
+
+ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #4c5863;
+}
+
+li + li {
+  margin-top: 4px;
 }

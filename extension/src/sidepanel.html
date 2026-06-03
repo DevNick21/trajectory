@@ -38,16 +38,29 @@
       </section>
 
       <section id="result" hidden>
+        <div class="row">
+          <h2>Question type</h2>
+          <span id="questionType">unknown</span>
+        </div>
+        <h2>What this tests</h2>
+        <p id="testing"></p>
         <h2>Nudge</h2>
         <p id="nudge"></p>
+        <h2>Missing evidence</h2>
+        <ul id="missing"></ul>
+        <h2>Memory angles</h2>
+        <ul id="memories"></ul>
         <h2>Draft</h2>
         <textarea id="answer" rows="8"></textarea>
+        <p id="saveIndicator"></p>
         <div class="actions">
+          <button id="polish" type="button">Polish</button>
           <button id="copy" type="button">Copy</button>
           <button id="write" type="button">Write back</button>
         </div>
       </section>
     </main>
+    <script src="assistClient.js"></script>
     <script type="module" src="sidepanel.js"></script>
   </body>
 </html>
