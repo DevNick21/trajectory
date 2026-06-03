@@ -37,7 +37,7 @@
       .join(" ");
   }
 
-  function nearbyLabel(element, doc = globalThis.document) {
+  function nearbyLabel(element, doc = globalThis.document, loc = globalThis.location) {
     if (!element || !doc) return { text: "", confidence: "LOW" };
 
     const explicit = explicitLabelFor(element, doc);
@@ -45,6 +45,9 @@
 
     const aria = ariaLabelFor(element, doc);
     if (aria) return { text: aria, confidence: "HIGH" };
+
+    const adapter = atsAdapterLabel(element, doc, loc);
+    if (adapter.text) return adapter;
 
     const parent = element.closest?.("label, fieldset, section, div");
     if (parent) {
@@ -55,6 +58,68 @@
     return { text: "", confidence: "LOW" };
   }
 
+  function hostnameFromLocation(loc = globalThis.location) {
+    if (loc?.hostname) return loc.hostname.toLowerCase();
+    try {
+      return new URL(loc?.href || "").hostname.toLowerCase();
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function closestText(element, selectors) {
+    const node = element?.closest?.(selectors);
+    return visibleText(node).slice(0, 700);
+  }
+
+  function firstSelectorText(doc, selectors) {
+    for (const selector of selectors) {
+      const text = visibleText(doc.querySelector?.(selector));
+      if (text) return text.slice(0, 700);
+    }
+    return "";
+  }
+
+  function atsAdapterLabel(element, doc = globalThis.document, loc = globalThis.location) {
+    const host = hostnameFromLocation(loc);
+
+    if (host.includes("greenhouse.io") || host.includes("greenhouse")) {
+      const text = closestText(
+        element,
+        ".field, .question, .application-question, [data-qa=\"question\"]",
+      ) || firstSelectorText(doc, [
+        ".application-question label",
+        ".field label",
+        "[data-qa=\"question\"]",
+      ]);
+      if (text) return { text, confidence: "HIGH", adapter: "greenhouse" };
+    }
+
+    if (host.includes("lever.co") || host.includes("lever")) {
+      const text = closestText(
+        element,
+        ".application-question, .posting-field, .question, .field",
+      ) || firstSelectorText(doc, [
+        ".application-question label",
+        ".posting-field label",
+      ]);
+      if (text) return { text, confidence: "HIGH", adapter: "lever" };
+    }
+
+    if (host.includes("workdayjobs.com") || host.includes("myworkdayjobs.com")) {
+      const text = closestText(
+        element,
+        "[data-automation-id=\"formField\"], [data-automation-id=\"questionnairePage\"], fieldset",
+      ) || firstSelectorText(doc, [
+        "[data-automation-id=\"formLabel\"]",
+        "[data-automation-id=\"richText\"]",
+      ]);
+      if (text) return { text, confidence: "HIGH", adapter: "workday" };
+    }
+
+    return { text: "", confidence: "LOW", adapter: "" };
+  }
+
   function collectContext(
     doc = globalThis.document,
     win = globalThis.window,
@@ -63,12 +128,13 @@
     const selection = String(win?.getSelection?.() || "").trim();
     const active = doc?.activeElement;
     const editable = isEditable(active) ? active : null;
-    const label = nearbyLabel(editable, doc);
+    const label = nearbyLabel(editable, doc, loc);
     return {
       selectedText: selection,
       activeFieldText: fieldValue(editable),
       detectedQuestion: label.text,
       fieldConfidence: label.confidence,
+      adapter: label.adapter || "",
       pageTitle: doc?.title || "",
       pageUrl: loc?.href || ""
     };
@@ -109,7 +175,9 @@
 
   globalThis.AskPickyDetector = {
     collectContext,
+    atsAdapterLabel,
     fieldValue,
+    hostnameFromLocation,
     isEditable,
     nearbyLabel,
     visibleText,

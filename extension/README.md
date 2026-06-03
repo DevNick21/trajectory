@@ -20,6 +20,15 @@ Permanent constraints:
 The extension stores only hosted auth state and local UI preferences in
 `chrome.storage.local`. Hosted AskPicky remains the source of truth.
 
+## Detection Strategy
+
+Detection runs in this order:
+
+1. Explicit labels and ARIA labels.
+2. ATS adapters for Greenhouse, Lever, and Workday-style application pages.
+3. Generic nearby container fallback.
+4. Manual highlight/send when confidence is low.
+
 ## Auth Bridge
 
 The extension uses hosted Supabase auth rather than a separate extension-only
@@ -50,5 +59,6 @@ npm run --prefix extension test
 ```
 
 The fixture suite covers explicit labels, contenteditable fields, nearby-label
-fallback, uncertain-field write-back, manifest permission shape, API request
-contracts, private-memory default-off behaviour, polish, and approve.
+fallback, Greenhouse/Lever/Workday adapters, uncertain-field write-back,
+manifest permission shape, API request contracts, private-memory default-off
+behaviour, polish, and approve.

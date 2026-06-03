@@ -17,6 +17,7 @@ function loadDetector() {
   const context = {
     CSS: { escape: (value) => String(value) },
     Event: FakeEvent,
+    URL,
     console,
   };
   context.globalThis = context;
@@ -144,6 +145,57 @@ const detector = loadDetector();
 
   assert.equal(label.text, "Give an example of stakeholder communication under pressure");
   assert.equal(label.confidence, "MEDIUM");
+}
+
+{
+  const parent = element({
+    tagName: "div",
+    text: "Greenhouse question: Describe the data platform you owned",
+  });
+  const field = element({ tagName: "textarea", value: "draft", parent });
+  const context = detector.collectContext(
+    doc({ activeElement: field }),
+    { getSelection: () => "" },
+    { href: "https://boards.greenhouse.io/acme/jobs/123" },
+  );
+
+  assert.equal(context.adapter, "greenhouse");
+  assert.equal(context.fieldConfidence, "HIGH");
+  assert.equal(context.detectedQuestion, "Greenhouse question: Describe the data platform you owned");
+}
+
+{
+  const parent = element({
+    tagName: "div",
+    text: "Lever question: Why do you want to work with this product team?",
+  });
+  const field = element({ tagName: "textarea", value: "", parent });
+  const context = detector.collectContext(
+    doc({ activeElement: field }),
+    { getSelection: () => "" },
+    { href: "https://jobs.lever.co/acme/abc" },
+  );
+
+  assert.equal(context.adapter, "lever");
+  assert.equal(context.fieldConfidence, "HIGH");
+  assert.equal(context.detectedQuestion, "Lever question: Why do you want to work with this product team?");
+}
+
+{
+  const parent = element({
+    tagName: "fieldset",
+    text: "Workday question: Explain your experience with Python and SQL",
+  });
+  const field = element({ tagName: "textarea", value: "", parent });
+  const context = detector.collectContext(
+    doc({ activeElement: field }),
+    { getSelection: () => "" },
+    { href: "https://acme.wd3.myworkdayjobs.com/en-US/jobs/job/123" },
+  );
+
+  assert.equal(context.adapter, "workday");
+  assert.equal(context.fieldConfidence, "HIGH");
+  assert.equal(context.detectedQuestion, "Workday question: Explain your experience with Python and SQL");
 }
 
 {

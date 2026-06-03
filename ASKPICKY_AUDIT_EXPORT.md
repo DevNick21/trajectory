@@ -96,6 +96,8 @@ what remains next.
     angles, and save state
   - calls suggest-memory, critique, polish, and approve before copy/write-back
   - keeps private-memory recall off by default and covered by fixtures
+- Added first-pass Greenhouse, Lever, and Workday detector adapters with
+  fixture coverage before the generic DOM fallback.
 - Added hosted quota coverage for `/api/chat`, `/api/queue`, and batch
   `/api/queue/process`; queue processing charges forward-job quota by the
   number of pending jobs.
@@ -117,7 +119,7 @@ what remains next.
   - UI should feel closer to Linear/Superhuman/1Password/Grammarly than a
     chatbot dashboard.
 - Chrome MV3 companion:
-  - ATS adapters
+  - additional ATS adapters beyond Greenhouse/Lever/Workday
   - generic DOM fallback hardening
   - browser-level integration tests for the side-panel flow
 - Electron V3 companion after Chrome/web retention is proven.
