@@ -249,7 +249,7 @@ def _make_post_validate(ctx: ValidationContext) -> Any:
 def _mock_verdict(user: UserProfile, bundle: ResearchBundle) -> Verdict:
     """Fixture verdict used when SMOKE_TEST_MOCK=1.
 
-    Debug loops on smoke_test.py would otherwise burn the primary GPT
+    Debug loops in the smoke suite would otherwise burn the primary GPT
     call on every iteration — roughly $0.50–$1.50 per call. Gating the
     real API call behind an env var preserves the full wiring of
     call_agent, post_validate, and _enforce_label_blocker_consistency
