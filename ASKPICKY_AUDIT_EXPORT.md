@@ -103,6 +103,9 @@ what remains next.
   test so anti-bot fallback spend is isolated from normal verdict quotas.
 - Added CI schema-drift enforcement for generated OpenAPI/types and CI
   execution of the extension fixture tests.
+- Added hosted Supabase route-isolation tests proving unauthenticated `401`
+  and cross-user `404` behaviour across sessions, files, packs, queue,
+  assist sessions, answer attempts, and Memory Inbox mutations.
 
 ---
 
@@ -127,7 +130,8 @@ what remains next.
 - Supabase Postgres/pgvector repository adapter is still needed; this pass adds
   the migration/RLS contract and fails closed when
   `STORAGE_BACKEND=supabase_postgres` is configured before the adapter lands.
-- Storage-level tenant isolation needs a full route audit and cross-user tests.
+- Storage-level tenant isolation still needs the runtime Postgres adapter test
+  suite, but the hosted FastAPI route layer now has focused cross-user tests.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
   broadening the hosted route-isolation and Playwright/axe suites.
 
@@ -139,7 +143,7 @@ what remains next.
 python -m compileall src\askpicky scripts\smoke_tests
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract --fail-fast
 python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_extractor --fail-fast
-python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py
+python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_hosted_route_isolation.py
 npm run api:contract
 npm run lint
 git diff --check
