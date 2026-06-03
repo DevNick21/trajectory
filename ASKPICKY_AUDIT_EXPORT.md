@@ -136,8 +136,9 @@ what remains next.
   - hosted-only managed sync and consented aggregate outcomes
 - Supabase Postgres/pgvector still needs live database integration coverage,
   especially service-role/RLS behaviour. The hosted adapter now writes vectors
-  and uses vector-first ranking in mocked asyncpg tests; the hosted FastAPI
-  route layer has focused cross-user tests.
+  and uses vector-first ranking in mocked asyncpg tests; a skipped-by-default
+  live Supabase RLS/pgvector gate exists for release environments with
+  disposable Supabase auth users.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
   broadening Playwright/axe suites beyond the static accessibility smoke gate.
 
@@ -150,6 +151,7 @@ python -m compileall src\askpicky scripts\smoke_tests
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract --fail-fast
 python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_extractor --fail-fast
 python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_storage_postgres.py tests/test_hosted_route_isolation.py
+SUPABASE_LIVE_TEST_DATABASE_URL=... SUPABASE_LIVE_TEST_USER_A=... SUPABASE_LIVE_TEST_USER_B=... python -m pytest tests/test_supabase_live_rls.py
 npm run api:contract
 npm run lint
 python scripts/check_frontend_accessibility.py

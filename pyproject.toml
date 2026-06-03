@@ -25,6 +25,9 @@ askpicky = ["prompts/*.md", "prompts/**/*.md"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "live_supabase: integration tests against a real Supabase project; skipped unless explicit live-test env vars are set",
+]
 
 [tool.ruff]
 line-length = 100
