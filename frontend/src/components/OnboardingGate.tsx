@@ -1,10 +1,9 @@
-// Redirects to /onboarding when no profile exists for the demo user.
+// Redirects to /onboarding when no profile exists for the current user.
 //
-// Single-user demo: there is no real auth — the "auth" is whether the
-// DEMO_USER_ID has a profile row. Without one, every other surface is
-// useless (forwarding a URL needs motivations + style, drafting a CV
-// needs career_entries, etc.) so we hard-redirect to the wizard
-// instead of letting the user wander into disabled forms.
+// Without a profile row, every other surface is useless (forwarding a URL
+// needs motivations + style, drafting a CV needs career entries, etc.) so we
+// hard-redirect to the wizard instead of letting the user wander into disabled
+// forms.
 
 import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";

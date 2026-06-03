@@ -25,7 +25,6 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
-from ...config import settings
 from ...schemas import CareerEntry, UserProfile, VisaStatus
 from ...storage import Storage
 from ..dependencies import get_current_user_id, get_storage
@@ -325,9 +324,6 @@ async def finalise(
         user_id, entries_written,
         writing_style_profile_id or "<none>",
     )
-
-    # Unused — but surfaces a link to settings for future /me editing.
-    _ = settings.demo_user_id
 
     return OnboardingFinaliseResponse(
         user_id=user_id,

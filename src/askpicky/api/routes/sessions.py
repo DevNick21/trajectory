@@ -4,8 +4,8 @@
   - GET  /api/sessions/{id}          — full detail (bundle + verdict + files + progress)
   - POST /api/sessions/forward_job   — Phase 1 pipeline as SSE stream
 
-All three are ownership-gated to settings.demo_user_id. The same 404
-covers "not found" and "not yours" so an attacker cannot enumerate
+All three are ownership-gated to the authenticated AskPicky user. The same
+404 covers "not found" and "not yours" so an attacker cannot enumerate
 session ids.
 
 SSE event vocabulary:

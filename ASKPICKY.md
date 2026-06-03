@@ -42,8 +42,9 @@ Supabase user, `/api/extension/exchange` accepts it only with a matching
 Supabase access token, and the extension stores that bearer locally.
 The Supabase Postgres/pgvector migration and RLS policy contract is committed;
 hosted Postgres mode routes through an asyncpg-backed storage adapter for the
-core web and Chrome companion tables. Live Supabase integration and pgvector
-ranking coverage remain part of the V2 Foundation gate.
+core web and Chrome companion tables, including pgvector writes and vector-first
+memory ranking. Live Supabase service-role/RLS exercise remains part of the V2
+Foundation gate.
 
 ---
 
@@ -470,7 +471,6 @@ This doc is the new canonical reference. All older docs should point here for pr
 
 - Reporting opt-in vs opt-out at nudge level (current bias: opt-out at nudge, never silent reporting)
 - AskPicky Interview brand: shared account, separate product
-- Auth mechanism for multi-user (ADR not yet written)
 - Cross-surface identity unification (web user identity)
 - Exact credit costs and price points (calibrate against real compute spend post-first-100-users)
 - Whether AskPicky publishes anonymised market data publicly (free goodwill) vs paid licensing only
@@ -483,6 +483,8 @@ Resolved 2026-06-01:
 - Hosted outcome/benchmark intelligence is the commercial moat; forks can run
   the open core but do not receive hosted aggregate employer data unless they
   join the hosted contribution loop.
+- Supabase Auth is the hosted multi-user mechanism; local OSS/dev mode keeps
+  demo identity for fast self-hosted iteration.
 
 ---
 

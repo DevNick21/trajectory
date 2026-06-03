@@ -4,9 +4,9 @@
 resolved through the configured auth mode: local OSS/dev can use demo identity,
 while hosted V2 uses Supabase bearer JWTs.
 
-`get_current_user` raises 404 when the demo user hasn't completed
-onboarding — the frontend interprets this as "redirect to
-/onboarding" rather than treating it as a server error.
+`get_current_user` raises 404 when the authenticated user has not completed
+onboarding; the frontend interprets this as "redirect to /onboarding" rather
+than treating it as a server error.
 """
 
 from __future__ import annotations
@@ -99,8 +99,8 @@ def get_storage(request: Request) -> Storage:
 def get_current_user_id(request: Request) -> str:
     """Return the authenticated AskPicky user id.
 
-    Demo mode returns `settings.demo_user_id`; hosted mode requires a valid
-    Supabase bearer JWT and maps the token `sub` to `user_id`.
+    Demo mode returns the configured local dev user. Hosted mode requires a
+    valid Supabase bearer JWT and maps the token `sub` to `user_id`.
     """
     return resolve_identity(request).user_id
 
@@ -109,7 +109,7 @@ async def get_current_user(
     user_id: str = Depends(get_current_user_id),
     storage: Storage = Depends(get_storage),
 ) -> UserProfile:
-    """Resolve the demo user's profile.
+    """Resolve the authenticated user's profile.
 
     Raises 404 with a `code: profile_not_found` body so the frontend
     can route the visitor to the onboarding wizard rather than show

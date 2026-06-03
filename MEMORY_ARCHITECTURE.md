@@ -65,8 +65,9 @@ Hosted V2 targets Supabase Auth and Supabase Postgres/pgvector for canonical
 multi-user memory. The migration/RLS contract is committed under
 `supabase/migrations/`; runtime Postgres mode uses the asyncpg-backed hosted
 adapter for core assist and memory tables. SQLite/FAISS remains the local
-OSS/dev storage path. Live Supabase pgvector ranking still needs integration
-coverage before hosted V2 is release-complete.
+OSS/dev storage path. The hosted adapter now writes pgvector embeddings and
+uses vector-first ranking with lexical fallback; live Supabase service-role/RLS
+exercise remains required before hosted V2 is release-complete.
 
 Chrome detection is confidence-based:
 
@@ -278,9 +279,9 @@ Latest live audit status after the 2026-06-01 hardening pass:
 
 ## Multi-User Boundary
 
-Every table added here is keyed by `user_id`. The current local/demo identity
-still resolves through `settings.demo_user_id`, but the memory schema is
-already tenant-scoped:
+Every table added here is keyed by `user_id`. Local/dev mode uses a configured
+single-user identity, while hosted V2 maps Supabase bearer `sub` claims to the
+same storage key. The memory schema is tenant-scoped:
 
 - assist sessions are user-owned
 - answer attempts are user-owned
@@ -288,8 +289,8 @@ already tenant-scoped:
 - Memory Inbox update routes check ownership before mutation
 - recall queries filter by user before scoring
 
-When auth is introduced, the route dependency changes; the storage contract
-does not need a shape rewrite.
+Auth and storage are now decoupled: changing identity providers should not
+require a memory table shape rewrite.
 
 ---
 

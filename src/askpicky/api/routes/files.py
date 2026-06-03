@@ -9,7 +9,7 @@ risk #8):
      session's directory via `is_relative_to`. Catches symlink
      escapes and any other shenanigan that survived step 1.
 
-Plus session ownership check — the demo user can only download files
+Plus session ownership check — the current user can only download files
 from their own sessions; the same 404 for "not found" and "not yours"
 prevents enumeration.
 """

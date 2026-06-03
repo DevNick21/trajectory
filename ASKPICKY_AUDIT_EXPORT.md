@@ -135,9 +135,9 @@ what remains next.
   - ghost-frequency trends
   - hosted-only managed sync and consented aggregate outcomes
 - Supabase Postgres/pgvector still needs live database integration coverage,
-  especially pgvector ranking and service-role/RLS behaviour. The mocked
-  adapter unit tests cover core method shape; the hosted FastAPI route layer
-  has focused cross-user tests.
+  especially service-role/RLS behaviour. The hosted adapter now writes vectors
+  and uses vector-first ranking in mocked asyncpg tests; the hosted FastAPI
+  route layer has focused cross-user tests.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
   broadening Playwright/axe suites beyond the static accessibility smoke gate.
 
