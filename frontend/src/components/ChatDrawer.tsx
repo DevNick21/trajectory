@@ -40,6 +40,7 @@ export default function ChatDrawer({ sessionId, className }: Props) {
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inertWhenClosed = !open ? ({ inert: "" } as React.HTMLAttributes<HTMLDivElement>) : {};
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: 1e9, behavior: "smooth" });
@@ -100,6 +101,7 @@ export default function ChatDrawer({ sessionId, className }: Props) {
           open ? "translate-x-0" : "translate-x-full",
         )}
         aria-hidden={!open}
+        {...inertWhenClosed}
       >
         <header className="flex items-center justify-between border-b px-4 py-3">
           <div>
@@ -171,7 +173,12 @@ export default function ChatDrawer({ sessionId, className }: Props) {
             disabled={busy}
             autoComplete="off"
           />
-          <Button type="submit" size="sm" disabled={busy || !input.trim()}>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={busy || !input.trim()}
+            aria-label="Send chat message"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </form>

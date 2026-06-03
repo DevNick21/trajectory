@@ -237,6 +237,7 @@ export default function Assist() {
               <label className="flex min-h-10 items-center gap-2 rounded-lg border border-canvas px-3 text-sm">
                 <input
                   type="checkbox"
+                  aria-label="Private save"
                   checked={privateMode}
                   onChange={(event) => {
                     setPrivateMode(event.target.checked);
@@ -249,6 +250,7 @@ export default function Assist() {
               <label className="flex min-h-10 items-center gap-2 rounded-lg border border-canvas px-3 text-sm">
                 <input
                   type="checkbox"
+                  aria-label="Include private memory"
                   checked={includePrivate}
                   onChange={(event) => setIncludePrivate(event.target.checked)}
                   className="h-4 w-4"

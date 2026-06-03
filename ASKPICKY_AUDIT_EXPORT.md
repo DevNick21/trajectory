@@ -139,8 +139,8 @@ what remains next.
   and uses vector-first ranking in mocked asyncpg tests; a skipped-by-default
   live Supabase RLS/pgvector gate exists for release environments with
   disposable Supabase auth users.
-- CI now has secret scanning and schema drift enforcement; remaining CI work is
-  broadening Playwright/axe suites beyond the static accessibility smoke gate.
+- CI now has secret scanning, schema drift enforcement, static accessibility
+  smoke, and a browser-level Playwright/axe gate over the built frontend.
 
 ---
 
@@ -155,6 +155,8 @@ SUPABASE_LIVE_TEST_DATABASE_URL=... SUPABASE_LIVE_TEST_USER_A=... SUPABASE_LIVE_
 npm run api:contract
 npm run lint
 python scripts/check_frontend_accessibility.py
+npm run --prefix frontend build
+ASKPICKY_REQUIRE_BROWSER_SMOKE=1 python scripts/check_frontend_browser_accessibility.py
 git diff --check
 python scripts/audit_prompt.py application_answer_shaper
 python scripts/audit_prompt.py memory_extractor
