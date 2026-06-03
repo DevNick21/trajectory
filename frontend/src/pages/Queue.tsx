@@ -317,10 +317,11 @@ function QueueRow({ item, live, onRemove, isRemoving }: RowProps) {
           type="button"
           onClick={onRemove}
           disabled={isRemoving}
+          aria-label="Remove from queue"
           title="Remove from queue"
           className="text-muted-foreground hover:text-destructive disabled:opacity-50"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-4 w-4" aria-hidden />
         </button>
       </div>
     </li>

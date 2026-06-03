@@ -108,6 +108,8 @@ what remains next.
 - Added hosted Supabase route-isolation tests proving unauthenticated `401`
   and cross-user `404` behaviour across sessions, files, packs, queue,
   assist sessions, answer attempts, and Memory Inbox mutations.
+- Added a no-dependency frontend accessibility smoke gate for unlabeled
+  icon-only buttons and fixed the Queue remove button accessible name.
 
 ---
 
@@ -135,7 +137,7 @@ what remains next.
 - Storage-level tenant isolation still needs the runtime Postgres adapter test
   suite, but the hosted FastAPI route layer now has focused cross-user tests.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
-  broadening the hosted route-isolation and Playwright/axe suites.
+  broadening Playwright/axe suites beyond the static accessibility smoke gate.
 
 ---
 
@@ -148,6 +150,7 @@ python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_ex
 python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_hosted_route_isolation.py
 npm run api:contract
 npm run lint
+python scripts/check_frontend_accessibility.py
 git diff --check
 python scripts/audit_prompt.py application_answer_shaper
 python scripts/audit_prompt.py memory_extractor
