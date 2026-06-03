@@ -67,6 +67,9 @@ what remains next.
   - Supabase bearer-auth dependency for hosted mode
   - `SUPABASE_DATABASE_URL` config
   - Supabase Postgres/pgvector migration contract with RLS policies
+  - asyncpg-backed hosted storage adapter for profile, career, sessions,
+    queue, quotas, audit, pairing, assist, memory, advice, and scrape-cache
+    tables
   - hosted quota ledger and route-level assist quotas
   - protected internal purge and quota reconciliation endpoints
   - scheduled raw-retention purge with privacy audit events
@@ -131,11 +134,10 @@ what remains next.
   - response-rate intelligence
   - ghost-frequency trends
   - hosted-only managed sync and consented aggregate outcomes
-- Supabase Postgres/pgvector repository adapter is still needed; this pass adds
-  the migration/RLS contract and fails closed when
-  `STORAGE_BACKEND=supabase_postgres` is configured before the adapter lands.
-- Storage-level tenant isolation still needs the runtime Postgres adapter test
-  suite, but the hosted FastAPI route layer now has focused cross-user tests.
+- Supabase Postgres/pgvector still needs live database integration coverage,
+  especially pgvector ranking and service-role/RLS behaviour. The mocked
+  adapter unit tests cover core method shape; the hosted FastAPI route layer
+  has focused cross-user tests.
 - CI now has secret scanning and schema drift enforcement; remaining CI work is
   broadening Playwright/axe suites beyond the static accessibility smoke gate.
 
@@ -147,7 +149,7 @@ what remains next.
 python -m compileall src\askpicky scripts\smoke_tests
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract --fail-fast
 python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_extractor --fail-fast
-python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_hosted_route_isolation.py
+python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_storage_postgres.py tests/test_hosted_route_isolation.py
 npm run api:contract
 npm run lint
 python scripts/check_frontend_accessibility.py

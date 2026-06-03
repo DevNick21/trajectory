@@ -41,7 +41,9 @@ secret scanning. The Chrome companion uses a one-time hosted pairing flow:
 Supabase user, `/api/extension/exchange` accepts it only with a matching
 Supabase access token, and the extension stores that bearer locally.
 The Supabase Postgres/pgvector migration and RLS policy contract is committed;
-hosted Postgres mode fails closed until the async storage adapter targets it.
+hosted Postgres mode routes through an asyncpg-backed storage adapter for the
+core web and Chrome companion tables. Live Supabase integration and pgvector
+ranking coverage remain part of the V2 Foundation gate.
 
 ---
 

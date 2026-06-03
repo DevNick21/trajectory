@@ -2377,6 +2377,7 @@ class Storage:
     """
 
     def __init__(self, db_path: Optional[str] = None) -> None:
+        self._backend: Any = None
         # Tests can pass a custom DB path; mutate the shared settings only when
         # the override is concrete (no `:memory:` — aiosqlite would still need
         # a file path) and only when no other Storage instance has already
@@ -2392,18 +2393,34 @@ class Storage:
                 )
             settings.sqlite_db_path = Path(db_path)
 
+    def __getattribute__(self, name: str) -> Any:
+        if name not in {
+            "_backend",
+            "__dict__",
+            "__class__",
+            "__getattribute__",
+            "__init__",
+            "initialise",
+            "close",
+        }:
+            backend = object.__getattribute__(self, "__dict__").get("_backend")
+            if backend is not None and hasattr(backend, name):
+                return getattr(backend, name)
+        return object.__getattribute__(self, name)
+
     async def initialise(self) -> None:
         if settings.storage_backend == "supabase_postgres":
-            raise RuntimeError(
-                "STORAGE_BACKEND=supabase_postgres is a hosted V2 release "
-                "gate, but the async Supabase Postgres storage adapter is "
-                "not implemented yet. Apply supabase/migrations first and "
-                "keep hosted deploys blocked until the adapter replaces the "
-                "SQLite/FAISS path."
-            )
+            from .storage_postgres import PostgresStorage
+
+            self._backend = PostgresStorage()
+            await self._backend.initialise()
+            return
         await _ensure_db()
 
     async def close(self) -> None:
+        if self._backend is not None:
+            await self._backend.close()
+            return
         pass  # connections are per-request; nothing to close
 
     # ── User profiles ──────────────────────────────────────────────────────

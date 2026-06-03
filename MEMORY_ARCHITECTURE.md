@@ -63,8 +63,10 @@ are delivery surfaces over the same memory/API contract, not separate products.
 
 Hosted V2 targets Supabase Auth and Supabase Postgres/pgvector for canonical
 multi-user memory. The migration/RLS contract is committed under
-`supabase/migrations/`; runtime Postgres mode fails closed until the async
-adapter lands. SQLite/FAISS remains the local OSS/dev storage path.
+`supabase/migrations/`; runtime Postgres mode uses the asyncpg-backed hosted
+adapter for core assist and memory tables. SQLite/FAISS remains the local
+OSS/dev storage path. Live Supabase pgvector ranking still needs integration
+coverage before hosted V2 is release-complete.
 
 Chrome detection is confidence-based:
 

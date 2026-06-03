@@ -11,6 +11,7 @@ pyarrow>=15.0.0
 openpyxl>=3.1.0
 sqlalchemy>=2.0.0
 aiosqlite>=0.20.0
+asyncpg>=0.29.0
 sentence-transformers>=3.0.0
 faiss-cpu>=1.8.0
 langgraph>=0.6.0
