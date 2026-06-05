@@ -12,7 +12,9 @@ import logging
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+_ROOT = Path(__file__).parent.parent
+for _package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    sys.path.insert(0, str(_ROOT / "packages" / _package / "src"))
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")

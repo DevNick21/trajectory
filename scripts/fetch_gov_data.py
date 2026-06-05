@@ -24,7 +24,9 @@ from typing import Any, Optional
 import pandas as pd
 import requests
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+_ROOT = Path(__file__).parent.parent
+for _package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    sys.path.insert(0, str(_ROOT / "packages" / _package / "src"))
 from askpicky.data_freshness import write_fetched_at  # noqa: E402
 
 log = logging.getLogger(__name__)

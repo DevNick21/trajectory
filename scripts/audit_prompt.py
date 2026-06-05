@@ -25,10 +25,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-# Make `askpicky` importable regardless of where this script is run from.
-_SRC = Path(__file__).resolve().parent.parent / "packages" / "engine" / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+# Make monorepo packages importable regardless of where this script is run from.
+_ROOT = Path(__file__).resolve().parent.parent
+for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    src = _ROOT / "packages" / package / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
 
 from pydantic import BaseModel  # noqa: E402
 

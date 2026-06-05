@@ -1256,7 +1256,7 @@ agent's prompt. Two-tier: deterministic regex filter (Tier 1) runs
 on every piece of untrusted content; an LLM classifier (Tier 2) only
 runs when Tier 1 flags suspicious patterns.
 
-**Location:** `src/askpicky/validators/content_shield.py` — not a
+**Location:** `packages/engine/src/askpicky/validators/content_shield.py` — not a
 `sub_agent/`. It is a utility called before any agent invocation
 where untrusted content is passed in.
 
@@ -1561,7 +1561,7 @@ OUTPUT: Valid JSON matching ApplicationAnswerOutput. No prose outside JSON.
 
 ## Output schema
 
-`ApplicationAnswerOutput` in `src/askpicky/schemas.py`.
+`ApplicationAnswerOutput` in `packages/engine/src/askpicky/schemas.py`.
 
 ## Validation
 
@@ -1659,7 +1659,7 @@ OUTPUT: Valid JSON matching MemoryExtractionOutput. No prose outside JSON.
 
 ## Output schema
 
-`MemoryExtractionOutput` in `src/askpicky/schemas.py`.
+`MemoryExtractionOutput` in `packages/engine/src/askpicky/schemas.py`.
 
 ## Validation
 

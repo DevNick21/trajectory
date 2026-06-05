@@ -24,10 +24,11 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-# Ensure sys.path has the engine source root BEFORE any askpicky imports
+# Ensure sys.path has package source roots BEFORE any askpicky imports
 # land from the individual smoke modules.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "packages" / "engine" / "src"))
+for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    sys.path.insert(0, str(_REPO_ROOT / "packages" / package / "src"))
 
 # Windows console is cp1252 by default — coerce stdout to UTF-8 so the
 # occasional Unicode glyph in a log line doesn't crash the run.
@@ -55,6 +56,7 @@ _REGISTRY: list[_Entry] = [
     _Entry("application_memory", "scripts.smoke_tests.application_memory", cheap=True,  category="infra"),
     _Entry("faiss_retrieval",    "scripts.smoke_tests.faiss_retrieval",    cheap=True,  category="infra"),
     _Entry("ratelimit",          "scripts.smoke_tests.ratelimit",          cheap=True,  category="infra"),
+    _Entry("self_host_local",    "scripts.smoke_tests.self_host_local",    cheap=True,  category="infra"),
     _Entry("data_freshness",     "scripts.smoke_tests.data_freshness",     cheap=True,  category="infra"),
     _Entry("observability",      "scripts.smoke_tests.observability",      cheap=True,  category="infra"),
 

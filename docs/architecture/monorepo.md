@@ -6,7 +6,12 @@ AskPicky is now organised as an open-core monorepo.
 apps/api        thin FastAPI app boundary
 apps/web        React/Vite user interface
 apps/extension  optional localhost-only browser companion
-packages/engine Python askpicky package and public engine
+packages/engine compatibility FastAPI/application package
+packages/core   shared public schemas/types
+packages/parsers deterministic public parsers
+packages/evaluators deterministic public evidence/claim evaluators
+packages/privacy local export/delete and privacy metadata
+packages/ai     provider abstraction for BYOK/local models
 infra/docker    Docker runtime files
 infra/local     local runtime scaffolding
 examples        sample inputs and traces

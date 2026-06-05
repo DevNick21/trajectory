@@ -69,9 +69,14 @@ The active public workflow is in
 apps/
   api/          # thin FastAPI app boundary
   web/          # React/Vite app
-  extension/    # optional low-permission browser companion
+apps/extension  # optional low-permission browser companion
 packages/
-  engine/       # Python askpicky package and open-core engine
+  engine/       # compatibility app package
+  core/         # shared public schemas/types
+  parsers/      # deterministic JD/CV/application parsers
+  evaluators/   # deterministic claim/evidence evaluators
+  privacy/      # export/delete and local privacy primitives
+  ai/           # provider abstraction for BYOK/local model adapters
 infra/
   docker/       # Docker runtime files
   local/        # local-only runtime scaffolding
@@ -132,8 +137,9 @@ pip install -r requirements.txt
 # Fetch UK gov data
 python scripts/fetch_gov_data.py
 
-# Copy .env.example to .env, fill provider keys + DEMO_USER_ID
+# Copy .env.example to .env, enable local mode for deterministic first-run use
 cp .env.example .env
+# Set ASKPICKY_LOCAL_MODE=1 for self-hosted mode without managed AI credentials.
 
 # Web frontend
 cd apps/web && npm install && npm run dev
@@ -149,6 +155,9 @@ uvicorn askpicky.api.app:app --reload --port 8000
 ```bash
 # Cheap suite, no live LLM calls
 python -m scripts.smoke_tests.run_all --cheap
+
+# Local self-host path only
+python -m scripts.smoke_tests.run_all --only self_host_local
 
 # Application-assist memory/API contract only
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract

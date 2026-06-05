@@ -15,6 +15,11 @@ services:
     command: ["uvicorn", "askpicky.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./packages/engine/src:/app/packages/engine/src
+      - ./packages/core/src:/app/packages/core/src
+      - ./packages/parsers/src:/app/packages/parsers/src
+      - ./packages/evaluators/src:/app/packages/evaluators/src
+      - ./packages/privacy/src:/app/packages/privacy/src
+      - ./packages/ai/src:/app/packages/ai/src
       - ./scripts:/app/scripts
       - askpicky-data:/data
     environment:

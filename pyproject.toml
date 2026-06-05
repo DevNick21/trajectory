@@ -12,7 +12,14 @@ requires-python = ">=3.11"
 # installs the package without re-declaring them here.
 
 [tool.setuptools.packages.find]
-where = ["packages/engine/src"]
+where = [
+    "packages/engine/src",
+    "packages/core/src",
+    "packages/parsers/src",
+    "packages/evaluators/src",
+    "packages/privacy/src",
+    "packages/ai/src",
+]
 include = ["askpicky*"]
 
 [tool.setuptools.package-data]
@@ -33,7 +40,14 @@ target-version = "py311"
 
 [tool.pyright]
 typeCheckingMode = "basic"
-include = ["packages/engine/src"]
+include = [
+    "packages/engine/src",
+    "packages/core/src",
+    "packages/parsers/src",
+    "packages/evaluators/src",
+    "packages/privacy/src",
+    "packages/ai/src",
+]
 exclude = ["**/__pycache__", "**/node_modules", "tests", "scripts", "apps/web", "apps/extension", "demo"]
 reportMissingTypeStubs = false
 reportUnknownMemberType = false

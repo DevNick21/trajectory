@@ -210,7 +210,9 @@ async def run_task(
     start = time.perf_counter()
 
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+        root = Path(__file__).resolve().parents[2]
+        for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+            sys.path.insert(0, str(root / "packages" / package / "src"))
         from askpicky.config import settings
 
         # Mock mode: return synthetic pass with schema fields populated.

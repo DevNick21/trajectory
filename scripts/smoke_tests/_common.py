@@ -37,9 +37,10 @@ from typing import Any, Awaitable, Callable, Optional
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_SRC = _REPO_ROOT / "packages" / "engine" / "src"
-if str(_SRC) not in sys.path:
-    sys.path.insert(0, str(_SRC))
+for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    src = _REPO_ROOT / "packages" / package / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
 
 # Allow Settings to boot without DEMO_USER_ID in the
 # environment. Individual smoke tests that need those values set them

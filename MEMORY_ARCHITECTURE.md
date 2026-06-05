@@ -27,7 +27,7 @@ tests, fixtures, and future self-hosted deployments with explicit identities.
 
 ## Core Tables
 
-Important memory tables live in `src/askpicky/storage.py`:
+Important memory tables live in `packages/engine/src/askpicky/storage.py`:
 
 - `user_profiles`
 - `career_entries`

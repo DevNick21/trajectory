@@ -7,28 +7,11 @@ the public engine boundary.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Optional
 
+from askpicky_privacy import USER_SCOPED_TABLES, redact_export_rows
+
 from ..storage import _connect
-
-
-_USER_TABLES = {
-    "user_profiles": "user_id",
-    "career_entries": "user_id",
-    "writing_style_profiles": "user_id",
-    "sessions": "user_id",
-    "llm_cost_log": None,
-    "security_audit_events": "user_id",
-    "queued_jobs": "user_id",
-    "jobs": "user_id",
-    "application_tracker": "user_id",
-    "application_assist_sessions": "user_id",
-    "answer_attempts": "user_id",
-    "experience_atoms": "user_id",
-    "story_frames": "user_id",
-    "memory_edges": "user_id",
-}
 
 
 async def _rows_for_user(table: str, user_id_col: Optional[str], user_id: str) -> list[dict[str, Any]]:
@@ -56,21 +39,10 @@ async def export_user_data(*, user_id: str, include_raw: bool = True) -> dict[st
     """Export all local rows scoped to a user."""
 
     export: dict[str, Any] = {}
-    for table, user_id_col in _USER_TABLES.items():
+    for table, user_id_col in USER_SCOPED_TABLES.items():
         rows = await _rows_for_user(table, user_id_col, user_id)
-        if not include_raw and table in {"answer_attempts", "career_entries"}:
-            for row in rows:
-                if "raw_text" in row:
-                    row["raw_text"] = ""
-                if "payload" in row:
-                    try:
-                        payload = json.loads(row["payload"])
-                    except Exception:
-                        payload = None
-                    if isinstance(payload, dict):
-                        payload["raw_draft"] = ""
-                        payload["transcript"] = None
-                        row["payload"] = payload
+        if not include_raw:
+            rows = redact_export_rows(table=table, rows=rows)
         export[table] = rows
 
     async with await _connect() as db:
@@ -108,7 +80,7 @@ async def hard_delete_user_data(*, user_id: str) -> dict[str, int]:
                 )
                 deleted[table] = cur.rowcount if cur.rowcount is not None else 0
 
-        for table, user_id_col in _USER_TABLES.items():
+        for table, user_id_col in USER_SCOPED_TABLES.items():
             if user_id_col is None:
                 continue
             cur = await db.execute(

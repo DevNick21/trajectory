@@ -63,7 +63,7 @@ Routing is configured in `config.py::agent_tier_map`. Each agent is assigned a t
 To swap a provider: edit the tier settings and `config.py::agent_tier_map`, then rebuild Docker. No code changes needed.
 
 ### Rule 8 — Cost discipline
-All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.
+All LLM calls go through `packages/engine/src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.
 
 ### Rule 9 — Content Shield on all untrusted content
 Scraped pages, JD text, user messages, recruiter emails, onboarding samples — all untrusted. Before reaching an agent's prompt they pass through `validators/content_shield.py`:

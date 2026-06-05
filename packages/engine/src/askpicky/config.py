@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     })
 
     # --- feature flags
+    # Local/self-hosted mode permits deterministic public workflows without
+    # managed AI credentials. BYOK/local provider setup remains opt-in.
+    local_mode: bool = False
     # Per-agent Phase 1 timeout.
     phase1_agent_timeout_s: float = 45.0
     # Tier 2 content-shield classifier timeout.
@@ -118,7 +121,7 @@ class Settings(BaseSettings):
     embedding_dim: int = Field(default=384)
 
     # --- local web surface identity
-    demo_user_id: str = ""
+    demo_user_id: str = "local-user"
     api_port: int = 8000
     web_origin: str = "http://localhost:5173"
     web_url: str = "http://localhost:5173"
@@ -147,7 +150,7 @@ class Settings(BaseSettings):
         if _is_test_env():
             return self
         missing: list[str] = []
-        if not self.deepseek_api_key:
+        if not self.local_mode and not self.deepseek_api_key:
             missing.append("DEEPSEEK_API_KEY")
         if not self.demo_user_id:
             missing.append("DEMO_USER_ID")

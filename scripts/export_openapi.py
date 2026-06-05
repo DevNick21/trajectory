@@ -11,9 +11,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "packages" / "engine" / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+    src = ROOT / "packages" / package / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
 
 os.environ.setdefault("ASKPICKY_TEST_MODE", "1")
 
