@@ -1,19 +1,19 @@
 # AGENTS.md — Agent Prompt Specifications
 
-> Source of truth for every LLM-driven component in AskPicky.
+> Source of truth for every LLM-driven prompt in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-06-02 — V2 removes legacy shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes all hosted models via DeepSeek + OpenAI. Hosted V2 is Supabase-authenticated, quota-gated, and uses the Chrome pairing bridge documented in V2_SECURITY_CHROME_PLAN.md.*
+*Last updated 2026-06-05 — active public product flow lives in docs/WORKING_PIPELINE.md. V2 removes legacy shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes agents via DeepSeek + OpenAI. Writing-sample onboarding is removed; style extraction is legacy-only until deleted.*
 
 ## Agent inventory
 
-The **Adapter** column is the `llm.py` dispatcher each agent uses (see CLAUDE.md "Adapter dispatch in `llm.py`"). Picking a different adapter for an existing agent is a substantial change — the post-2026-04-25 migration assigned each.
+The **Adapter** column is the `llm.py` dispatcher each agent uses. Picking a
+different adapter for an existing agent is a substantial change.
 
 Updated 2026-05-23 — multi-provider routing (DeepSeek V4 Flash for
 low-stakes tasks), Firecrawl anti-bot fallback, 6-label verdict
 taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard.
-See config.py agent_model_map for the per-agent provider→model routing
-table.
+See config.py agent_tier_map for the per-agent tier routing table.
 
 Provider routing legend (2026-05-25):
   🟢 DeepSeek V4 Flash — fast tier: extraction, routing, triage, style
@@ -31,8 +31,8 @@ Provider routing legend (2026-05-25):
 | 7 | Verdict | **strong tier (GPT-5.4)** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
 | 8 | Interview Questions (design + predict) | **DeepSeek V4 Flash** | `call_agent` | `design` post-verdict; `predict` user-triggered | Phase 3/4 |
 | 9 | STAR Polisher | **DeepSeek V4 Flash** | `call_agent` | After each user answer | Phase 3 |
-| 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Onboarding, once | Onboarding |
-| 11 | Onboarding Parser | **DeepSeek V4 Flash** | `call_agent` | End of onboarding flow | Onboarding |
+| 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Legacy/manual only; not onboarding | Deprecated |
+| 11 | Onboarding Parser | **DeepSeek V4 Flash** | `call_agent` | Optional per-stage parse; finalise is deterministic | Onboarding |
 | 12 | Salary Strategist | **DeepSeek V4 Pro** | `call_agent` | On-demand only | Phase 4 |
 | 13 | CV Tailor (agentic) | **DeepSeek V4 Pro** | `call_agent` (multi-turn tool use) | User-triggered | Phase 4 |
 | 14 | Cover Letter Writer | **DeepSeek V4 Pro** | `call_agent` | User-triggered | Phase 4 |
@@ -48,9 +48,9 @@ Provider routing legend (2026-05-25):
 
 Cuts since the original inventory:
 
-- ~~Intent Router (Opus xhigh)~~ — deterministic tier-0 + DeepSeek Flash fallback
+- ~~Intent Router legacy strong-model-only path~~ — deterministic tier-0 + DeepSeek Flash fallback
 - ~~Question Designer~~ + ~~Likely Questions Predictor~~ — merged into Interview Questions
-- Ghost Job JD Scorer — downgraded from Opus xhigh → Haiku → deterministic regex
+- Ghost Job JD Scorer — downgraded from legacy strong-model routing to deterministic regex and then fast-tier checks
 - ~~Career Narrator~~ — folded into CV Parser's single call
 - ~~Salary Data agent in Phase 1~~ — kept as module for on-demand Salary Strategist
 
@@ -63,6 +63,9 @@ New since 2026-05-23:
 - Application assist adds two agents: `application_answer_shaper` on the
   normal tier for user-facing final answers, and `memory_extractor` on the
   fast tier for optional background Memory Inbox enrichment.
+- Onboarding no longer collects writing samples and `/api/onboarding/finalise`
+  no longer calls the onboarding parser or style extractor. CV import remains
+  optional and finalise writes profile and career entries deterministically.
 
 ---
 
@@ -279,7 +282,7 @@ RULES:
 
 **Purpose:** One of 4 signals combined in `ghost_job_detector.py`. Scores the JD text itself on specificity vs boilerplate.
 
-**Model:** `claude-haiku-4-5`
+**Model:** DeepSeek V4 Flash (fast tier)
 
 ## System prompt
 
@@ -498,7 +501,7 @@ OUTPUT: Valid JSON matching QuestionSet schema. Exactly 3 questions.
 
 1. Exactly 3 questions.
 2. No banned openers (regex check over `question_text`).
-3. Each `question_text` must contain at least one noun-phrase token from JD or company research or a specific career entry. Second Sonnet call validates.
+3. Each `question_text` must contain at least one noun-phrase token from JD or company research or a specific career entry. A second validation call checks this.
 4. Distinct `target_gap` values unless rationale explicitly justifies duplication.
 
 ---
@@ -557,9 +560,16 @@ OUTPUT: Valid JSON matching STARPolish schema.
 
 # 9. Writing Style Extractor
 
-**Purpose:** Build a `WritingStyleProfile` from the user's pasted samples during onboarding.
+**Purpose:** Legacy/manual helper for building a `WritingStyleProfile` from
+explicit user-provided samples.
 
-**Model:** `claude-opus-4-7`, `xhigh`
+**Status:** Deprecated for product onboarding. Do not call from
+`/api/onboarding/finalise` and do not add new user-facing sample collection.
+Voice now comes from product personas, approved memory, and assist-loop
+feedback. Keep this prompt only while old generators still accept
+`WritingStyleProfile` as an internal fallback shape.
+
+**Model:** fast tier
 
 ## System prompt
 
@@ -607,9 +617,11 @@ OUTPUT: Valid JSON matching WritingStyleProfile.
 
 # 10. Onboarding Orchestrator
 
-**Purpose:** End-of-onboarding agent that takes the conversational transcript and produces structured profile + initial career entries.
+**Purpose:** Optional per-stage parser for older conversational onboarding
+experiments. Active `/api/onboarding/finalise` is deterministic and does not
+call this agent.
 
-**Model:** `claude-opus-4-7`, `xhigh`
+**Model:** fast tier
 
 ## System prompt
 
@@ -624,9 +636,6 @@ The onboarding covered 6 topics:
 4. Deal-breakers and good-role signals
 5. Visa/location situation
 6. Life and urgency context
-
-Plus a writing samples batch (already processed separately into
-WritingStyleProfile).
 
 YOUR JOB:
 
@@ -1017,8 +1026,8 @@ Flag any of the following:
    the same? If yes, flag. These must be rewritten to cite
    something specific.
 
-5. STYLE_MISMATCH: sentences with style conformance <7/10 to the
-   user's WritingStyleProfile. Flag with a proposed rewrite.
+5. VOICE_MISMATCH: sentences that sound generic, sycophantic, or unlike the
+   approved memory/persona context. Flag with a proposed rewrite.
 
 For each flag:
 - exact offending substring
@@ -1082,8 +1091,8 @@ AskPicky's non-negotiable discipline:
    proven track record, leverage (verb), touch base, circle back,
    reach out, excited to apply, hit the ground running, self-starter.
 
-4. Generated output must sound like the user's own voice (per
-   WritingStyleProfile), not like AI.
+4. Generated output must sound grounded in the user's approved memory/persona
+   context, not like generic AI.
 
 5. Never invent facts the user didn't state. Never invent citations.
 
@@ -1131,8 +1140,8 @@ C4. Does the prompt specify how to refuse if the untrusted input
 
 D. VOICE & CLICHÉ DISCIPLINE (generators only; N/A for extractors)
 
-D1. Does the prompt reference WritingStyleProfile.tone,
-    signature_patterns, and avoided_patterns explicitly?
+D1. Does the prompt reference approved memory/persona context or explain why
+    voice is not relevant?
 D2. Is the banned-phrase list referenced, even by reference?
 D3. Is the company-swap test mentioned ("if I replace Monzo with
     Revolut does this still read?")?
@@ -1229,7 +1238,7 @@ class PromptAuditReport(BaseModel):
 3. Re-run the audit. Keep iterating until `overall_assessment` is
    `STRONG` or `ADEQUATE` with no `HIGH` weaknesses.
 4. If `UNSAFE`, stop shipping that agent until fixed. Log the delay
-   in PROCESS.md.
+   in the audit run export.
 
 **Discipline note:** the auditor is not always right. It is a critic,
 not an authority. If it flags something you deliberately designed
@@ -1244,8 +1253,8 @@ where N/A is the correct result but the auditor may default to FAIL.
 
 **Purpose:** Sanitise all untrusted content before it reaches any
 agent's prompt. Two-tier: deterministic regex filter (Tier 1) runs
-on every piece of untrusted content; Sonnet-based classifier (Tier 2)
-only runs when Tier 1 flags suspicious patterns.
+on every piece of untrusted content; an LLM classifier (Tier 2) only
+runs when Tier 1 flags suspicious patterns.
 
 **Location:** `src/askpicky/validators/content_shield.py` — not a
 `sub_agent/`. It is a utility called before any agent invocation
@@ -1420,15 +1429,15 @@ if flags:
 | memory_extractor | Tier 1 + Tier 2 if flagged | Approved answers are user-supplied data that become durable memory |
 | salary_strategist | Tier 1 | JD + company research in prompt |
 | intent_router | Tier 1 | User message is untrusted |
-| onboarding_orchestrator | Tier 1 | User's pasted samples |
-| style_extractor | Tier 1 only | User's pasted samples — but output schema is constrained |
+| onboarding_orchestrator | Tier 1 | Legacy parser only; user free text is untrusted |
+| style_extractor | Tier 1 only | Legacy explicit samples only; output schema is constrained |
 | question_designer, star_polisher, self_audit | No wrap | Only receive already-validated structured data |
 
 ## Budget impact
 
 - Tier 1: free, always runs.
 - Tier 2: only on flagged content, maybe 1 in 20 forwarded jobs (~5%).
-  Sonnet 4.6 medium effort on ~2k tokens = ~$0.003 per call.
+  Fast-tier classifier spend should stay small and operator-gated.
 - **Expected total:** <$5 across the demo + judge testing window.
 
 ## Operator-visible signals
@@ -1685,9 +1694,11 @@ Retry count: **maximum 2 retries per agent call**. More than 2 usually means a p
 | Task type | Model | Priority |
 |-----------|-------|----------|
 | Verdict (judgement, hard blockers, citation reasoning) | GPT-5.4 primary / DeepSeek Pro fallback | CRITICAL |
-| Self-audit, voice-sensitive generators | DeepSeek V4 Pro | high |
-| Structured extraction, triage, routing, style | DeepSeek V4 Flash | low |
+| Self-audit, evidence-sensitive generators | DeepSeek V4 Pro | high |
+| Structured extraction, triage, routing, legacy style fallback | DeepSeek V4 Flash | low |
 | Citation validation LLM checks | DeepSeek V4 Flash | low |
-| Prompt auditor (build-time only) | Opus 4.7 | xhigh |
+| Prompt auditor (build-time only) | strong tier | critical |
 
-No routing ever defaults to a model below Sonnet 4.6 except the verdict fallback path, which uses DeepSeek Pro as a recovery route. No task requires Haiku in this project.
+Active routing is tier-based through `agent_tier_map`. Do not wire runtime code
+to provider-specific legacy model ids; use `TIER_FAST`, `TIER_NORMAL`, and
+`TIER_STRONG`.

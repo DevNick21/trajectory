@@ -3,11 +3,11 @@
 Exercises the draft_cv orchestrator end-to-end:
   - _shield_bundle over the fixture (Tier 1 redactions and Tier 2 routing)
   - build_context (citation validation context)
-  - cv_tailor.generate (Opus xhigh + extended thinking)
+  - cv_tailor.generate (strong model path)
   - self_audit + _apply_rewrites_to_strings patch loop
   - render_cv_docx + render_cv_pdf produce files on disk
 
-Cost: ~$1.00-$2.00 (Opus xhigh generator + self-audit).
+Cost: ~$1.00-$2.00 (generator + self-audit).
 """
 
 from __future__ import annotations
@@ -55,8 +55,8 @@ async def _body() -> tuple[list[str], list[str], float]:
     session = await storage.get_session(session.session_id)  # reload with phase1
 
     # Seed a small career history. Without this, the agentic CV path's
-    # `search_career_entries` tool returns nothing — and PROCESS Entry 47
-    # showed Opus occasionally hallucinates a `career_entry` citation
+    # `search_career_entries` tool returns nothing. Earlier live runs showed
+    # the model occasionally hallucinated a `career_entry` citation
     # against an empty store, which the post-validator then rejects
     # ("entry_id not found in career store"). With ≥3 real entries to
     # cite, the model has correct material and the rejection rate

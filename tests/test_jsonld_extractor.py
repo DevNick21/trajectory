@@ -1,4 +1,4 @@
-"""Tests for src/askpicky/sub_agents/jsonld_extractor.py.
+"""Tests for packages/engine/src/askpicky/sub_agents/jsonld_extractor.py.
 
 Hardcoded representative JSON-LD fixtures per known-good ATS site.
 Tests are deterministic and offline — never hit the network.

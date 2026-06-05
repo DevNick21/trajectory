@@ -4,8 +4,7 @@ Covers the orchestrator wiring that the existing per-agent smokes leave
 uncovered:
 
   - All Phase 1 sub-agents are invoked (or marked skipped) and emit the
-    expected progress events in the right order — the load-bearing
-    contract for CLAUDE.md Rule 9 (Telegram streaming reveals).
+    expected progress events in the right order.
   - `handle_forward_job` constructs a valid `ResearchBundle` from sub-agent
     outputs and persists it via `storage.save_phase1_output`.
   - The shielded-bundle path runs to completion on clean fixture content

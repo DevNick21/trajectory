@@ -246,16 +246,14 @@ def fetch_going_rates() -> None:
 
     # Hardcoded skeleton reflecting the April 2026 Skilled Worker regime
     # (general threshold £41,700; standard new-entrant floor £33,400;
-    # medical-practitioner new-entrant floor £41,750). SOC 2136 was
-    # updated in an earlier pass (PROCESS.md Entry 27); this pass
-    # refreshes the remaining rows and introduces the general
-    # threshold so soc_check can compute
+    # medical-practitioner new-entrant floor £41,750). This skeleton
+    # introduces the general threshold so soc_check can compute
     #     threshold = max(role_specific_rate, GENERAL_THRESHOLD_GBP).
     #
     # Post-hackathon: replace this skeleton with a real parser of the
     # gov.uk "Skilled Worker visa: going rates for eligible occupations"
     # HTML table — the equivalent of _resolve_sponsor_register_url for
-    # the going rates. Tracked as the corresponding PROCESS.md entry.
+    # the going rates. Track this before relying on live visa verdicts.
     #
     # Each row cites the April 2026 Immigration Salary List as the
     # source. Values are annual GBP.

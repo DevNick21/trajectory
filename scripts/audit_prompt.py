@@ -3,8 +3,8 @@
 AGENTS.md §17 + PROJECT_STRUCTURE.md `scripts/audit_prompt.py`.
 
 Reads the target agent's `SYSTEM_PROMPT` constant from
-`src/askpicky/sub_agents/<agent>.py`, infers its output schema from
-the agent module, pairs it with a declared `INPUT_SOURCES` list
+`packages/engine/src/askpicky/sub_agents/<agent>.py`, infers its output
+schema from the agent module, pairs it with a declared `INPUT_SOURCES` list
 (trusted / untrusted labels), and calls the Prompt Auditor. Writes
 each report to `./audits/<agent>_<timestamp>.json`.
 
@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Optional
 
 # Make `askpicky` importable regardless of where this script is run from.
-_SRC = Path(__file__).resolve().parent.parent / "src"
+_SRC = Path(__file__).resolve().parent.parent / "packages" / "engine" / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
@@ -43,8 +43,8 @@ if sys.platform == "win32":
     except Exception:  # pragma: no cover
         pass
 
-# The 16 runtime agents that should be audited. Each row declares:
-#   module_name         — file under src/askpicky/sub_agents/
+# Runtime agents that should be audited. Each row declares:
+#   module_name         — file under packages/engine/src/askpicky/sub_agents/
 #   system_prompt_attr  — attribute name holding the system prompt string
 #   input_sources       — labelled trusted/untrusted inputs the agent sees
 #
@@ -119,14 +119,6 @@ _AGENT_REGISTRY: dict[str, dict] = {
         "input_sources": [
             "raw_story: TRUSTED (user-provided in dialogue)",
             "writing_style_profile: TRUSTED",
-        ],
-    },
-    "style_extractor": {
-        "module": "askpicky.sub_agents.style_extractor",
-        "system_prompt_attr": "SYSTEM_PROMPT",
-        "output_schema_symbol": "WritingStyleProfile",
-        "input_sources": [
-            "samples: UNTRUSTED (user-pasted)",
         ],
     },
     "self_audit": {

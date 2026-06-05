@@ -3,7 +3,7 @@
 # Vite serves on :5173 by default; proxies /api → http://localhost:8000.
 set -euo pipefail
 
-cd "$(dirname "$0")/../frontend"
+cd "$(dirname "$0")/../apps/web"
 
 if [ ! -d node_modules ]; then
   echo "node_modules missing — running npm install first..."

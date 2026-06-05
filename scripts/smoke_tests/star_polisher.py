@@ -1,6 +1,6 @@
 """Smoke test — star_polisher.polish on a synthetic rough answer.
 
-Set SMOKE_STAR_POLISHER_MOCK=1 to skip Opus.
+Set SMOKE_STAR_POLISHER_MOCK=1 to skip the model call.
 
 Cost: ~$0.08 live, $0 mock.
 """
@@ -45,7 +45,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     if mock:
-        messages.append("MOCK: skipped Opus; would return STARPolish")
+        messages.append("MOCK: skipped model call; would return STARPolish")
         return messages, failures, 0.0
 
     from askpicky.schemas import DesignedQuestion

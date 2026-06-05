@@ -14,7 +14,7 @@ services:
   backend:
     command: ["uvicorn", "askpicky.api.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
-      - ./src:/app/src
+      - ./packages/engine/src:/app/packages/engine/src
       - ./scripts:/app/scripts
       - askpicky-data:/data
     environment:
@@ -22,11 +22,11 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile.dev
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
     volumes:
-      - ./frontend:/app
+      - ./apps/web:/app
       - frontend-node-modules:/app/node_modules
     ports:
       - "5173:5173"

@@ -1,10 +1,10 @@
 """Smoke test — prompt_auditor.audit on a short canned prompt.
 
-Runs the build-time prompt auditor (Opus) against a tiny illustrative
+Runs the build-time prompt auditor against a tiny illustrative
 prompt. The point is wiring + schema, not validating the quality of
 the audit itself — that's what scripts/audit_prompt.py is for.
 
-Set SMOKE_PROMPT_AUDITOR_MOCK=1 to skip Opus.
+Set SMOKE_PROMPT_AUDITOR_MOCK=1 to skip the model call.
 
 Cost: ~$0.10 live, $0 mock.
 """
@@ -46,7 +46,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     if mock:
-        messages.append("MOCK: skipped Opus; would return PromptAuditReport")
+        messages.append("MOCK: skipped model call; would return PromptAuditReport")
         return messages, failures, 0.0
 
     from askpicky.sub_agents import prompt_auditor

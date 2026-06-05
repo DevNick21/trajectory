@@ -1,6 +1,6 @@
 """Smoke test — agentic CV tailor.
 
-Gated behind `SMOKE_AGENTIC_CV=1`. Cost ~$0.35 (Opus xhigh, multi-turn
+Gated behind `SMOKE_AGENTIC_CV=1`. Cost ~$0.35 (multi-turn strong model path
 with ~40k input + ~4k output across turns).
 
 Seeds 20 synthetic career entries in the fresh smoke tempdir SQLite +

@@ -1,15 +1,23 @@
-# AskPicky Audit Export
+# AskPicky Public Audit Export
 
-*Last updated 2026-06-02.*
+*Last updated 2026-06-05. This tracked export intentionally omits
+managed-service implementation details, commercial rollout notes,
+infrastructure-specific plans, and packaging strategy.*
 
-This is the working export of what is done, what was hardened in this pass, and
-what remains next.
+This file records public-safe product and engineering status only. Private
+deployment, launch, and managed-service security notes should live outside Git.
 
 ---
 
 ## Done
 
-- Hosted web app remains the source of truth for AskPicky v1.
+- The web app remains the source of truth for the public workflow.
+- `docs/WORKING_PIPELINE.md` is the active public pipeline source of truth.
+- Onboarding finalise is deterministic:
+  - no writing-sample collection
+  - no style extractor during finalise
+  - no onboarding parser during finalise
+  - optional CV import remains separate from profile save
 - Application assist API exists:
   - `/api/assist/start`
   - `/api/assist/suggest-memory`
@@ -31,7 +39,24 @@ what remains next.
 
 ---
 
-## Hardened In This Pass
+## Public Hardening Summary
+
+### Pipeline and onboarding reset
+
+- Added the canonical public working-pipeline document covering the web
+  workflow, progressive onboarding, forward-job, assist, local storage modes,
+  privacy controls, and public test gates.
+- Removed writing-sample onboarding from backend schemas, frontend state,
+  onboarding UI, generated API contract, and onboarding smoke tests.
+- Removed the dead onboarding samples parser stage/prompt and obsolete smoke
+  coverage from the standard smoke registry.
+- Simplified `/api/onboarding/finalise` into deterministic profile and
+  career-entry writes so the user-facing save step does not hide a slow LLM
+  workflow.
+- Updated generated OpenAPI/TypeScript contracts after the onboarding shape
+  changed.
+- Updated active docs/comments to stop presenting style extraction as a
+  required onboarding step.
 
 ### Application assist hardening
 
@@ -53,94 +78,61 @@ what remains next.
   - `application_answer_shaper`: STRONG, 0 HIGH.
   - `memory_extractor`: STRONG, 0 HIGH.
 
-### 16-lens audit-prompt pass
+### Public security and reliability hardening
 
-- Every prompt in `docs/audit-prompts/` was applied against the current repo.
-- Full export is in
-  `docs/AUDIT_PROMPT_RUN_2026_06_01.md`.
-- Fixed config drift that could crash rate-limited routes:
-  - added `Settings.enforce_rate_limit`
-  - added `Settings.enable_batch_queue_runner`
-  - removed legacy model/provider aliases and updated verdict code, tests,
-    and smoke scripts to tier-based routing
-- Added V2 hosted security foundation:
-  - Supabase bearer-auth dependency for hosted mode
-  - `SUPABASE_DATABASE_URL` config
-  - Supabase Postgres/pgvector migration contract with RLS policies
-  - asyncpg-backed hosted storage adapter for profile, career, sessions,
-    queue, quotas, audit, pairing, assist, memory, advice, and scrape-cache
-    tables
-  - hosted quota ledger and route-level assist quotas
-  - protected internal purge and quota reconciliation endpoints
-  - scheduled raw-retention purge with privacy audit events
-  - SSRF-safe URL validation before httpx, Playwright, and Firecrawl
-  - OpenAPI export plus generated frontend contract view
-  - Chrome MV3 companion scaffold with manual highlight/send flow
-- Added FastAPI security headers and equivalent nginx headers:
-  - `Content-Security-Policy`
-  - `Permissions-Policy`
-  - `Referrer-Policy`
-  - `X-Content-Type-Options`
-  - `X-Frame-Options`
-- Restricted CORS request headers from wildcard to explicit API headers.
-- Added `/api/version` for frontend/API compatibility checks.
-- Hardened `.dockerignore` so `.env.*`, SQLite/DB, and FAISS artifacts do not
-  enter Docker build context.
-- Added regression tests for `/api/version` and API security headers.
-- Added Chrome companion pairing bridge:
-  - `/api/extension/pairing-token`
-  - `/api/extension/exchange`
-  - hosted `/extension/connect` page outside the workspace and onboarding gate
-  - extension external-message completion from the hosted connect page
-  - one-time hashed pairing tokens with audit events
-- Added Chrome detector fixture tests and manifest permission checks.
-- Hardened the Chrome side-panel assist loop:
-  - renders question type, what the question tests, missing evidence, memory
-    angles, and save state
-  - calls suggest-memory, critique, polish, and approve before copy/write-back
-  - keeps private-memory recall off by default and covered by fixtures
-- Added first-pass Greenhouse, Lever, and Workday detector adapters with
-  fixture coverage before the generic DOM fallback.
-- Added hosted quota coverage for `/api/chat`, `/api/queue`, and batch
-  `/api/queue/process`; queue processing charges forward-job quota by the
-  number of pending jobs.
-- Added a dedicated Firecrawl fallback quota bucket and direct quota-denial
-  test so anti-bot fallback spend is isolated from normal verdict quotas.
-- Added CI schema-drift enforcement for generated OpenAPI/types and CI
-  execution of the extension fixture tests.
-- Added hosted Supabase route-isolation tests proving unauthenticated `401`
-  and cross-user `404` behaviour across sessions, files, packs, queue,
-  assist sessions, answer attempts, and Memory Inbox mutations.
-- Added a no-dependency frontend accessibility smoke gate for unlabeled
-  icon-only buttons and fixed the Queue remove button accessible name.
+- Added route identity and ownership checks for multi-user deployments.
+- Added retention purge paths and privacy audit metadata for sensitive
+  operations.
+- Added SSRF-safe URL validation before external fetch paths.
+- Added OpenAPI export plus generated frontend contract view.
+- Added extension fixture tests and manifest permission checks.
+- Added static frontend accessibility checks for unlabeled icon-only buttons.
+- Added browser-level accessibility smoke coverage over the built frontend.
+- Added schema-drift enforcement for generated OpenAPI/types.
+
+Implementation-specific deployment details are intentionally omitted here.
 
 ---
 
 ## Still Needed
 
+- CV import UX:
+  - show progress and extracted fields clearly
+  - allow skip/retry without blocking onboarding finalise
+  - move richer profile enrichment into a background memory job
+- Forward-job reliability:
+  - make JD extraction confidence visible when JSON-LD/text is thin
+  - expand tests for broken/dynamic/blocked job pages
+  - keep company investigation advisory and non-fatal
+- Company investigation:
+  - explicit source-status model for missing/stale/low-confidence company pages
+  - bounded page list per company
+  - fallback budget and failure messaging in the UI
+- Sponsor Register:
+  - stronger alias/domain/CRN resolution
+  - clearer ambiguity states for visa users
+  - fixture coverage for recruitment agencies, subsidiaries, rebrands, and
+    similarly named sponsors
+- Production-like testing:
+  - tenant-isolation release gate where multi-user storage is used
+  - one manually observed live forward-job run before release
+  - no claim that local storage tests prove deployment-level isolation
+- Redundant-code cleanup:
+  - delete or refactor the remaining legacy style-extractor fallback once
+    generator signatures accept memory/persona inputs directly
+  - remove legacy provider/model references from active docs/comments
+  - inventory default-off feature flags and unused agents before new surface work
 - Full design pass:
   - Assist becomes an application cockpit.
   - Memory becomes an evidence vault.
   - UI should feel closer to Linear/Superhuman/1Password/Grammarly than a
     chatbot dashboard.
-- Chrome MV3 companion:
-  - additional ATS adapters beyond Greenhouse/Lever/Workday
+- Extension:
+  - fixture coverage for more field/page variants
   - generic DOM fallback hardening
   - browser-level integration tests for the side-panel flow
-- Electron V3 companion after Chrome/web retention is proven.
-- Hosted commercial data layer:
-  - outcome reporting
-  - aggregate employer benchmarks
-  - response-rate intelligence
-  - ghost-frequency trends
-  - hosted-only managed sync and consented aggregate outcomes
-- Supabase Postgres/pgvector still needs live database integration coverage,
-  especially service-role/RLS behaviour. The hosted adapter now writes vectors
-  and uses vector-first ranking in mocked asyncpg tests; a skipped-by-default
-  live Supabase RLS/pgvector gate exists for release environments with
-  disposable Supabase auth users.
-- CI now has secret scanning, schema drift enforcement, static accessibility
-  smoke, and a browser-level Playwright/axe gate over the built frontend.
+- Managed-service roadmap details are deliberately not tracked
+  in this file.
 
 ---
 
@@ -148,20 +140,14 @@ what remains next.
 
 ```bash
 python -m compileall src\askpicky scripts\smoke_tests
+python -m scripts.smoke_tests.run_all --only api_onboarding,onboarding_journey_uk,onboarding_journey_visa --fail-fast
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract --fail-fast
 python -m scripts.smoke_tests.run_all --only application_answer_shaper,memory_extractor --fail-fast
-python -m pytest tests/test_content_shield.py tests/test_auth_supabase.py tests/test_url_safety.py tests/test_supabase_foundation.py tests/test_storage_postgres.py tests/test_hosted_route_isolation.py
-SUPABASE_LIVE_TEST_DATABASE_URL=... SUPABASE_LIVE_TEST_USER_A=... SUPABASE_LIVE_TEST_USER_B=... python -m pytest tests/test_supabase_live_rls.py
+python -m pytest tests/test_content_shield.py tests/test_url_safety.py
 npm run api:contract
 npm run lint
 python scripts/check_frontend_accessibility.py
 npm run --prefix frontend build
-ASKPICKY_REQUIRE_BROWSER_SMOKE=1 python scripts/check_frontend_browser_accessibility.py
-git diff --check
-python scripts/audit_prompt.py application_answer_shaper
-python scripts/audit_prompt.py memory_extractor
-python -m pytest tests\test_api_health.py tests\test_api_queue.py tests\test_api_pack.py tests\test_verdict_fallback.py tests\test_api_read_routes.py -q
-python -m pytest tests\test_extension_pairing.py -q
-python -m pytest tests\test_firecrawl_quota.py -q
 npm run --prefix extension test
+git diff --check
 ```

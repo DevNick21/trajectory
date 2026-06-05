@@ -1,13 +1,13 @@
 """Smoke test — cover_letter.generate against fixture + synthetic style.
 
-Validates the Opus xhigh cover letter generator wiring:
+Validates the cover letter generator wiring:
   - accepts fixture JD + bundle + synthetic user/style
   - output schema valid
   - word_count sane (>= 150, <= 500)
   - zero banned phrases in paragraphs
   - every citation resolves against the fixture bundle
 
-Set SMOKE_COVER_LETTER_MOCK=1 to skip Opus.
+Set SMOKE_COVER_LETTER_MOCK=1 to skip the model call.
 
 Cost: ~$0.40 live, $0 mock.
 """

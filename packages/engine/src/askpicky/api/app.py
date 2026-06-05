@@ -1,0 +1,124 @@
+"""FastAPI application factory.
+
+Lifespan owns the Storage singleton — initialised once on startup,
+closed on shutdown. CORS is locked to `settings.web_origin` (no
+wildcards, per MIGRATION_PLAN.md §6 risk #9).
+
+Routes are registered through `routes/__init__.py::api_router` so
+adding an endpoint in Wave 3+ doesn't touch this file.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import sys
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
+
+# Windows + Playwright fix: subprocess_exec is only implemented on the
+# Proactor event loop. uvicorn defaults to Selector under --reload on
+# some setups, which makes `playwright.async_api` raise
+# NotImplementedError when launching the chromium subprocess. Setting
+# the policy at import time covers both the API process and any tests
+# that import this module before starting their own loop.
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:  # pragma: no cover — policy already set, etc.
+        pass
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+
+from ..config import settings
+from ..observability import (
+    bind_request_id,
+    install_correlation_filter,
+    new_request_id,
+)
+from ..storage import Storage
+from .routes import api_router
+
+log = logging.getLogger(__name__)
+
+
+_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none'"
+    ),
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    ),
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Single Storage instance for the process lifetime.
+    """
+    install_correlation_filter()
+    storage = Storage()
+    await storage.initialise()
+    app.state.storage = storage
+    log.info("askpicky.api ready (storage initialised)")
+    try:
+        yield
+    finally:
+        await storage.close()
+        log.info("askpicky.api shutdown complete")
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="AskPicky API",
+        description="Web surface for the AskPicky job-search assistant.",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[settings.web_origin],
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_headers=["Accept", "Authorization", "Content-Type", "X-Request-ID"],
+    )
+
+    @app.middleware("http")
+    async def _correlation_middleware(request: Request, call_next) -> Any:
+        # Honour a client-supplied X-Request-ID when present, otherwise
+        # mint a new one. Propagates into every log record via the
+        # contextvars-backed CorrelationFilter.
+        rid = request.headers.get("x-request-id") or new_request_id()
+        token = bind_request_id(rid)
+        try:
+            response = await call_next(request)
+        finally:
+            # Restore the previous value so background tasks started
+            # before the request don't accidentally inherit this id.
+            # contextvars.ContextVar.reset uses the token returned by
+            # .set() — see askpicky.observability.bind_request_id.
+            try:
+                from ..observability.logging_context import _request_id_var
+                _request_id_var.reset(token)
+            except Exception:  # pragma: no cover — defensive
+                pass
+        response.headers["X-Request-ID"] = rid
+        for header, value in _SECURITY_HEADERS.items():
+            if header not in response.headers:
+                response.headers[header] = value
+        return response
+
+    app.include_router(api_router)
+    return app
+
+
+# Module-level instance for `uvicorn askpicky.api.app:app`.
+app = create_app()

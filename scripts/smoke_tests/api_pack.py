@@ -7,7 +7,7 @@ Asserts:
   - 200 with the expected PackResult shape on success
   - 409 when no research bundle on the session
 
-Set SMOKE_API_PACK_LIVE=1 to exercise the real Opus path (~$2).
+Set SMOKE_API_PACK_LIVE=1 to exercise the real model path (~$2).
 
 Cost: $0 by default.
 """
@@ -48,7 +48,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     app = create_app()
 
     # Monkey-patch the orchestrator handler unless we explicitly want to
-    # hit Opus. The pack endpoint lazily imports handle_draft_cv inside
+    # hit the model. The pack endpoint lazily imports handle_draft_cv inside
     # the runner, so patch the symbol on the orchestrator module. Must
     # be restored in the `finally` below — otherwise the fake leaks
     # into later tests (notably phase4_cv which calls the real handler).

@@ -1,0 +1,6 @@
+Name: Example Candidate
+
+Experience:
+- Built Python APIs with FastAPI and PostgreSQL.
+- Shipped React dashboards for operational users.
+- Reduced manual review time by improving internal data tooling.

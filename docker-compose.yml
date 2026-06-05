@@ -1,7 +1,7 @@
 # AskPicky — one-command launch for local dev + production.
 #
 # Quickstart:
-#   cp .env.example .env       # fill ANTHROPIC_API_KEY, etc.
+#   cp .env.example .env       # fill model provider keys, etc.
 #   docker compose up --build  # boots API + frontend + Nginx
 #
 # Two services share the same image (backend) — one runs uvicorn.
@@ -17,7 +17,7 @@ services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: infra/docker/api.Dockerfile
     image: askpicky:latest
     container_name: askpicky-api
     restart: unless-stopped
@@ -39,7 +39,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/web
       dockerfile: Dockerfile
     image: askpicky-frontend:latest
     container_name: askpicky-web

@@ -2,8 +2,20 @@
 .env
 .env.local
 
-# Docs (untracked — kept local only)
-docs/
+# Docs
+# Keep local/generated notes ignored, but track the canonical pipeline doc.
+docs/*
+!docs/
+!docs/WORKING_PIPELINE.md
+!docs/OPEN_CORE_STRATEGY.md
+!docs/architecture/
+!docs/architecture/**
+!docs/self-hosting/
+!docs/self-hosting/**
+!docs/privacy/
+!docs/privacy/**
+!docs/api/
+!docs/api/**
 
 # Python
 .venv/
@@ -38,6 +50,8 @@ data/embeddings.faiss.ids.json
 data/generated/
 data/managed_agents.json
 data/ch_bulk/
+data/archives/
+*.bundle
 
 # Logs
 *.log

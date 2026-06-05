@@ -1,15 +1,14 @@
-"""Smoke test — onboarding parser (Opus 4.7 low effort).
+"""Smoke test — optional onboarding parser.
 
-Exercises the new per-stage parser + the advance-with-clarification
-flow on `OnboardingSession`. Confirms:
+Exercises the per-stage parser that future inline clarification UX can call.
+The active finalise route does not use this parser. Confirms:
 
   - A clear, complete reply → status="parsed", state advances
   - A vague one-word reply → status="needs_clarification", state stays,
     follow_up is non-empty
   - Numeric extraction works in plain English ("sixty k" → 60000)
 
-Cost: ~$0.02 (3 Sonnet 4.6 low-effort round-trips). Was ~$0.15 when
-the parser ran on Opus 4.7 low; PROCESS.md Entry 26 documents the swap.
+Cost: ~$0.02 (3 fast-tier round-trips).
 """
 
 from __future__ import annotations
@@ -34,7 +33,6 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     from askpicky.sub_agents.onboarding_parser import (
         parse_money,
-        parse_deal_breakers,
         parse_visa,
     )
 

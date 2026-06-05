@@ -1,6 +1,6 @@
-"""Smoke test — onboarding CV parser (PROCESS Entry 49).
+"""Smoke test — onboarding CV parser.
 
-Sonnet pass: free-form CV text -> CVImport. Costs ~$0.05 live.
+Fast-tier pass: free-form CV text -> CVImport. Costs ~$0.05 live.
 Set SMOKE_CV_PARSER_MOCK=1 to skip the LLM and assert the
 file-format dispatcher only.
 
@@ -94,7 +94,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     mock = os.getenv("SMOKE_CV_PARSER_MOCK", "").lower() in {"1", "true", "yes"}
     if mock:
-        messages.append("MOCK: skipping live Sonnet pass.")
+        messages.append("MOCK: skipping live fast-tier pass.")
         return messages, failures, 0.0
 
     missing = require_live_llm_key()
@@ -119,7 +119,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if not imp.raw_text or imp.raw_text != _FIXTURE_CV:
         failures.append(
             "raw_text not preserved verbatim from caller input — "
-            "style_extractor downstream needs the original text."
+            "background memory enrichment needs the original text."
         )
     if len(imp.roles) < 2:
         failures.append(f"only {len(imp.roles)} roles extracted; expected >=2")
@@ -128,7 +128,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     if imp.extraction_confidence < 5:
         failures.append(
             f"confidence {imp.extraction_confidence} < 5 on a clean fixture; "
-            "Sonnet flagged its own extraction as low quality."
+            "the parser flagged its own extraction as low quality."
         )
 
     return messages, failures, ESTIMATED_COST_USD

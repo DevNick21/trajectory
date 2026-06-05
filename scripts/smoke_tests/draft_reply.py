@@ -1,9 +1,9 @@
 """Smoke test — draft_reply.generate on a recruiter message.
 
 Input first passes through Tier 1 content shield (orchestrator-style),
-then the Opus xhigh generator produces a DraftReplyOutput.
+then the generator produces a DraftReplyOutput.
 
-Set SMOKE_DRAFT_REPLY_MOCK=1 to skip Opus.
+Set SMOKE_DRAFT_REPLY_MOCK=1 to skip the model call.
 
 Cost: ~$0.20 live, $0 mock.
 """
@@ -49,7 +49,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     if mock:
-        messages.append(f"MOCK: skipped Opus; would reply as user={user.name}")
+        messages.append(f"MOCK: skipped model call; would reply as user={user.name}")
         return messages, failures, 0.0
 
     from askpicky.sub_agents import draft_reply

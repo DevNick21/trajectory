@@ -2,7 +2,7 @@
 
 > Operating manual for Claude Code working on this repo.
 > Read this first, every session.
-> For **what AskPicky is** (positioning, free/premium split, roadmap), read [ASKPICKY.md](./ASKPICKY.md). That document is canonical and supersedes anything here on contradiction.
+> For **what AskPicky is** in public docs, read [ASKPICKY.md](./ASKPICKY.md). Managed-service packaging and rollout details are intentionally kept outside Git.
 
 *Last updated 2026-05-25 — three-tier model config (TIER_FAST/NORMAL/STRONG), Anthropic removed, all agents route via DeepSeek/OpenAI via tier-based dispatch, agent_tier_map replaces agent_model_map.*
 
@@ -58,9 +58,9 @@ Routing is configured in `config.py::agent_tier_map`. Each agent is assigned a t
 **strong tier** — high-stakes judgment (GPT-5.4):
 - `verdict`, `self_audit`, `offer_analyst`
 
-**OpenAI** (benchmarks only, not production routing)
+**OpenAI** is available as the strong-tier provider and for benchmark runs.
 
-To swap a provider: edit `config.py::agent_model_map`, rebuild Docker. No code changes needed.
+To swap a provider: edit the tier settings and `config.py::agent_tier_map`, then rebuild Docker. No code changes needed.
 
 ### Rule 8 — Cost discipline
 All LLM calls go through `src/askpicky/llm.py` which tracks running cost. The `priority` argument lets non-essential calls refuse below `credits_warn_threshold_usd` (default $20). The free-tier rate limits in ASKPICKY.md §7 are the contract; the cost log validates it.
@@ -115,8 +115,8 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 | Embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`) + `faiss-cpu`; pre-downloaded in Dockerfile; `HF_HOME=/data/huggingface` |
 | Validation | `pydantic` v2 |
 | File rendering | `python-docx` + `reportlab` |
-| Benchmarking | `scripts/benchmarks/run.py` — 5 task × provider matrix; `--mock` for CI, live for quality comparison |
-| CI | `.github/workflows/benchmarks.yml` — scheduled + workflow_dispatch |
+| Benchmarking | `scripts/benchmarks/run.py` — provider quality harness; `--mock` for CI, live for local quality comparison |
+| CI | Project-specific workflows; keep generated benchmark reports as artifacts |
 | Tests | `pytest` + `pytest-asyncio`; smoke harness in `scripts/smoke_tests/` |
 
 ---
@@ -127,7 +127,7 @@ Self-audit also runs the **company-swap test**: any sentence where swapping the 
 - **Multi-provider CV tailor v1** — replaced by unified `agent_model_map` routing in `config.py`.
 - **Verdict ensemble** — removed; single-verdict path is canonical.
 - **Binary GO/NO_GO verdict** — replaced by 6-label VerdictLabel taxonomy.
-- **Cohere provider** — dead code, no integration. Removed from storage.py pricing and .env.
+- **Cohere provider** — dead code, no integration. Removed from storage.py cost metadata and .env.
 - **Hardcoded Anthropic routing** — replaced by per-agent provider/model map.
 - **HANDOFF.md, SKILL.md, legacy entity_resolution stores** — archived or restored as needed.
 

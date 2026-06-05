@@ -1,9 +1,8 @@
 """Smoke test — POST /api/onboarding/finalise (no LLM path).
 
-Passes writing_samples=[] so the style extractor is skipped (no Opus
-call). Empty free-text stages fall back to raw passthrough, so the
-voice-stage parsers are also skipped. End result: a UserProfile + a
-bundle of CareerEntry rows, zero LLM cost.
+Empty free-text stages fall back to raw passthrough, so the preference
+parsers are skipped. End result: a UserProfile + a bundle of CareerEntry
+rows, zero LLM cost.
 
 Cost: $0.
 """
@@ -49,7 +48,6 @@ async def _body() -> tuple[list[str], list[str], float]:
             "deal_breakers_text": "No pure maintenance roles.",
             "good_role_signals_text": "Strong engineering culture.",
             "life_constraints": ["needs hybrid"],
-            "writing_samples": [],   # <- skips Opus call
             "career_narrative": "Seven years of backend engineering.",
         }
         resp = client.post("/api/onboarding/finalise", json=payload)
@@ -62,16 +60,15 @@ async def _body() -> tuple[list[str], list[str], float]:
         body = resp.json()
         messages.append(
             f"finalise OK: user_id={body['user_id']} "
-            f"entries_written={body['career_entries_written']} "
-            f"style_profile_id={body.get('writing_style_profile_id')}"
+            f"entries_written={body['career_entries_written']}"
         )
         if body["career_entries_written"] < 3:
             failures.append(
                 f"expected ≥ 3 career entries; got {body['career_entries_written']}"
             )
-        if body.get("writing_style_profile_id") is not None:
+        if "writing_style_profile_id" in body:
             failures.append(
-                "writing_style_profile_id should be None when samples are empty."
+                "onboarding finalise should not return writing_style_profile_id."
             )
 
         # Profile should now be retrievable.

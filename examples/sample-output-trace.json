@@ -1,0 +1,14 @@
+{
+  "analysis": {
+    "role_title": "Senior Software Engineer",
+    "required_skills": ["python", "typescript", "react", "fastapi", "postgres", "docker", "aws"],
+    "application_priority": "maybe_apply_after_checking_filters",
+    "hard_filters": [
+      {
+        "label": "right to work",
+        "evidence": "Applicants must have the right to work in the UK",
+        "severity": "hard"
+      }
+    ]
+  }
+}

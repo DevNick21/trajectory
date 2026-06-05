@@ -1,0 +1,6 @@
+Senior Software Engineer
+
+We are looking for a Python and TypeScript engineer to build internal AI tools.
+The role uses FastAPI, React, PostgreSQL, Docker, and AWS. Candidates should
+have 4+ years of production engineering experience and be able to work onsite
+in London two days per week. Applicants must have the right to work in the UK.

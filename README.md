@@ -1,101 +1,127 @@
 # AskPicky
 
-> **Verify roles before you apply.**
-> UK-first, visa-aware, agent-powered job search assistant. Forward a job URL, get a cited verdict grounded in live UK government data, then ask for a tailored CV, cover letter, salary strategy, or interview prep on demand.
+> **A job application operating system for serious active applicants.**
+> Paste a job description, see hard filters, match the role against your real
+> evidence, generate safer application answers, and track what happens next.
 
-AGPL-3.0 · Python 3.12+ · Multi-provider LLM (DeepSeek V4 Flash / Pro + OpenAI GPT-5.4) · No auto-apply, ever.
+Python 3.12+ · FastAPI · Vite/React · DeepSeek + OpenAI model tiers ·
+Open-core engine · No auto-apply, ever.
 
-*Last updated 2026-06-02 — V2 security gate, Supabase hosted auth/storage plan, Chrome pairing bridge, private-save application memory.*
-
----
-
-## What it does
-
-**Forward a job → cited verdict.**
-A mix of deterministic + LLM checks run in parallel against the JD, the company, and live UK government data (Companies House, The Gazette insolvency notices, Sponsor Register, SOC, ASHE). Picky combines them into a 6-label verdict (STRONG_GO, GO, TRY_ANYWAY, ASK_FIRST, PASS, BLOCKED) with an entropy-based evidence-spread score — every claim cites a verbatim source.
-
-**Visa-aware out of the box.**
-Sponsor Register (with fuzzy-match + Splink rescoring), SOC threshold and new-entrant rule, Appendix Skilled Occupations eligibility, Companies House signals. The visa wedge is built in, not bolted on.
-
-**Writes in your voice, not AI voice.**
-3–5 writing samples at onboarding plus your uploaded CV feed a `WritingStyleProfile` that's injected into every generator. A self-audit rejects AI clichés and runs a company-swap test — any sentence that would read identically with a different company name gets flagged.
-
-**Adapts salary advice to your situation.**
-Opening number, floor, ceiling, and four negotiation scripts adjust to your urgency, recent rejections, visa timeline, employment status, and the role's posted band.
-
-**Tracks what happens after you apply.**
-One-tap outcome reporting in Telegram feeds the data network. The more users report, the better the verdicts get at telling you whether a role is worth your time.
-
-**Builds private application memory while you write.**
-Application assist now saves answer attempts, extracts reviewable memory atoms and story frames, and surfaces relevant approved stories when a similar form question appears again. Raw drafts expire by default; extracted memories sit in a Memory Inbox until the user approves, hides, privatizes, or deletes them.
-
-**Never auto-applies.** Philosophically off-limits. The user is always in the loop. The spam paradox is real.
+*Last updated 2026-06-05 — public docs now describe the open/local engine only.
+Managed-service roadmap details are intentionally kept out of tracked files.*
 
 ---
 
-## Surfaces, one hosted source of truth
+## What It Does
 
-| Surface | Best for | What you get |
-|---|---|---|
-| **Web** (Vite + React) | V1 hosted product. Onboarding, verdicts, application assist, memory, tracker. | Wizard onboarding, dashboard with live Phase 1 SSE streaming, per-session detail pages, pack generators, application cockpit, Memory Inbox. |
-| **Chrome MV3 companion** | V2 commercial browser workflow. | In-page coaching overlay for application forms: detect question/field, retrieve memory, nudge, polish, approve, and copy/write back. |
-| **Electron companion** | V3 power-user desktop workflow. | Later screen/audio/system integration once the hosted loop proves retention. |
-| **Telegram bot** | Mobile. Quick "should I apply?" checks. | Forward a URL, get the verdict + pack as chat messages and document attachments. Day-21 nudge for outcome reporting. |
+**Analyses jobs before you apply.**
+AskPicky extracts the role, seniority, salary, location, required skills,
+hard filters, company status, ghost-job signals, and visa/SOC constraints where
+relevant.
 
-All surfaces call the same FastAPI orchestrator and one multi-provider agent pipeline (DeepSeek V4 Flash for extraction/routing, DeepSeek V4 Pro for generators, OpenAI strong tier where configured). Hosted V2 targets Supabase Auth plus Supabase Postgres/pgvector as the source of truth; the migration/RLS contract is committed and `STORAGE_BACKEND=supabase_postgres` now routes through an asyncpg-backed hosted adapter for the core web/extension tables, including vector-first memory ranking. Local/self-hosted forks keep SQLite + FAISS for OSS/dev mode, while hosted aggregate employer/outcome intelligence remains the commercial moat.
+**Matches the job to actual evidence.**
+It compares job requirements against CV/profile/memory evidence, shows what is
+supported, what is missing, and which claims would be unsafe to make.
 
-The canonical V2 release plan is in [V2_SECURITY_CHROME_PLAN.md](V2_SECURITY_CHROME_PLAN.md).
+**Coaches before it writes.**
+The application-assist loop critiques drafts, retrieves approved evidence,
+shapes final answers, and flags unsupported claims before the user copies
+anything.
+
+**Tracks applications as the central entity.**
+The tracker records roles, statuses, evidence, generated answers, deadlines,
+and outcomes.
+
+**Keeps the user in control.**
+AskPicky never auto-submits. Sensitive fields require confirmation. Memory is
+provenance-backed and user-scoped.
 
 ---
 
-## Phase 1 checks (run on every forward)
+## Public Strategy
+
+The public repository documents and develops the inspectable engine:
+
+- job analysis
+- CV/profile parsing
+- candidate and application schemas
+- evidence matching
+- claim support checking
+- basic answer generation
+- manual tracker
+- local database support
+- AI provider abstraction
+- BYOK/local model path
+- export and delete controls
+- audit traces and evaluation examples
+
+Managed-service implementation details, packaging, rollout plans, and commercial
+roadmaps are deliberately not maintained in tracked public files.
+
+The active public workflow is in
+[docs/WORKING_PIPELINE.md](./docs/WORKING_PIPELINE.md).
+
+---
+
+## Repository Layout
+
+```text
+apps/
+  api/          # thin FastAPI app boundary
+  web/          # React/Vite app
+  extension/    # optional low-permission browser companion
+packages/
+  engine/       # Python askpicky package and open-core engine
+infra/
+  docker/       # Docker runtime files
+  local/        # local-only runtime scaffolding
+docs/           # public architecture, privacy, API, and self-hosting docs
+examples/       # sample CV/JD/workflow/trace fixtures
+tests/          # Python regression tests
+scripts/        # repository tooling and smoke tests
+```
+
+---
+
+## First Useful Workflow
+
+```text
+Paste job description
+  -> role breakdown
+  -> hard filters
+  -> evidence match
+  -> application priority
+  -> suggested answer strategy
+  -> optional CV upload/profile save
+  -> application tracking
+```
+
+Do not require a large profile, API-key setup, browser extension, or inbox
+access before first value.
+
+---
+
+## Analysis Checks
 
 | Check | What it catches |
 |---|---|
-| Ghost-job detector | Stale posting + not on careers page + vague JD + company distress |
-| Sponsor Register | Whether the employer holds a Skilled Worker licence (visa holders) — fuzzy + CRN-aware |
-| SOC threshold | Whether the offered salary clears the going rate for the role's SOC code |
-| Companies House | Dissolution, administration, overdue filings, wind-up resolutions |
-| Salary benchmarking | Offered vs. personal floor vs. market 10th percentile (ASHE) |
-| Red flags | Layoffs, lawsuits, Glassdoor patterns, regulatory actions, leaver signals |
-| Reviews signals | Public-page review aggregation via scraper + Firecrawl fallback |
-| JSON-LD pre-LLM extractor | Avoids an Opus call when the page exposes Schema.org JobPosting |
-| Company scrape + summariser | Site-wide signal feed for the verdict |
+| JSON-LD pre-LLM extractor | Avoids an LLM call when the page exposes Schema.org JobPosting. |
+| JD extractor | Structured role fields, requirements, salary, location, seniority, and vagueness signals. |
+| Ghost-job detector | Stale posting, missing careers-page signal, vague JD, and distress patterns. |
+| Sponsor Register | Whether the employer holds a Skilled Worker licence for visa holders. |
+| SOC threshold | Whether salary clears going-rate constraints where relevant. |
+| Companies House | Dissolution, administration, overdue filings, wind-up signals. |
+| The Gazette | Insolvency notice signals. |
+| Red flags | Layoffs, lawsuits, regulatory actions, review patterns, and other candidate risks. |
+| Company investigation | Bounded, best-effort company context for verdict reasoning. |
 
-Then the verdict agent reasons over all of it. Inline citation validation checks every quoted snippet against source text.
-
----
-
-## On-demand pack generation
-
-Forwarding doesn't generate a pack — Picky won't burn your credits on a role you haven't decided to pursue. Once you've read the verdict, ask for what you need:
-
-- `draft_cv` → tailored CV as DOCX + PDF
-- `draft_cover_letter` → tailored cover letter as DOCX + PDF (Citations-backed)
-- `predict_questions` → 8–12 likely interview questions with strategy notes
-- `salary_advice` → opening number, floor, ceiling + 4 negotiation scripts
-- `draft_reply` → recruiter reply, short and long variants
-- `full_prep` → all four in parallel via `asyncio.gather`
+The verdict agent reasons over the bundle with citation validation and source
+status warnings. Advisory company research failures should degrade gracefully,
+not crash the session.
 
 ---
 
-## Free vs premium
-
-See [ASKPICKY.md](./ASKPICKY.md) §7–§8 for the full split. In short:
-
-**Free** covers the core: full onboarding, verdicts (rate-limited), all visa-specific features, all pack generation, personal memory, application tracker, one-tap outcome reporting.
-
-**Premium** adds:
-- Real-time hiring intent verification (live web research)
-- Pre-application employer benchmarks (built from the data network)
-- Salary defensibility against Home Office rules
-- Application autopsy after rejection
-
-Contribute outcomes → earn credits → never need to pay.
-
----
-
-## Run it locally
+## Run It Locally
 
 ```bash
 # Backend
@@ -103,69 +129,65 @@ python -m venv .venv && . .venv/bin/activate    # or .venv\Scripts\activate on W
 pip install -e .
 pip install -r requirements.txt
 
-# Fetch UK gov data (Sponsor Register, ASHE, SOC codes, Appendix Skilled Occupations)
+# Fetch UK gov data
 python scripts/fetch_gov_data.py
 
-# Copy .env.example to .env, fill DEEPSEEK_API_KEY + DEMO_USER_ID
+# Copy .env.example to .env, fill provider keys + DEMO_USER_ID
 cp .env.example .env
 
 # Web frontend
-cd frontend && npm install && npm run dev
+cd apps/web && npm install && npm run dev
 
 # Backend (in another shell)
 uvicorn askpicky.api.app:app --reload --port 8000
-
-# Telegram bot (in another shell)
-python -m askpicky.bot.app
 ```
 
 ---
 
-## Smoke tests
+## Smoke Tests
 
 ```bash
-# Cheap suite, $0 — no LLM calls, must stay green
+# Cheap suite, no live LLM calls
 python -m scripts.smoke_tests.run_all --cheap
 
 # Application-assist memory/API contract only
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract
 
-# Chrome companion generic detector fixtures
-npm run --prefix extension test
+# Extension detector fixtures
+npm run --prefix apps/extension test
 
-# Full live suite (~$5, ~10 min)
+# Full live suite
 python -m scripts.smoke_tests.run_all
 ```
 
-The cheap suite is the regression net every change has to hold. Each LLM-backed test honours `SMOKE_<NAME>_MOCK=1` for free-iteration.
+Each LLM-backed test honours `SMOKE_<NAME>_MOCK=1` for free iteration.
 
 ---
 
-## What's not in here
+## Not In Scope For Public Docs
 
-- Auto-apply (philosophical no, permanently)
-- Trust badges for applicants (spam paradox)
-- AI-content detection (adversarial, unwinnable)
-- Identity verification (different problem)
-- Employer-facing ATS (different sales motion)
-- Redis-backed distributed rate limiting (the current limiter is in-process)
-- Supabase Postgres in local OSS/dev mode (SQLite + FAISS remain local defaults)
+- Auto-apply or auto-submit
+- Managed-service implementation details
+- Managed-service packaging or rollout notes
+- Inbox or platform integration roadmaps
+- Autonomous ATS autofill
+- Employer-facing ATS or recruiter tooling
 
 ---
 
 ## Docs
 
-- [ASKPICKY.md](./ASKPICKY.md) — canonical product definition (free/premium split, roadmap, four-question test)
-- [ASKPICKY_AUDIT_EXPORT.md](./ASKPICKY_AUDIT_EXPORT.md) — current done/needed export and verification checklist
-- [docs/AUDIT_PROMPT_RUN_2026_06_01.md](./docs/AUDIT_PROMPT_RUN_2026_06_01.md) — latest 16-lens audit-prompt pass, fixes applied, and launch blockers
+- [docs/WORKING_PIPELINE.md](./docs/WORKING_PIPELINE.md) — active public workflow source of truth
+- [ASKPICKY.md](./ASKPICKY.md) — public product definition
+- [AGENTS.md](./AGENTS.md) — agent prompt inventory and adapter assignments
 - [MEMORY_ARCHITECTURE.md](./MEMORY_ARCHITECTURE.md) — application-assist memory graph, privacy, API, and tests
-- [CLAUDE.md](./CLAUDE.md) — operating manual for AI-assisted dev
-- [AGENTS.md](./AGENTS.md) — agent prompt inventory + adapter assignments
-- [PROCESS.md](./PROCESS.md) — decision log
-- [docs/history/](./docs/history/) — superseded planning notes
+- [ASKPICKY_AUDIT_EXPORT.md](./ASKPICKY_AUDIT_EXPORT.md) — public audit export
+- [docs/history/](./docs/history/) — superseded notes
 
 ---
 
-## Licence
+## Licence Note
 
-AGPL-3.0. Code is open; the aggregated employer-behaviour data network is closed. Contributors sign a CLA — see [CONTRIBUTING.md](./CONTRIBUTING.md) once it exists.
+This repository currently includes an AGPL-3.0 licence file. Public release
+scope and managed-service boundaries should be decided outside tracked public
+docs before any broad launch.

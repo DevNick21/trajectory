@@ -1,8 +1,8 @@
 """Shared smoke-test plumbing.
 
 Responsibilities:
-  - Put `src/` on sys.path so `askpicky.*` imports work regardless of
-    where the script is invoked from.
+  - Put the engine source root on sys.path so `askpicky.*` imports work
+    regardless of where the script is invoked from.
   - Redirect `settings.sqlite_db_path` and `settings.faiss_index_path`
     to a fresh temp dir per run so real-API smoke tests never touch the
     project's SQLite DB / FAISS index.
@@ -37,7 +37,7 @@ from typing import Any, Awaitable, Callable, Optional
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_SRC = _REPO_ROOT / "src"
+_SRC = _REPO_ROOT / "packages" / "engine" / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 

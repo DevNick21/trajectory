@@ -1,7 +1,7 @@
 """Smoke test — CV .docx renderer (no LLM).
 
 Builds a synthetic CVOutput, renders via python-docx, then validates
-magic bytes + file size. Catches python-docx API drift without an Opus
+magic bytes + file size. Catches python-docx API drift without a model
 round-trip.
 
 Cost: $0.

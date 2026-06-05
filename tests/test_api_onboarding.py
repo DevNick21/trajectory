@@ -1,54 +1,24 @@
-"""Tests for Wave 9 onboarding API.
+"""Tests for onboarding API.
 
-Fully mocks the style_extractor + onboarding_parser so tests run
-without LLM calls. Covers:
+Mocks the optional onboarding_parser only for `/parse`. Covers:
 
   - /parse: dispatches to the parser and returns its model dump
   - /finalise: writes UserProfile + CareerEntries with the right kinds
-  - /finalise fallback when parser returns empty (raw text → 1 entry)
-  - /finalise without samples doesn't call style_extractor
+  - /finalise deterministic list splitting
   - /finalise with visa_holder derives VisaStatus
-  - /finalise when style_extractor raises still completes (profile
-    writing_style_profile_id stays None)
+  - /finalise never calls style_extractor; writing-sample onboarding is gone
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from askpicky.schemas import (
-    DealBreakersParseResult,
-    MotivationsParseResult,
-    WritingStyleProfile,
-)
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-def _style_profile(user_id: str = "demo-user-1") -> WritingStyleProfile:
-    now = _now()
-    return WritingStyleProfile(
-        profile_id="style-pid",
-        user_id=user_id,
-        tone="direct",
-        sentence_length_pref="medium",
-        formality_level=6,
-        hedging_tendency="direct",
-        signature_patterns=["starts with a verb"],
-        avoided_patterns=["passive voice"],
-        examples=["Shipped observability overhaul."],
-        source_sample_ids=[],
-        sample_count=2,
-        created_at=now,
-        updated_at=now,
-    )
+from askpicky.schemas import MotivationsParseResult
 
 
 @pytest.fixture
@@ -85,22 +55,10 @@ def _valid_finalise_body(**overrides) -> dict:
         "deal_breakers_text": "no remote, micromanagement",
         "good_role_signals_text": "strong engineering culture",
         "life_constraints": [],
-        "writing_samples": [],
         "career_narrative": "",
     }
     body.update(overrides)
     return body
-
-
-def _patch_style_extractor(monkeypatch, *, raises: bool = False):
-    from askpicky.sub_agents import style_extractor
-
-    async def fake(user_id, samples, session_id=None):
-        if raises:
-            raise RuntimeError("style extractor boom")
-        return _style_profile(user_id)
-
-    monkeypatch.setattr(style_extractor, "extract", fake)
 
 
 def _patch_parser(monkeypatch, *, motivations=None, deal_breakers=None):
@@ -174,29 +132,19 @@ def test_parse_422_for_unknown_stage(client, monkeypatch):
 
 
 def test_finalise_writes_profile_and_entries(client, monkeypatch):
-    _patch_style_extractor(monkeypatch)
-    _patch_parser(
-        monkeypatch,
-        motivations=MotivationsParseResult(
-            status="parsed",
-            motivations=["impact", "autonomy"],
-            drains=["meetings"],
-        ),
-        deal_breakers=DealBreakersParseResult(
-            status="parsed",
-            deal_breakers=["no remote"],
-            good_role_signals=["strong culture"],
-        ),
-    )
-
     resp = client.post(
         "/api/onboarding/finalise",
-        json=_valid_finalise_body(writing_samples=["Sample A", "Sample B"]),
+        json=_valid_finalise_body(
+            motivations_text="impact; autonomy",
+            deal_breakers_text="no remote",
+            good_role_signals_text="strong culture; strong engineering culture",
+            life_constraints=["meetings"],
+        ),
     )
     assert resp.status_code == 201
     body = resp.json()
     assert body["user_id"] == "demo-user-1"
-    assert body["writing_style_profile_id"] == "style-pid"
+    assert "writing_style_profile_id" not in body
 
     # Profile persisted.
     from askpicky.storage import get_user_profile, get_all_career_entries_for_user
@@ -206,27 +154,24 @@ def test_finalise_writes_profile_and_entries(client, monkeypatch):
     assert user.name == "Demo User"
     assert user.base_location == "London"
     assert user.salary_floor == 60_000
+    assert user.writing_style_profile_id is None
     assert user.motivations == ["impact", "autonomy"]
     assert user.deal_breakers == ["no remote"]
-    # good_role_signals comes from parser + extra signals text.
     assert "strong culture" in user.good_role_signals
     assert "strong engineering culture" in user.good_role_signals
-    # drains from parser appended as life_constraints.
     assert "meetings" in user.life_constraints
 
     entries = _seed(get_all_career_entries_for_user("demo-user-1"))
     kinds = [e.kind for e in entries]
-    # motivations=2, deal_breakers=1, good_role_signals=2, writing_samples=2.
+    # motivations=2, deal_breakers=1, good_role_signals=2.
     assert kinds.count("motivation") == 2
     assert kinds.count("deal_breaker") == 1
     assert kinds.count("good_role_signal") == 2
-    assert kinds.count("writing_sample") == 2
+    assert "writing_sample" not in kinds
 
 
-def test_finalise_fallback_when_parser_returns_none(client, monkeypatch):
-    """Parser None → raw text becomes a single-item list."""
-    _patch_style_extractor(monkeypatch)
-    _patch_parser(monkeypatch, motivations=None, deal_breakers=None)
+def test_finalise_unsplit_text_becomes_single_item(client, monkeypatch):
+    """Unsplit prose becomes a single-item list."""
 
     resp = client.post(
         "/api/onboarding/finalise",
@@ -245,44 +190,26 @@ def test_finalise_fallback_when_parser_returns_none(client, monkeypatch):
     assert user.deal_breakers == ["no remote"]
 
 
-def test_finalise_without_samples_skips_style_extractor(client, monkeypatch):
+def test_finalise_never_calls_style_extractor(client, monkeypatch):
     called = {"n": 0}
 
     async def fake(user_id, samples, session_id=None):
         called["n"] += 1
-        return _style_profile(user_id)
+        raise AssertionError("style_extractor should not run during onboarding")
 
     from askpicky.sub_agents import style_extractor
 
     monkeypatch.setattr(style_extractor, "extract", fake)
-    _patch_parser(monkeypatch)
 
     resp = client.post(
         "/api/onboarding/finalise",
-        json=_valid_finalise_body(writing_samples=[]),
+        json=_valid_finalise_body(writing_samples=["stale client sample"]),
     )
     assert resp.status_code == 201
     assert called["n"] == 0
-    assert resp.json()["writing_style_profile_id"] is None
-
-
-def test_finalise_style_extractor_failure_is_graceful(client, monkeypatch):
-    _patch_style_extractor(monkeypatch, raises=True)
-    _patch_parser(monkeypatch)
-
-    resp = client.post(
-        "/api/onboarding/finalise",
-        json=_valid_finalise_body(writing_samples=["x"]),
-    )
-    assert resp.status_code == 201
-    body = resp.json()
-    assert body["writing_style_profile_id"] is None
 
 
 def test_finalise_visa_holder_derives_visa_status(client, monkeypatch):
-    _patch_style_extractor(monkeypatch)
-    _patch_parser(monkeypatch)
-
     resp = client.post(
         "/api/onboarding/finalise",
         json=_valid_finalise_body(
@@ -307,9 +234,6 @@ def test_finalise_visa_holder_derives_visa_status(client, monkeypatch):
 
 def test_finalise_visa_holder_with_past_expiry_uses_fallback(client, monkeypatch):
     """Matches the bot's behaviour — expired date → 2 years from now."""
-    _patch_style_extractor(monkeypatch)
-    _patch_parser(monkeypatch)
-
     resp = client.post(
         "/api/onboarding/finalise",
         json=_valid_finalise_body(

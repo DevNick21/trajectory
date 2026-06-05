@@ -39,7 +39,7 @@ import pandas as pd
 
 # Allow running as `python scripts/...` without install.
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "packages" / "engine" / "src"))
 
 from askpicky.sub_agents.sponsor_register import (
     _ABBREVIATIONS,

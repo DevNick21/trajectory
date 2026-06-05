@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AskPicky</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>AskPicky</h1>
+      </header>
+
+      <section>
+        <label for="apiBase">API base</label>
+        <input id="apiBase" type="url" value="http://localhost:8000" />
+      </section>
+
+      <section>
+        <label for="jdContext">JD context</label>
+        <textarea id="jdContext" rows="5" placeholder="Paste JD context if needed"></textarea>
+      </section>
+
+      <section>
+        <div class="row">
+          <label for="question">Question</label>
+          <span id="confidence">LOW</span>
+        </div>
+        <textarea id="question" rows="5"></textarea>
+      </section>
+
+      <section>
+        <label class="toggle">
+          <input id="includePrivate" type="checkbox" />
+          Include private memory
+        </label>
+      </section>
+
+      <section>
+        <button id="send" type="button">Send to AskPicky</button>
+      </section>
+
+      <section id="result" hidden>
+        <div class="row">
+          <h2>Question type</h2>
+          <span id="questionType">unknown</span>
+        </div>
+        <h2>What this tests</h2>
+        <p id="testing"></p>
+        <h2>Nudge</h2>
+        <p id="nudge"></p>
+        <h2>Missing evidence</h2>
+        <ul id="missing"></ul>
+        <h2>Memory angles</h2>
+        <ul id="memories"></ul>
+        <h2>Draft</h2>
+        <textarea id="answer" rows="8"></textarea>
+        <p id="saveIndicator"></p>
+        <div class="actions">
+          <button id="polish" type="button">Polish</button>
+          <button id="copy" type="button">Copy</button>
+          <button id="write" type="button">Write back</button>
+        </div>
+      </section>
+    </main>
+    <script src="assistClient.js"></script>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

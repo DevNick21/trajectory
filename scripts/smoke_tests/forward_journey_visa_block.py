@@ -4,12 +4,12 @@ This is the differentiator path from the Problem Statement: a visa-holder
 forwards a role at an unlisted-sponsor company. Two protections must hold:
 
   1. The bundle carries `SponsorStatus.status == NOT_LISTED` end-to-end.
-     If the orchestrator drops the visa_holder branch (Rule 2 of
-     CLAUDE.md), this is where it shows up.
+     If the orchestrator drops the visa_holder branch, this is where it
+     shows up.
 
-  2. CLAUDE.md Rule 2's programmatic guard (`_enforce_no_go_with_blockers`
-     in sub_agents/verdict.py:138) flips a `GO` verdict to `NO_GO` when
-     any hard blocker is present. We patch `_mock_verdict` to return an
+  2. The programmatic guard (`_enforce_no_go_with_blockers` in
+     sub_agents/verdict.py:138) flips a `GO` verdict to `NO_GO` when any
+     hard blocker is present. We patch `_mock_verdict` to return an
      intentionally-inconsistent `GO + hard_blocker(NOT_ON_SPONSOR_REGISTER)`
      and assert the guard catches it.
 

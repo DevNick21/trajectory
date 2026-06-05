@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND_SRC = ROOT / "frontend" / "src"
+FRONTEND_SRC = ROOT / "apps" / "web" / "src"
 
 BUTTON_RE = re.compile(r"<button\b(?P<attrs>[^>]*)>(?P<body>.*?)</button>", re.S)
 TAG_RE = re.compile(r"<[^>]+>")

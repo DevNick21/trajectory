@@ -1,9 +1,9 @@
-"""Smoke test — /api/chat route wiring (PROCESS Entry 45).
+"""Smoke test — /api/chat route wiring.
 
 The /api/chat endpoint mirrors the Telegram bot's natural-language
 entry point on the web. It runs intent_router + dispatches to the
 appropriate handler. This smoke exercises the route shape without
-spending Opus credits by monkey-patching intent_router and handle_*
+spending model credits by monkey-patching intent_router and handle_*
 calls.
 
 Asserts:

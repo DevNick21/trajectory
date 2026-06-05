@@ -24,10 +24,10 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-# Ensure sys.path has src/ BEFORE any askpicky imports land from the
-# individual smoke modules.
+# Ensure sys.path has the engine source root BEFORE any askpicky imports
+# land from the individual smoke modules.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(_REPO_ROOT / "src"))
+sys.path.insert(0, str(_REPO_ROOT / "packages" / "engine" / "src"))
 
 # Windows console is cp1252 by default — coerce stdout to UTF-8 so the
 # occasional Unicode glyph in a log line doesn't crash the run.
@@ -95,11 +95,8 @@ _REGISTRY: list[_Entry] = [
     _Entry("gov_data",           "scripts.smoke_tests.gov_data",           cheap=True,  category="phase1"),
     _Entry("jsonld_extractor",   "scripts.smoke_tests.jsonld_extractor",   cheap=True,  category="phase1"),
     _Entry("salary_data",        "scripts.smoke_tests.salary_data",        cheap=True,  category="phase1"),
-    _Entry("process_entries",    "scripts.smoke_tests.process_entry_numbers", cheap=True,  category="phase1"),
     _Entry("ghost_job",          "scripts.smoke_tests.ghost_job",          cheap=False, category="phase1"),
     _Entry("red_flags",          "scripts.smoke_tests.red_flags",          cheap=False, category="phase1"),
-    _Entry("style_extractor",    "scripts.smoke_tests.style_extractor",    cheap=False, category="phase1"),
-
     # ── LLM-backed: onboarding, intent, shield tier2 ───────────────────
     _Entry("content_shield",     "scripts.smoke_tests.content_shield",     cheap=False, category="agent-util"),
     _Entry("onboarding_parser",  "scripts.smoke_tests.onboarding_parser",  cheap=False, category="agent-util"),
@@ -124,7 +121,6 @@ _REGISTRY: list[_Entry] = [
     _Entry("forward_journey_visa_block",    "scripts.smoke_tests.forward_journey_visa_block",    cheap=True,  category="e2e"),
     _Entry("onboarding_journey_uk",         "scripts.smoke_tests.onboarding_journey_uk",         cheap=True,  category="e2e"),
     _Entry("onboarding_journey_visa",       "scripts.smoke_tests.onboarding_journey_visa",       cheap=True,  category="e2e"),
-    _Entry("onboarding_persona_stress",     "scripts.smoke_tests.onboarding_persona_stress",     cheap=True,  category="e2e"),
     _Entry("scraper",            "scripts.smoke_tests.scraper",            cheap=False, category="e2e"),
     _Entry("verdict",            "scripts.smoke_tests.verdict",            cheap=False, category="e2e"),
     _Entry("phase4_cv",          "scripts.smoke_tests.phase4_cv",          cheap=False, category="e2e"),

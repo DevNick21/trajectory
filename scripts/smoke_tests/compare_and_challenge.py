@@ -7,7 +7,7 @@ sessions with different (confidence, age, density) signatures, run
 the ranker, assert the order matches the composite formula.
 
 challenge_verdict can't be exercised live in the cheap tier because
-its body calls Opus. We assert the wiring instead:
+its body calls a model. We assert the wiring instead:
   - the orchestrator handler exists and refuses sessions without a
     Phase 1 bundle (ValueError)
   - _build_user_input on verdict.py correctly threads user_challenge
@@ -169,7 +169,7 @@ async def _body() -> tuple[list[str], list[str], float]:
 
     # B (medium conf, mid age) should score lower than C (high conf,
     # very old) because A's freshness advantage exceeds C's confidence
-    # premium. Actually: confidence weight (60%) > freshness weight (25%),
+    # boost. Actually: confidence weight (60%) > freshness weight (25%),
     # so C may beat B. Just assert the bottom slot is correctly placed —
     # whichever of B/C is last must have the lowest score.
     sorted_scores = sorted([r.score for r in result.ranked], reverse=True)

@@ -66,8 +66,7 @@ async def _body() -> tuple[list[str], list[str], float]:
             messages.append(f"/health body: {body}")
 
             for required in ("status", "service", "version",
-                             "storage_initialised",
-                             "auth_mode", "storage_backend"):
+                             "storage_initialised"):
                 if required not in body:
                     failures.append(f"/health missing field: {required}")
 

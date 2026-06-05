@@ -8,8 +8,7 @@ Usage:
     python scripts/benchmarks/run.py --output-json data/benchmarks/latest.json
 
 Output: JSON lines per task + a summary block written to
-data/benchmarks/latest.json. CI can upload this as an artifact;
-the frontend dashboard reads it via GET /api/benchmarks/latest.
+data/benchmarks/latest.json. CI can upload this as an artifact.
 
 Cost: with --mock, ~$0. With live providers, ~$0.50-1.50 per full run
 (DeepSeek Flash is ~$0.14/Mtok input — the tasks are small).

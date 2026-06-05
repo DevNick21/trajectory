@@ -2,11 +2,10 @@
 
 Three canonical user messages through the router. Confirms:
   - Router returns a valid intent literal
-  - Shield Tier 1 redacts obvious injections before the router ever
-    sees them (CLAUDE.md Rule 10)
+  - Shield Tier 1 redacts obvious injections before the router sees them
   - `blocked_by_verdict` plumbing behaves against a prior NO_GO session
 
-Cost: ~$0.03 (Opus xhigh × 3 routing calls).
+Cost: ~$0.03 (3 fast-tier routing calls).
 """
 
 from __future__ import annotations

@@ -49,8 +49,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 # Ensure repo root on sys.path for `from askpicky...` imports when run as a
 # script outside the editable-install context.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT / "src"))
+_ENGINE_SRC = _REPO_ROOT / "packages" / "engine" / "src"
+if str(_ENGINE_SRC) not in sys.path:
+    sys.path.insert(0, str(_ENGINE_SRC))
 
 from askpicky.config import settings  # noqa: E402
 

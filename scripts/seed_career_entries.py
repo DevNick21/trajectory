@@ -26,10 +26,11 @@ import sys
 import uuid
 from datetime import datetime, timezone
 
-# Ensure src/ is on the path so we can import the package without install.
+# Ensure the engine source root is on the path so we can import the package
+# without install.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, os.path.join(_ROOT, "src"))
+sys.path.insert(0, os.path.join(_ROOT, "packages", "engine", "src"))
 
 from askpicky.schemas import CareerEntry  # noqa: E402
 from askpicky.storage import (  # noqa: E402

@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 # installs the package without re-declaring them here.
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["packages/engine/src"]
 include = ["askpicky*"]
 
 [tool.setuptools.package-data]
@@ -25,9 +25,7 @@ askpicky = ["prompts/*.md", "prompts/**/*.md"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-markers = [
-    "live_supabase: integration tests against a real Supabase project; skipped unless explicit live-test env vars are set",
-]
+markers = []
 
 [tool.ruff]
 line-length = 100
@@ -35,8 +33,8 @@ target-version = "py311"
 
 [tool.pyright]
 typeCheckingMode = "basic"
-include = ["src"]
-exclude = ["**/__pycache__", "**/node_modules", "tests", "scripts", "frontend", "demo"]
+include = ["packages/engine/src"]
+exclude = ["**/__pycache__", "**/node_modules", "tests", "scripts", "apps/web", "apps/extension", "demo"]
 reportMissingTypeStubs = false
 reportUnknownMemberType = false
 reportUnknownArgumentType = false

@@ -1,8 +1,8 @@
 """Browser-level frontend smoke and axe accessibility gate.
 
-Runs against the built Vite output in `frontend/dist`. The script serves the
+Runs against the built Vite output in `apps/web/dist`. The script serves the
 SPA locally, mocks `/api/*` responses inside Playwright, injects `axe-core`,
-and checks the app shell plus the Assist, Memory, and extension pairing views.
+and checks the app shell plus the Assist, Memory, and Applications views.
 
 Set ASKPICKY_REQUIRE_BROWSER_SMOKE=1 in CI/release gates to fail when Chromium
 is not installed or cannot launch. Local development without browser binaries
@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND = ROOT / "frontend"
+FRONTEND = ROOT / "apps" / "web"
 DIST = FRONTEND / "dist"
 AXE = FRONTEND / "node_modules" / "axe-core" / "axe.min.js"
 REQUIRE_BROWSER = os.getenv("ASKPICKY_REQUIRE_BROWSER_SMOKE") == "1"
@@ -58,8 +58,6 @@ def _api_payload(path: str, query: dict[str, list[str]]) -> Any:
         }
     if path == "/api/sessions":
         return {"sessions": []}
-    if path == "/api/notifications":
-        return {"notifications": [], "unread_count": 0}
     if path == "/api/memory/inbox":
         return {
             "experience_atoms": [
@@ -85,13 +83,6 @@ def _api_payload(path: str, query: dict[str, list[str]]) -> Any:
         return []
     if path == "/api/applications":
         return {"applications": []}
-    if path == "/api/benchmarks/latest":
-        return {
-            "generated_at": _now(),
-            "companies": [],
-            "roles": [],
-            "sample_size": 0,
-        }
     if path == "/health":
         return {"status": "ok", "service": "browser-smoke"}
     return {}
@@ -199,9 +190,9 @@ def _check_page(page, url: str, label: str, axe_source: str) -> list[str]:
 
 def main() -> int:
     if not (DIST / "index.html").exists():
-        return _skip("frontend/dist is missing; run npm run --prefix frontend build first")
+        return _skip("apps/web/dist is missing; run npm run --prefix apps/web build first")
     if not AXE.exists():
-        return _skip("frontend/node_modules/axe-core/axe.min.js is missing")
+        return _skip("apps/web/node_modules/axe-core/axe.min.js is missing")
 
     try:
         from playwright.sync_api import Error as PlaywrightError
@@ -221,7 +212,7 @@ def main() -> int:
                         ("/", "dashboard shell"),
                         ("/assist", "assist"),
                         ("/memory", "memory"),
-                        ("/extension/connect", "extension connect"),
+                        ("/applications", "applications"),
                     ):
                         page = browser.new_page(viewport={"width": 1280, "height": 900})
                         failures.extend(_check_page(page, base_url + path, label, axe_source))

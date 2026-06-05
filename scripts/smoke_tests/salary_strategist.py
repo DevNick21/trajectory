@@ -3,7 +3,7 @@
 Fabricates a JobSearchContext (urgency=HIGH, 2 recent rejections) and
 asserts the recommendation lands within the ASHE band in the fixture.
 
-Set SMOKE_SALARY_STRATEGIST_MOCK=1 to skip Opus.
+Set SMOKE_SALARY_STRATEGIST_MOCK=1 to skip the model call.
 
 Cost: ~$0.50 live, $0 mock.
 """
@@ -55,7 +55,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     if mock:
-        messages.append(f"MOCK: skipped Opus; context urgency={ctx.urgency_level}")
+        messages.append(f"MOCK: skipped model call; context urgency={ctx.urgency_level}")
         return messages, failures, 0.0
 
     from askpicky.sub_agents import salary_strategist

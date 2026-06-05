@@ -1,7 +1,7 @@
 """Smoke test — content_shield Tier 1 regex-only (no LLM).
 
 Cheap twin of the existing `content_shield` smoke, which exercises
-Tier 2 Sonnet. This variant covers Tier 1 exclusively so CI can run
+Tier 2. This variant covers Tier 1 exclusively so CI can run
 it for free on every change.
 
 Exercises:

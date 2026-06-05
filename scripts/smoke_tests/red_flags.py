@@ -1,10 +1,10 @@
 """Smoke test — red_flags.detect on fixture (LLM-backed).
 
-Runs the red-flags detector (Opus xhigh) against the fixture's
+Runs the red-flags detector against the fixture's
 company_research + companies_house. Expected: few or zero flags for
 the fixture (which depicts a healthy company).
 
-Set SMOKE_RED_FLAGS_MOCK=1 to skip the Opus call.
+Set SMOKE_RED_FLAGS_MOCK=1 to skip the model call.
 
 Cost: ~$0.10 live, $0 mock.
 """

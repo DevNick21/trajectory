@@ -4,7 +4,7 @@ Expects the audit to at minimum flag the planted phrase. A clean audit
 on content that contains 'passionate' would indicate the banned-phrase
 detection pipeline is broken.
 
-Set SMOKE_SELF_AUDIT_MOCK=1 to skip Opus.
+Set SMOKE_SELF_AUDIT_MOCK=1 to skip the model call.
 
 Cost: ~$0.10 live, $0 mock.
 """
@@ -50,7 +50,7 @@ async def _body() -> tuple[list[str], list[str], float]:
     failures: list[str] = []
 
     if mock:
-        messages.append("MOCK: skipped Opus; would return SelfAuditReport with ≥1 flag")
+        messages.append("MOCK: skipped model call; would return SelfAuditReport with >=1 flag")
         return messages, failures, 0.0
 
     from askpicky.sub_agents import self_audit
