@@ -1,7 +1,7 @@
 """Agent system prompts, one Markdown file per prompt.
 
 Keeping prompts as plain Markdown alongside the code gives us:
-  - git-based versioning (`git log src/askpicky/prompts/verdict.md`)
+  - git-based versioning (`git log packages/engine/src/askpicky/prompts/verdict.md`)
   - readable diffs across prompt iterations
   - ability to view prompts without opening a Python file
   - a stable surface for the Prompt Auditor (AGENTS.md §17) to ingest
@@ -18,7 +18,7 @@ editable without touching Python.
 
 Storage layout:
 
-    src/askpicky/prompts/
+    packages/engine/src/askpicky/prompts/
     ├── __init__.py                 (this file)
     ├── verdict.md
     ├── intent_router.md

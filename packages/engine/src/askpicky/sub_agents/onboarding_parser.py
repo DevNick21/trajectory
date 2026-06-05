@@ -50,7 +50,7 @@ T = TypeVar("T", bound=BaseModel)
 _INPUT_CHAR_CAP = 2_000  # per-reply ceiling; trims adversarial dumps
 
 
-# Prompt fragments live in src/askpicky/prompts/onboarding/ as plain
+# Prompt fragments live in packages/engine/src/askpicky/prompts/onboarding/ as plain
 # Markdown so they can be diffed and versioned without touching Python.
 # Each per-stage prompt is composed at module-load time as:
 #     header + STAGE: <stage-description> + OUTPUT SCHEMA: <name> + common rules.

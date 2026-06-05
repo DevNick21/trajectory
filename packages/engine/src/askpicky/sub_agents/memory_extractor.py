@@ -4,7 +4,7 @@ Extracts reviewable ExperienceAtom / StoryFrame drafts from approved answers.
 The API stores these as Memory Inbox items; they do not influence future
 suggestions until approved or explicitly included.
 
-System prompt: src/askpicky/prompts/memory_extractor.md
+System prompt: packages/engine/src/askpicky/prompts/memory_extractor.md
 """
 
 from __future__ import annotations

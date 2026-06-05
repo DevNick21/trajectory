@@ -4,7 +4,7 @@ Turns a user's rough draft/transcript plus approved memory suggestions into a
 submission-ready answer. This is a high-stakes user-facing generator, so it
 uses the normal tier and receives full writing-style context.
 
-System prompt: src/askpicky/prompts/application_answer_shaper.md
+System prompt: packages/engine/src/askpicky/prompts/application_answer_shaper.md
 """
 
 from __future__ import annotations
