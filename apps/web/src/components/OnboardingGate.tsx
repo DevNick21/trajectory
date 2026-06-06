@@ -6,7 +6,7 @@ import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { ApiError, getProfile } from "@/lib/api";
+import { getOptionalProfile } from "@/lib/api";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface Props {
@@ -19,14 +19,17 @@ export default function OnboardingGate({ children }: Props) {
   const isJdFirstPath =
     location.pathname === "/" || location.pathname.startsWith("/applications");
 
-  const { isPending, isError, error } = useQuery({
+  const { data: profile, isPending } = useQuery({
     queryKey: ["profile"],
-    queryFn: getProfile,
+    queryFn: getOptionalProfile,
     retry: false,
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
 
-  const profileMissing =
-    isError && error instanceof ApiError && error.code === "profile_not_found";
+  const profileMissing = profile === null;
 
   // Toast-free redirect — the wizard itself explains what's happening.
   useEffect(() => {

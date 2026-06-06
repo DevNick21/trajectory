@@ -82,6 +82,17 @@ async function request<T>(
 
 export const getProfile = () => request<UserProfile>("/api/profile");
 
+export async function getOptionalProfile(): Promise<UserProfile | null> {
+  try {
+    return await getProfile();
+  } catch (err) {
+    if (err instanceof ApiError && err.code === "profile_not_found") {
+      return null;
+    }
+    throw err;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Sessions (read-only — POST /api/sessions/forward_job lives in sse.ts)
 // ---------------------------------------------------------------------------

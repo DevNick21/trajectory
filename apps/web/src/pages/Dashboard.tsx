@@ -3,7 +3,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { ApiError, analyseJobDescription, getProfile, getSession, listSessions, saveLocalApplication } from "@/lib/api";
+import { analyseJobDescription, getOptionalProfile, getSession, listSessions, saveLocalApplication } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
 import type { ForwardJobEvent, LocalJobAnalysis, SessionListResponse, VerdictPayload } from "@/lib/types";
 import { isPositiveVerdict, isBlockingVerdict } from "@/lib/verdict";
@@ -168,8 +168,12 @@ function reducer(state: StreamState, action: Action): StreamState {
 export default function Dashboard() {
   const profile = useQuery({
     queryKey: ["profile"],
-    queryFn: getProfile,
+    queryFn: getOptionalProfile,
     retry: false,
+    staleTime: 60_000,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   });
   const queryClient = useQueryClient();
   const [stream, dispatch] = useReducer(reducer, initial);
@@ -250,9 +254,7 @@ export default function Dashboard() {
     setState(pickyState as any);
   }, [stream.status, stream.verdict?.decision, setState]);
 
-  const profileError = profile.error as ApiError | undefined;
-  const profileMissing =
-    profile.isError && profileError?.code === "profile_not_found";
+  const profileMissing = profile.data === null;
   const canForward = !profile.isPending;
 
   const saveLocalMutation = useMutation({
@@ -639,7 +641,7 @@ export default function Dashboard() {
             <div className="px-4 py-3 border-b border-canvas">
               <h3 className="text-xs font-bold uppercase tracking-widest">Case Files</h3>
             </div>
-            <SessionList enabled={profile.isSuccess} />
+            <SessionList enabled={profile.data !== null} />
           </div>
         </div>
       </div>
