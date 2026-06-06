@@ -1,9 +1,4 @@
-"""Local export and hard-delete primitives.
-
-These functions deliberately operate on the public local SQLite schema. Hosted
-storage, backups, billing, email data, and managed retention systems are outside
-the public engine boundary.
-"""
+"""Local export and hard-delete primitives for the public SQLite data model."""
 
 from __future__ import annotations
 

@@ -4,11 +4,11 @@ Layering:
   - The VoicePersona contributes structural rhetoric — Thought Partner
     framing for cover letters, Value Architect framing for CV bullets,
     Direct Operator framing for follow-ups.
-  - An optional style_block may add approved memory/persona/legacy style
-    hints when available.
+  - An optional style_block may add approved memory, persona, or style hints
+    when available.
 
 The persona is the outer wrapper. Any optional style_block narrows it without
-making writing-sample onboarding a product dependency.
+making sample collection a product dependency.
 
 Intent -> persona mapping (the orchestrator dispatches on this):
 
@@ -104,7 +104,7 @@ def compose_system_prompt(
 
     Order:
       1. Persona structural prompt (outer wrapper — "Value Architect")
-      2. Optional style block (approved memory/persona/legacy fallback)
+      2. Optional style block (approved memory/persona/style hints)
       3. The agent's task-specific instructions
 
     The agent's prompt stays the deepest layer so its task contract

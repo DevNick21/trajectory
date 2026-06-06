@@ -1,12 +1,13 @@
 # AskPicky — Public Product Definition
 
-*Last updated 2026-06-05 — tracked docs describe the open/local engine and
-public workflow only. Managed-service implementation details, packaging, and
-rollout notes are intentionally kept outside Git.*
+This tracked product definition covers the open/local engine and public
+workflow. Managed-service implementation details, packaging, and rollout notes
+stay outside tracked public files.
 
-The active public workflow source of truth is
-[`docs/WORKING_PIPELINE.md`](./docs/WORKING_PIPELINE.md). Agent prompts remain
-owned by [`AGENTS.md`](./AGENTS.md).
+Agent prompts and routing live in [`AGENTS.md`](./AGENTS.md). Memory design
+lives in [`MEMORY_ARCHITECTURE.md`](./MEMORY_ARCHITECTURE.md). Implementation
+docs live under `docs/architecture`, `docs/api`, `docs/privacy`, and
+`docs/self-hosting`.
 
 ---
 
@@ -35,17 +36,17 @@ product definition.
 
 ---
 
-## 2. What AskPicky Is Not
+## 2. Product Boundaries
 
-- Not a generic AI wrapper.
-- Not ChatGPT plus a spreadsheet.
-- Not API-key setup as the mainstream first-run experience.
-- Not a full-profile-before-value product.
-- Not a platform integration as the MVP dependency.
-- Not an auto-apply or auto-submit tool.
-- Not an ATS, job board, recruiter product, or employer-facing product.
-- Not a promise of interviews, offers, sponsorship, or recruiter replies.
-- Not an AI detector, identity verifier, or candidate trust badge.
+- The MVP centers job analysis, evidence-backed answers, and manual tracking.
+- The first-run flow gives value before API-key setup, local infrastructure,
+  browser extension setup, inbox access, or a full profile.
+- The user reviews every generated answer and every sensitive-field decision.
+- The product never auto-submits applications.
+- The public engine serves applicants, with no recruiter, ATS, employer, AI
+  detection, identity-verification, or candidate-badge workflow.
+- The product gives decision support and safer drafting, with no guarantee of
+  interviews, offers, sponsorship, or recruiter replies.
 
 ---
 
@@ -173,8 +174,9 @@ The public repository should include:
 - basic audit traces
 - basic evaluation examples
 
-The public repository should not enumerate managed-service implementation
-details, roadmap sequencing, infrastructure design, or packaging.
+Tracked public files describe the open/local engine boundary. Managed-service
+implementation details, roadmap sequencing, infrastructure design, and
+packaging stay outside the public repo.
 
 ---
 
@@ -285,7 +287,7 @@ Useful metrics:
 - conversion from first analysis to saved application
 - reactivation during a later job-search cycle
 
-The main retention risk is not success-driven churn. It is churn before value.
+Churn before first value is the primary retention risk.
 
 ---
 
@@ -337,7 +339,7 @@ The main retention risk is not success-driven churn. It is churn before value.
 
 ## 12. Documentation Rules
 
-1. Keep `docs/WORKING_PIPELINE.md` as the only active public pipeline map.
+1. Keep `ASKPICKY.md` as the active public product map.
 2. Keep `AGENTS.md` scoped to prompt inventory and active routing notes.
 3. Do not add tracked docs that enumerate managed-service features,
    infrastructure, packaging, or rollout sequencing.
@@ -348,11 +350,9 @@ The main retention risk is not success-driven churn. It is churn before value.
 
 ## 13. Final Principle
 
-The strongest version of AskPicky is not a chatbot that helps people apply for
-jobs.
-
-It is a structured job application operating system where AI acts on verified
-user evidence, job requirements, application history, and tracked outcomes.
+AskPicky's strongest form is a structured job application operating system
+where AI acts on verified user evidence, job requirements, application history,
+and tracked outcomes.
 
 The MVP proves:
 

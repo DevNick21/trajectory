@@ -1,22 +1,18 @@
 # AskPicky Public Audit Export
 
-*Last updated 2026-06-05. This tracked export intentionally omits
-managed-service implementation details, commercial rollout notes,
-infrastructure-specific plans, and packaging strategy.*
-
-This file records public-safe product and engineering status only. Private
-deployment, launch, and managed-service security notes should live outside Git.
+This tracked export records public-safe product and engineering status only.
+Managed-service implementation details, commercial rollout notes,
+infrastructure-specific plans, packaging strategy, deployment notes, and
+managed-service security notes stay outside tracked public files.
 
 ---
 
 ## Done
 
 - The web app remains the source of truth for the public workflow.
-- `docs/WORKING_PIPELINE.md` is the active public pipeline source of truth.
 - Onboarding finalise is deterministic:
-  - no writing-sample collection
-  - no style extractor during finalise
-  - no onboarding parser during finalise
+  - structured profile save
+  - deterministic career-entry writes
   - optional CV import remains separate from profile save
 - Application assist API exists:
   - `/api/assist/start`
@@ -41,22 +37,17 @@ deployment, launch, and managed-service security notes should live outside Git.
 
 ## Public Hardening Summary
 
-### Pipeline and onboarding reset
+### Pipeline and onboarding
 
-- Added the canonical public working-pipeline document covering the web
-  workflow, progressive onboarding, forward-job, assist, local storage modes,
-  privacy controls, and public test gates.
-- Removed writing-sample onboarding from backend schemas, frontend state,
-  onboarding UI, generated API contract, and onboarding smoke tests.
-- Removed the dead onboarding samples parser stage/prompt and obsolete smoke
-  coverage from the standard smoke registry.
-- Simplified `/api/onboarding/finalise` into deterministic profile and
-  career-entry writes so the user-facing save step does not hide a slow LLM
-  workflow.
-- Updated generated OpenAPI/TypeScript contracts after the onboarding shape
-  changed.
-- Updated active docs/comments to stop presenting style extraction as a
-  required onboarding step.
+- [ASKPICKY.md](./ASKPICKY.md) covers the public product map.
+- Progressive onboarding, forward-job, assist, local storage modes, privacy
+  controls, and public test gates are represented in tracked implementation
+  docs and smoke tests.
+- `/api/onboarding/finalise` performs deterministic profile and career-entry
+  writes so the user-facing save step stays fast and inspectable.
+- Generated OpenAPI/TypeScript contracts match the onboarding payload.
+- Voice guidance comes from explicit persona, approved memory, and assist-loop
+  feedback.
 
 ### Application assist hardening
 
@@ -118,9 +109,9 @@ Implementation-specific deployment details are intentionally omitted here.
   - one manually observed live forward-job run before release
   - no claim that local storage tests prove deployment-level isolation
 - Redundant-code cleanup:
-  - delete or refactor the remaining legacy style-extractor fallback once
-    generator signatures accept memory/persona inputs directly
-  - remove legacy provider/model references from active docs/comments
+  - align remaining generator signatures around memory/persona inputs
+    directly
+  - keep provider/model references scoped to current tier routing
   - inventory default-off feature flags and unused agents before new surface work
 - Full design pass:
   - Assist becomes an application cockpit.

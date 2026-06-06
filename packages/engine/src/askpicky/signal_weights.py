@@ -1,10 +1,7 @@
-"""Phase 1 signal weights — architecture gap #7.
+"""Phase 1 signal weights.
 
-The verdict prompt previously did all signal weighting implicitly:
-"this is a UK resident, so sponsor_register is irrelevant; SOC distress
-matters less than ghost-job for a contractor" etc. That's coherent
-when the LLM is consistent, but produces subtly different reasoning
-across similar jobs and gives no surface to update from outcomes.
+Deterministic signal weights keep verdict reasoning consistent across similar
+jobs and create a surface for outcome-informed calibration.
 
 This module returns a deterministic per-pillar weight map keyed by
 `(user_type, soc_code)`. The verdict consumes it as `signal_weights`
@@ -13,18 +10,16 @@ weights as PRIORS — i.e. a pillar weighted 0.30 should move
 confidence ~3x as much as one weighted 0.10. The weights don't
 multiply into a hard score; they keep reasoning calibrated.
 
-What's NOT here yet:
-- Outcome-driven re-weighting. The full closure of gap #7 needs an
-  updater that nudges weights when reported outcomes contradict the
-  pillar's prediction (e.g. if `sponsor_register=LISTED` correlates
-  with `outcome=ghosted`, the sponsor pillar drops). The weights
-  table is structured to make this swap-in trivial: load from
-  storage instead of from this module, keyed by the same tuple.
+Future calibration:
+- Outcome-driven re-weighting can nudge weights when reported outcomes
+  contradict a pillar's prediction. For example, if
+  `sponsor_register=LISTED` correlates with `outcome=ghosted`, the sponsor
+  pillar can drop. The weights table is structured for storage-backed loading
+  keyed by the same tuple.
 
 Defaults are calibrated to "what AskPicky has consistently treated
-as load-bearing in the verdict prompt" — they're not arbitrary, but
-they're not yet evidence-based either. Update them when the outcome
-data justifies a change.
+as load-bearing in the verdict prompt". Update them when outcome data
+justifies a change.
 """
 
 from __future__ import annotations

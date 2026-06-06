@@ -11,8 +11,8 @@ Pipeline (short-circuit on each anchor):
      above threshold. Anchors a CRN.
   5. Fallback: thin identity with just the raw name + confidence 0.0.
 
-The resolver does NOT make LLM calls. It's a pure name + structured-data
-resolution layer — cheap, deterministic, easy to test.
+The resolver is a pure name + structured-data resolution layer: cheap,
+deterministic, and easy to test.
 """
 
 from __future__ import annotations

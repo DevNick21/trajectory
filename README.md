@@ -7,9 +7,6 @@
 Python 3.12+ · FastAPI · Vite/React · DeepSeek + OpenAI model tiers ·
 Open-core engine · No auto-apply, ever.
 
-*Last updated 2026-06-05 — public docs now describe the open/local engine only.
-Managed-service roadmap details are intentionally kept out of tracked files.*
-
 ---
 
 ## What It Does
@@ -58,8 +55,8 @@ The public repository documents and develops the inspectable engine:
 Managed-service implementation details, packaging, rollout plans, and commercial
 roadmaps are deliberately not maintained in tracked public files.
 
-The active public workflow is in
-[docs/WORKING_PIPELINE.md](./docs/WORKING_PIPELINE.md).
+The active public product definition lives in [ASKPICKY.md](./ASKPICKY.md).
+Agent prompts and routing live in [AGENTS.md](./AGENTS.md).
 
 ---
 
@@ -71,7 +68,7 @@ apps/
   web/          # React/Vite app
 apps/extension  # optional low-permission browser companion
 packages/
-  engine/       # compatibility app package
+  engine/       # FastAPI application package
   core/         # shared public schemas/types
   parsers/      # deterministic JD/CV/application parsers
   evaluators/   # deterministic claim/evidence evaluators
@@ -173,7 +170,7 @@ Each LLM-backed test honours `SMOKE_<NAME>_MOCK=1` for free iteration.
 
 ---
 
-## Not In Scope For Public Docs
+## Public Scope Boundaries
 
 - Auto-apply or auto-submit
 - Managed-service implementation details
@@ -186,12 +183,10 @@ Each LLM-backed test honours `SMOKE_<NAME>_MOCK=1` for free iteration.
 
 ## Docs
 
-- [docs/WORKING_PIPELINE.md](./docs/WORKING_PIPELINE.md) — active public workflow source of truth
 - [ASKPICKY.md](./ASKPICKY.md) — public product definition
 - [AGENTS.md](./AGENTS.md) — agent prompt inventory and adapter assignments
 - [MEMORY_ARCHITECTURE.md](./MEMORY_ARCHITECTURE.md) — application-assist memory graph, privacy, API, and tests
 - [ASKPICKY_AUDIT_EXPORT.md](./ASKPICKY_AUDIT_EXPORT.md) — public audit export
-- [docs/history/](./docs/history/) — superseded notes
 
 ---
 

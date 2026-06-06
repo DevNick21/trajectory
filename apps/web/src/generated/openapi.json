@@ -2006,7 +2006,7 @@
         "type": "object"
       },
       "OnboardingFinaliseRequest": {
-        "description": "Web wizard's fully-typed payload.\n\nStructured stages are pre-validated by the frontend. Motivation and\ndeal-breaker prose is split deterministically into retrievable preferences.\nWriting-sample onboarding was removed; V2 style guidance comes from\nexplicit voice/persona settings and the browser companion feedback loop.",
+        "description": "Web wizard's fully-typed payload.\n\nStructured stages are pre-validated by the frontend. Motivation and\ndeal-breaker prose is split deterministically into retrievable preferences.\nVoice guidance comes from explicit voice/persona settings and assist-loop\nfeedback.",
         "properties": {
           "base_location": {
             "title": "Base Location",
@@ -2645,7 +2645,7 @@
         "type": "object"
       },
       "SessionDetailResponse": {
-        "description": "Full session payload for the detail page.\n\n`research_bundle` and `verdict` are passed through as raw dicts so\nthe API layer doesn't have to keep its types lockstep with every\ndomain-schema tweak. Frontend reads with TanStack Query and types\nagainst the migration plan's TypeScript shapes.\n\n`progress_events` contains the durable event log from\nsession_progress_events \u2014 empty for pre-migration sessions.",
+        "description": "Full session payload for the detail page.\n\n`research_bundle` and `verdict` are passed through as raw dicts so\nthe API layer doesn't have to keep its types lockstep with every\ndomain-schema tweak. Frontend reads with TanStack Query and generated\nTypeScript shapes.\n\n`progress_events` contains the durable event log from\nsession_progress_events.",
         "properties": {
           "cost_summary": {
             "$ref": "#/components/schemas/CostSummary"

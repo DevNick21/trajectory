@@ -1,8 +1,7 @@
 """Phase 4 — Cover Letter Writer.
 
-Source-grounded prose with inline citation-grounded output. Replaces
-the old external citations API path (removed 2026-05-25). Now uses
-`call_agent` with inline document context and structured JSON output.
+Source-grounded prose with inline document context and structured JSON output
+through `call_agent`.
 """
 
 from __future__ import annotations

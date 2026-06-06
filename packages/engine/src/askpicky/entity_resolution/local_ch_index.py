@@ -209,7 +209,7 @@ class LocalCHHit:
     matched_alias: str  # which alias variant matched (canonical or a previous name)
 
     def as_search_item(self) -> dict:
-        """Render as the legacy /search/companies item shape."""
+        """Render as a /search/companies item shape."""
         item: dict = {
             "company_number": self.company_number,
             "title": self.company_name,

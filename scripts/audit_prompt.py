@@ -157,10 +157,8 @@ _AGENT_REGISTRY: dict[str, dict] = {
         ],
     },
     "cv_tailor_agentic": {
-        # D5 (2026-04-24): only CV tailor path. Multi-turn FAISS
-        # retrieval; career entries enter via tool-call results
-        # (trusted — user's own history) rather than up-front prompt
-        # context. The legacy single-call path was retired.
+        # Multi-turn FAISS retrieval; career entries enter via tool-call
+        # results from the user's own history.
         "module": "askpicky.sub_agents.cv_tailor_agentic",
         "system_prompt_attr": "SYSTEM_PROMPT",
         "output_schema_symbol": "CVOutput",

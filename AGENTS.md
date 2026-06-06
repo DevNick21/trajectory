@@ -3,19 +3,21 @@
 > Source of truth for every LLM-driven prompt in AskPicky.
 > Do not write prompts from scratch — copy from here.
 
-*Last updated 2026-06-05 — active public product flow lives in docs/WORKING_PIPELINE.md. V2 removes legacy shims, uses three-tier model config (TIER_FAST/NORMAL/STRONG), and routes agents via DeepSeek + OpenAI. Writing-sample onboarding is removed; style extraction is legacy-only until deleted.*
+Active public product flow lives in [ASKPICKY.md](./ASKPICKY.md). This file
+owns agent prompts, routing tiers, and validation notes.
 
 ## Agent inventory
 
 The **Adapter** column is the `llm.py` dispatcher each agent uses. Picking a
 different adapter for an existing agent is a substantial change.
 
-Updated 2026-05-23 — multi-provider routing (DeepSeek V4 Flash for
-low-stakes tasks), Firecrawl anti-bot fallback, 6-label verdict
-taxonomy replacing binary GO/NO_GO, benchmark harness + CI dashboard.
-See config.py agent_tier_map for the per-agent tier routing table.
+Agent routing uses three model tiers via `config.py::agent_tier_map`.
+DeepSeek V4 Flash handles fast extraction and triage, DeepSeek V4 Pro handles
+quality-sensitive generation, and GPT-5.4 handles high-stakes judgement.
+Firecrawl provides anti-bot fallback, verdicts use a 6-label taxonomy, and
+benchmarks publish CI artifacts.
 
-Provider routing legend (2026-05-25):
+Provider routing legend:
   🟢 DeepSeek V4 Flash — fast tier: extraction, routing, triage, style
   🟠 DeepSeek V4 Pro  — normal tier: generators, CV, cover letter, salary
   🔴 GPT-5.4          — strong tier: verdict, self-audit, offer analyst
@@ -31,7 +33,7 @@ Provider routing legend (2026-05-25):
 | 7 | Verdict | **strong tier (GPT-5.4)** | `call_agent` | Orchestrator after Phase 1 | Phase 2 |
 | 8 | Interview Questions (design + predict) | **DeepSeek V4 Flash** | `call_agent` | `design` post-verdict; `predict` user-triggered | Phase 3/4 |
 | 9 | STAR Polisher | **DeepSeek V4 Flash** | `call_agent` | After each user answer | Phase 3 |
-| 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Legacy/manual only; not onboarding | Deprecated |
+| 10 | Writing Style Extractor | **DeepSeek V4 Flash** | `call_agent` | Manual/internal samples only | Internal |
 | 11 | Onboarding Parser | **DeepSeek V4 Flash** | `call_agent` | Optional per-stage parse; finalise is deterministic | Onboarding |
 | 12 | Salary Strategist | **DeepSeek V4 Pro** | `call_agent` | On-demand only | Phase 4 |
 | 13 | CV Tailor (agentic) | **DeepSeek V4 Pro** | `call_agent` (multi-turn tool use) | User-triggered | Phase 4 |
@@ -46,26 +48,27 @@ Provider routing legend (2026-05-25):
 | 22 | Application Answer Shaper | **DeepSeek V4 Pro** | `call_agent` | `/api/assist/polish` | Application assist |
 | 23 | Memory Extractor | **DeepSeek V4 Flash** | `call_agent` | optional background job after `/api/assist/approve` | Memory |
 
-Cuts since the original inventory:
+Routing notes:
 
-- ~~Intent Router legacy strong-model-only path~~ — deterministic tier-0 + DeepSeek Flash fallback
-- ~~Question Designer~~ + ~~Likely Questions Predictor~~ — merged into Interview Questions
-- Ghost Job JD Scorer — downgraded from legacy strong-model routing to deterministic regex and then fast-tier checks
-- ~~Career Narrator~~ — folded into CV Parser's single call
-- ~~Salary Data agent in Phase 1~~ — kept as module for on-demand Salary Strategist
-
-New since 2026-05-23:
-- Three-tier model config — `TIER_FAST`/`TIER_NORMAL`/`TIER_STRONG` in config.py. Per-agent `agent_tier_map` maps agent name to tier string. `call_agent` resolves tier → (model_id, provider) automatically.
-- Legacy provider shims removed. All models route via DeepSeek (primary) and OpenAI (strong tier).
-- Multi-turn tool use is provider-agnostic via OpenAI-compat tool calling. `call_agent_with_tools` works with both DeepSeek and OpenAI.
+- Intent routing uses deterministic tier-0 rules with DeepSeek Flash fallback.
+- Interview Questions owns both design and prediction modes.
+- Ghost Job JD Scorer uses deterministic regex scoring plus fast-tier checks.
+- CV Parser owns structured CV import and career-narrative extraction.
+- Salary Strategist runs on demand.
+- `TIER_FAST`/`TIER_NORMAL`/`TIER_STRONG` in `config.py` map each agent to a
+  tier string. `call_agent` resolves tier -> `(model_id, provider)`
+  automatically.
+- All runtime models route through DeepSeek or OpenAI.
+- Multi-turn tool use is provider-agnostic through chat-completions tool
+  calling. `call_agent_with_tools` works with both DeepSeek and OpenAI.
 - Citation-grounded output uses inline document context and local validation.
 - Offer analysis uses local pypdf text extraction.
 - Application assist adds two agents: `application_answer_shaper` on the
   normal tier for user-facing final answers, and `memory_extractor` on the
   fast tier for optional background Memory Inbox enrichment.
-- Onboarding no longer collects writing samples and `/api/onboarding/finalise`
-  no longer calls the onboarding parser or style extractor. CV import remains
-  optional and finalise writes profile and career entries deterministically.
+- Onboarding finalise writes profile and career entries deterministically. CV
+  import remains optional, and voice guidance comes from explicit persona,
+  approved memory, and assist-loop feedback.
 
 ---
 
@@ -560,14 +563,12 @@ OUTPUT: Valid JSON matching STARPolish schema.
 
 # 9. Writing Style Extractor
 
-**Purpose:** Legacy/manual helper for building a `WritingStyleProfile` from
+**Purpose:** Manual/internal helper for building a `WritingStyleProfile` from
 explicit user-provided samples.
 
-**Status:** Deprecated for product onboarding. Do not call from
-`/api/onboarding/finalise` and do not add new user-facing sample collection.
-Voice now comes from product personas, approved memory, and assist-loop
-feedback. Keep this prompt only while old generators still accept
-`WritingStyleProfile` as an internal fallback shape.
+**Status:** Internal helper. `/api/onboarding/finalise` writes profile and
+career entries deterministically. Voice guidance comes from product personas,
+approved memory, and assist-loop feedback.
 
 **Model:** fast tier
 
@@ -1429,8 +1430,8 @@ if flags:
 | memory_extractor | Tier 1 + Tier 2 if flagged | Approved answers are user-supplied data that become durable memory |
 | salary_strategist | Tier 1 | JD + company research in prompt |
 | intent_router | Tier 1 | User message is untrusted |
-| onboarding_orchestrator | Tier 1 | Legacy parser only; user free text is untrusted |
-| style_extractor | Tier 1 only | Legacy explicit samples only; output schema is constrained |
+| onboarding_orchestrator | Tier 1 | Optional parser; user free text is untrusted |
+| style_extractor | Tier 1 only | Explicit samples only; output schema is constrained |
 | question_designer, star_polisher, self_audit | No wrap | Only receive already-validated structured data |
 
 ## Budget impact
@@ -1689,16 +1690,15 @@ Retry count: **maximum 2 retries per agent call**. More than 2 usually means a p
 
 ---
 
-## Model routing summary (2026-05-25)
+## Model routing summary
 
 | Task type | Model | Priority |
 |-----------|-------|----------|
 | Verdict (judgement, hard blockers, citation reasoning) | GPT-5.4 primary / DeepSeek Pro fallback | CRITICAL |
 | Self-audit, evidence-sensitive generators | DeepSeek V4 Pro | high |
-| Structured extraction, triage, routing, legacy style fallback | DeepSeek V4 Flash | low |
+| Structured extraction, triage, routing, and style extraction | DeepSeek V4 Flash | low |
 | Citation validation LLM checks | DeepSeek V4 Flash | low |
 | Prompt auditor (build-time only) | strong tier | critical |
 
-Active routing is tier-based through `agent_tier_map`. Do not wire runtime code
-to provider-specific legacy model ids; use `TIER_FAST`, `TIER_NORMAL`, and
-`TIER_STRONG`.
+Active routing is tier-based through `agent_tier_map`. Runtime code should use
+`TIER_FAST`, `TIER_NORMAL`, and `TIER_STRONG`.

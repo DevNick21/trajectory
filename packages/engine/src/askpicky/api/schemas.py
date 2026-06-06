@@ -104,11 +104,11 @@ class SessionDetailResponse(BaseModel):
 
     `research_bundle` and `verdict` are passed through as raw dicts so
     the API layer doesn't have to keep its types lockstep with every
-    domain-schema tweak. Frontend reads with TanStack Query and types
-    against the migration plan's TypeScript shapes.
+    domain-schema tweak. Frontend reads with TanStack Query and generated
+    TypeScript shapes.
 
     `progress_events` contains the durable event log from
-    session_progress_events — empty for pre-migration sessions.
+    session_progress_events.
     """
 
     id: str
@@ -175,8 +175,8 @@ class OnboardingFinaliseRequest(BaseModel):
 
     Structured stages are pre-validated by the frontend. Motivation and
     deal-breaker prose is split deterministically into retrievable preferences.
-    Writing-sample onboarding was removed; V2 style guidance comes from
-    explicit voice/persona settings and the browser companion feedback loop.
+    Voice guidance comes from explicit voice/persona settings and assist-loop
+    feedback.
     """
 
     # Structured fields — no parser needed.

@@ -39,8 +39,7 @@ Block-then-score pipeline:
    surface as `SponsorStatus.alternative_matches` so the verdict agent
    can disambiguate when scores cluster.
 
-Status mapping (LISTED / B_RATED / SUSPENDED / NOT_LISTED) is unchanged
-from the legacy module; only the matching logic has been refactored.
+Status mapping uses LISTED / B_RATED / SUSPENDED / NOT_LISTED.
 """
 
 from __future__ import annotations
@@ -686,7 +685,7 @@ def _topk_matches(
 
 
 # ---------------------------------------------------------------------------
-# Status mapping (unchanged from the legacy module)
+# Status mapping
 # ---------------------------------------------------------------------------
 
 

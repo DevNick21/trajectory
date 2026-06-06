@@ -96,7 +96,7 @@ def test_star_boost_flips_borderline_ranking(isolated_storage):
     _seed(insert_career_entry(_entry(
         "polish", "star_polish",
         "Led migration from monolith to microservices — Situation: "
-        "legacy PHP app with 90s p99. Task: new architecture. "
+        "older PHP app with 90s p99. Task: new architecture. "
         "Action: strangler fig with service boundaries by domain. "
         "Result: p99 down to 12s within six months.",
     )))

@@ -213,15 +213,15 @@ def _count_recent_psc_changes(psc_items: list[dict]) -> int:
 def _extract_corporate_parents(psc_items: list[dict]) -> list[dict]:
     """Pull corporate (non-individual) PSCs out of the raw PSC items.
 
-    Architecture gap #2 — when the JD's company is a subsidiary, the
-    Sponsor Register lookup against that exact name returns NOT_LISTED
-    but the parent IS often on the register. We return one row per
-    corporate parent for the orchestrator's parent-walk step.
+    When the JD's company is a subsidiary, the Sponsor Register lookup against
+    that exact name can return NOT_LISTED while the parent is on the register.
+    We return one row per corporate parent for the orchestrator's parent-walk
+    step.
 
     Filters:
       - Only `kind in {corporate-entity-person-with-significant-control,
         legal-person-person-with-significant-control}` — skip individuals.
-      - Skip parents whose `ceased_on` is set (no longer in control).
+      - Skip parents whose `ceased_on` is set.
       - Deduplicate by name.
 
     Returns dicts of {name, crn, kind}. Caller wraps in ParentCompany.
@@ -257,11 +257,9 @@ def _pick_best_search_hit(
 ) -> Optional[str]:
     """Score every CH search hit, return the best CRN above threshold.
 
-    Replaces the legacy `items[0]` blind pick. Uses the same rapidfuzz
-    ensemble as the sponsor matcher so scoring is consistent across
-    the pipeline. Falls back to `items[0]`'s CRN when no hit clears
-    the threshold (better something than nothing — but the caller can
-    look at confidence and discount the result).
+    Uses the same rapidfuzz ensemble as the sponsor matcher so scoring is
+    consistent across the pipeline. Falls back to `items[0]`'s CRN when no hit
+    clears the threshold so the caller can inspect a low-confidence candidate.
     """
     # Imported here so this module stays importable when the
     # entity_resolution package isn't on path (e.g. partial deploy).
@@ -312,10 +310,10 @@ async def lookup(
     fetch the profile + filings directly. Returns None on missing key
     or unreachable API.
 
-    Legacy path (`crn=None`): search + score every hit against the
-    input. The `aliases` argument lets the resolver pass in
-    sponsor-anchored canonical forms ("Octopus Energy Limited" when
-    the JD says "Octopus") so scoring has a second anchor.
+    Name-search path (`crn=None`): search and score every hit against the
+    input. The `aliases` argument lets the resolver pass in sponsor-anchored
+    canonical forms ("Octopus Energy Limited" when the JD says "Octopus") so
+    scoring has a second anchor.
     """
     if not settings.companies_house_api_key:
         logger.info("Companies House API key not set; skipping lookup.")

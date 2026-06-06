@@ -5,8 +5,7 @@ The banned list is authoritative in CLAUDE.md. Additions require a test
 case.
 
 The company-swap check is handled by the self-audit LLM itself — a
-purely heuristic version previously lived here and got removed because
-it false-flagged technical prose lacking proper nouns.
+heuristic-only check false-flags technical prose lacking proper nouns.
 """
 
 from __future__ import annotations

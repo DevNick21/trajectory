@@ -1,6 +1,6 @@
 """Unit tests for sponsor-register multi-signal matching.
 
-Covers the six optimisations layered onto the legacy WRatio-only path:
+Covers the six active matching behaviours:
   1. query-side alias expansion
   2. block-then-score (covered via the end-to-end lookup hitting an
      injected index)

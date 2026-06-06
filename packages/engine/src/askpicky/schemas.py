@@ -894,11 +894,7 @@ class ResearchBundle(BaseModel):
     sponsor_status: Optional[SponsorStatus] = None
     soc_check: Optional[SocCheckResult] = None
     ghost_job: GhostJobAssessment
-    # Salary signals removed from Phase 1 fan-out 2026-05-22 — most JDs
-    # don't post a band, so the comparison was noisy and the verdict
-    # leaned on signals that weren't there. `salary_strategist` (the
-    # on-demand intent) still computes live signals when the user
-    # explicitly asks for salary advice.
+    # Salary advice is computed by salary_strategist on demand.
     salary_signals: Optional[SalarySignals] = None
     red_flags: RedFlagsReport
     # Gazette insolvency notices for the resolved entity. Empty list
@@ -1380,7 +1376,7 @@ class ContentShieldVerdict(BaseModel):
 # ---------------------------------------------------------------------------
 # Company investigator output
 #
-# Kept for legacy stored research bundles and future scraper replacements.
+# Used by stored research bundles and future scraper replacements.
 # Conversion to `CompanyResearch` + `ExtractedJobDescription` is the
 # citation-enforcement boundary: every finding's `verbatim_snippet` must
 # appear in one of the pages actually fetched during the session.

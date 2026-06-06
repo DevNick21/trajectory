@@ -1,7 +1,7 @@
 """PII scrubber for user-provided text samples.
 
 Runs BEFORE user text reaches an LLM that synthesises new text from it
-(currently only the legacy `style_extractor`). The goal is to
+(currently the `style_extractor`). The goal is to
 prevent a user's email address, phone number, National Insurance number,
 postcode, or card number from being pickled into a WritingStyleProfile
 that can influence generated documents.

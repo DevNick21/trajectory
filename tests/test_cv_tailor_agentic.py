@@ -6,7 +6,7 @@ Fully mocked — no provider SDK, no FAISS, no SQLite. Exercises:
   - CVTailorToolExecutor tracks retrieved_ids
   - Post-hoc hallucination check (cite an un-retrieved entry → raise)
   - Min-3-search rule
-  - Dispatcher fallback: agentic raises → legacy runs
+  - Dispatcher degradation: agentic raises -> single-call path runs
 """
 
 from __future__ import annotations
@@ -288,8 +288,8 @@ async def test_happy_path_emits_cv(monkeypatch):
 async def test_hallucinated_citation_raises(monkeypatch):
     from askpicky import llm
 
-    # Duplicate the response sequence — `cv_tailor_agentic.generate`
-    # retries once on post-validation failure (PROCESS Entry 47 bug 12).
+    # Duplicate the response sequence because `cv_tailor_agentic.generate`
+    # retries once on post-validation failure.
     # The hallucination must still fail after both attempts; doubling
     # the script preserves the test's intent.
     one_attempt_responses = [
@@ -339,16 +339,10 @@ async def test_hallucinated_citation_raises(monkeypatch):
 
     monkeypatch.setattr(llm, "_enforce_credit_budget", fake_budget)
 
-    # PROCESS Entry 47 bugs 14 + 16:
-    #  - bug 14 relaxed the validator (entries-in-store-but-not-searched
-    #    are warnings, not failures)
-    #  - bug 16 added GRACEFUL DEGRADATION: when the only remaining
-    #    failures after retry are hallucinated citations, drop the bad
-    #    citations and ship the CV with the bullet text intact. Better
-    #    than failing the whole CV for a citation pointer issue.
-    # So this test now verifies the drop-not-raise behaviour: the CV
-    # comes back, the hallucinated citation has been removed from the
-    # bullet, and the bullet text is preserved.
+    # Entries-in-store-but-not-searched are warnings, while fabricated ids are
+    # failures. When the only remaining failures after retry are hallucinated
+    # citations, drop the bad citations and keep the CV bullet text intact.
+    # This verifies the drop-not-raise behaviour.
     cv = await cv_tailor_agentic.generate(
         jd=_jd(),
         research_bundle=_bundle(),

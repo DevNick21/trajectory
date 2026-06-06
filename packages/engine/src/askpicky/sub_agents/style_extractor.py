@@ -1,8 +1,7 @@
-"""Legacy Writing Style Extractor.
+"""Writing Style Extractor.
 
-Builds WritingStyleProfile from explicit user-provided samples. This is no
-longer part of web onboarding; new product work should use approved memory and
-assist-loop feedback instead.
+Builds WritingStyleProfile from explicit user-provided samples. Product
+generators should prefer approved memory and assist-loop feedback.
 System prompt verbatim from AGENTS.md §9.
 """
 
@@ -27,7 +26,7 @@ async def extract(
     samples: list[str],
     session_id: Optional[str] = None,
 ) -> WritingStyleProfile:
-    # Two filters run over samples before they reach the legacy style agent:
+    # Two filters run over samples before they reach the style agent:
     #   1. PII scrubber — strip email / phone / NINO / postcode / card /
     #      DOB so the WritingStyleProfile can't end up citing personal
     #      identifiers in generated cover letters.

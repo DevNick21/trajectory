@@ -1,6 +1,6 @@
 // TypeScript mirrors of the FastAPI response shapes. The generated OpenAPI
-// contract in apps/web/src/generated is now canonical for new routes; keep
-// these legacy hand-written shapes in sync until callers are migrated.
+// contract in apps/web/src/generated is canonical for new routes; keep these
+// hand-written shapes aligned with active callers.
 
 // ---------------------------------------------------------------------------
 // Profile

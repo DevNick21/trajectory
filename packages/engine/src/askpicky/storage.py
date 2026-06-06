@@ -26,11 +26,7 @@ from .config import settings
 
 
 def _utcnow() -> datetime:
-    """Naive UTC timestamp — drop-in replacement for the deprecated
-    `datetime.utcnow()`, behaviourally identical. Kept naive to stay
-    compatible with already-stored isoformat strings without timezone
-    suffix.
-    """
+    """Naive UTC timestamp for isoformat strings without timezone suffix."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -1026,9 +1022,8 @@ async def get_cached_page(url: str, max_age_hours: int = 24) -> Optional[str]:
 
 # Approximate $/token prices (verify before production). These feed
 # `estimate_cost_usd` to populate `llm_cost_log.cost_usd` at every
-# `log_llm_cost(...)` call. Hosted V2 reconciles actual usage through
-# the quota ledger; this local estimate is for dev budgets and smoke
-# rollups.
+# `log_llm_cost(...)` call. The local engine uses this estimate for dev
+# budgets and smoke rollups.
 _PRICING_LAST_VERIFIED = "2026-06-01"
 _PRICING_USD_PER_MTOK = {
     # DeepSeek (May 2026 — 75% promo active through 2026-05-31)
@@ -1040,7 +1035,6 @@ _PRICING_USD_PER_MTOK = {
     "gpt-5":       {"input": 2.50, "output": 15.00},
     "gpt-5.5":     {"input": 5.00, "output": 30.00},
     "gpt-4o":      {"input": 2.50, "output": 10.0},
-    # Cohere — REMOVED (dead code, no integration). See Process Entry 44.
 }
 
 

@@ -164,7 +164,7 @@ export default function SessionDetail() {
                </CardHeader>
                <CardContent className="text-[10px] font-mono space-y-1.5">
                  {s.progress_events.length === 0 ? (
-                   <p className="text-muted-foreground/50 italic">No progress recorded — pre-migration session.</p>
+                   <p className="text-muted-foreground/50 italic">No progress recorded for this session.</p>
                  ) : (
                    s.progress_events.map((e, i) => {
                      const type = e.type as string;

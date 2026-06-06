@@ -56,8 +56,8 @@ _NEGATIVE_CASES: dict[str, str] = {
     "ignore_previous": "Candidates from previous rounds will be ignored.",
     "disregard_previous": "Below are the previous roles held.",
     "forget_previous": "Nobody will forget the Monzo outage of 2019.",
-    # Carve-out removed — accept the JD false-positive rate and let Tier 2
-    # sort it. Negative case: text with no "you are / act as / …" trigger.
+    # Tier 2 handles borderline JD phrasing. Negative case: text with no
+    # "you are / act as / ..." trigger.
     "impersonation": "Users are typically engineers who want flexibility.",
     "role_marker_line": "Location: London (relocation is supported)",
     "role_marker_angle": "Use <strong>HTML</strong> to format replies.",

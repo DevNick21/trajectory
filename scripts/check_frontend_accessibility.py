@@ -1,9 +1,8 @@
 """Static frontend accessibility smoke checks.
 
-This is not a replacement for Playwright + axe. It is a cheap CI gate for
-the most common regression in the current React codebase: icon-only buttons
-without an accessible name. The V2 plan still requires real browser-level axe
-coverage; this script keeps obvious regressions out while that tooling lands.
+This is a cheap CI gate for the most common accessibility issue in the React
+codebase: icon-only buttons without an accessible name. Browser-level axe
+coverage remains the release gate for full interaction testing.
 """
 
 from __future__ import annotations

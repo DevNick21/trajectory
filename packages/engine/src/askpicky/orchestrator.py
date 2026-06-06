@@ -323,9 +323,9 @@ async def handle_forward_job(
     timeout = settings.phase1_agent_timeout_s
 
     async def run_reviews() -> list:
-        # Reviews aggregation was removed 2026-05-24. Company research is now served by the Playwright +
-        # Firecrawl pipeline in company_scraper. Glassdoor/Indeed reviews are
-        # scraped via Firecrawl fallback when available.
+        # Company research is served by the Playwright + Firecrawl pipeline in
+        # company_scraper. Review collection is empty unless a provider is
+        # explicitly wired in.
         await mark_started("reviews")
         if not reviews_future.done():
             reviews_future.set_result([])
@@ -435,14 +435,9 @@ async def handle_forward_job(
             await mark_complete("phase_1_ghost_job_jd_scorer")
             return result
         except (Exception, asyncio.TimeoutError) as exc:
-            # Match the sibling Phase 1C pattern (run_red_flags, run_soc):
-            # log + mark + return a conservative fallback rather than
-            # raising, since `asyncio.gather(..., return_exceptions=False)`
-            # below would otherwise abort the entire verdict on a single
-            # detector failure. LIKELY_REAL + LOW confidence is the
-            # least-confidently-bad default — the verdict will still
-            # surface other hard blockers but won't auto-flip to NO_GO
-            # on ghost-job grounds when we have no real signal.
+            # Ghost scoring degrades independently so Phase 1 fan-out can
+            # complete when this detector times out. The verdict still receives
+            # LOW-confidence ghost data and any other hard-blocker signals.
             timed_out = isinstance(exc, asyncio.TimeoutError)
             log.warning(
                 "ghost_job_detector failed (timed_out=%s): %s", timed_out, exc
@@ -539,19 +534,15 @@ async def handle_forward_job(
         sponsor_status=sponsor_status,
         soc_check=soc_result,
         ghost_job=ghost_assessment,
-        # Salary signals dropped from Phase 1 fan-out 2026-05-22.
-        # `salary_strategist` (on-demand intent) still computes
-        # live ASHE-anchored advice when the user asks.
+        # Salary advice is computed by salary_strategist on demand.
         salary_signals=None,
         red_flags=red_flags_report,
         gazette_signals=gazette_signals,
         bundle_completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
-    # PROCESS Entry 45 — find-or-create the persistent Job entity. Same
-    # role at same company across multiple URL forwards = one job_id.
-    # Stamped on the Session so the app can locate "that Acme role"
-    # later by company + title rather than session-recency.
+    # Persist one Job entity per company/title pair so repeated URL forwards
+    # resolve to the same job_id.
     try:
         from .storage import update_session, upsert_job
         job_id = await upsert_job(
@@ -592,8 +583,7 @@ async def handle_forward_job(
     # Every scraped string must go through the Content Shield before reaching
     # a high-stakes agent. The verdict agent is the highest-stakes call in the
     # pipeline; Tier 2 runs when Tier 1 flags anything. A REJECT short-circuits
-    # to a minimal fallback verdict instead of shipping an agent-steered
-    # decision.
+    # to a minimal fallback verdict.
     shielded_bundle, shield_verdict = await _shield_bundle(bundle, "verdict")
     if shield_verdict and shield_verdict.recommended_action == "REJECT":
         log.warning(
@@ -740,8 +730,8 @@ async def _walk_parent_sponsors(
     if not matched_any:
         return sponsor_status
 
-    # Demote status to AMBIGUOUS so the verdict prompt's tier override
-    # routes NOT_LISTED → stretch concern instead of hard blocker.
+    # Demote status to AMBIGUOUS so the verdict treats subsidiary/parent
+    # sponsor ambiguity as a stretch concern.
     return sponsor_status.model_copy(
         update={
             "status": "AMBIGUOUS",
@@ -1655,16 +1645,14 @@ async def compute_job_search_context(
 
 
 # ---------------------------------------------------------------------------
-# Fallback style (onboarding no longer collects samples)
+# Fallback style
 # ---------------------------------------------------------------------------
 
 
 def _fallback_style(user_id: str) -> WritingStyleProfile:
     """Neutral style profile used when no approved voice signal exists.
 
-    Threads the real user_id through so storage logs, audits, and later
-    debugging can tell which user hit the fallback — "unknown" as a
-    sentinel made log grepping harder without helping anyone.
+    Threads the real user_id through storage logs and audits.
     """
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     return WritingStyleProfile(
@@ -1679,7 +1667,7 @@ def _fallback_style(user_id: str) -> WritingStyleProfile:
         examples=[],
         source_sample_ids=[],
         sample_count=0,
-        low_confidence_reason="onboarding does not collect writing samples",
+        low_confidence_reason="no approved writing samples available",
         created_at=now,
         updated_at=now,
     )

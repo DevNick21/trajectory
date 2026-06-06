@@ -19,12 +19,8 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
-# MEMORY_TOOL_DEFINITION lived here as a client-tool registration for
-# agents that want tool-use-driven recall. salary_strategist /
-# draft_reply / likely_questions all pre-fetch via `recall()` and
-# inject the results into the prompt instead, so no agent ever needs
-# to dispatch the tool. Removed 2026-04-26 in the dead-code sweep —
-# recover via `git log` when a tool-use call site materialises.
+# salary_strategist, draft_reply, and likely_questions pre-fetch via `recall()`
+# and inject the results into the prompt.
 
 
 async def recall(

@@ -1,7 +1,7 @@
 """Content Shield — untrusted-content sanitiser.
 
 Every piece of externally-sourced content (scraped pages, JD text, user
-messages, recruiter emails, uploaded files, or legacy style samples) MUST pass
+messages, recruiter emails, uploaded files, or writing samples) MUST pass
 through this module before reaching any agent's prompt. Two tiers:
 
   Tier 1  — deterministic regex filter. Zero cost, zero latency. Always

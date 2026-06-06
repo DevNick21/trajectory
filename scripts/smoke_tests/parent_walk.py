@@ -1,4 +1,4 @@
-"""Smoke: parent/subsidiary CRN walk (architecture gap #2).
+"""Smoke: parent/subsidiary CRN walk.
 
 Two layers:
 
@@ -44,7 +44,7 @@ _PSC_FIXTURE = [
         "name": "Defunct Parent Ltd",
         "kind": "corporate-entity-person-with-significant-control",
         "identification": {"registration_number": "00112233"},
-        "ceased_on": "2024-03-15",  # No longer in control; must skip.
+        "ceased_on": "2024-03-15",  # Ceased control; must skip.
     },
     {
         # Duplicate of ACME HOLDINGS PLC — must dedupe.

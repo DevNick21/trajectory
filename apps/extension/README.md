@@ -1,7 +1,5 @@
 # AskPicky Chrome Companion
 
-*Last updated 2026-06-05.*
-
 The public companion is a low-permission MV3 extension for the local/self-hosted
 AskPicky engine.
 

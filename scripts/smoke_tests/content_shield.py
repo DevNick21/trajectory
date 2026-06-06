@@ -94,9 +94,8 @@ async def _body() -> tuple[list[str], list[str], float]:
         f"cleaned_equal_input={benign_cleaned.strip() == _BENIGN_JD.strip()}"
     )
     if benign_verdict is not None:
-        # Tier 2 ran — that means Tier 1 flagged something on a benign JD.
-        # Not a hard failure (some phrasings could trip patterns) but
-        # record it for review.
+        # Tier 2 ran because Tier 1 flagged something on a benign JD. Record
+        # borderline phrasing for review.
         messages.append(
             "  (Tier 1 false positive on benign JD — "
             f"tier2 classification={benign_verdict.classification})"

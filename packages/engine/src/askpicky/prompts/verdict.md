@@ -23,9 +23,9 @@ ASK_FIRST  — critical unknown that must be resolved before applying.
               Ask the recruiter about the specific unknown (e.g. is
               sponsorship actually available? what is the salary band?
               is the client name known for an agency posting?).
-PASS       — not worth applying right now. No hard blocker, but the
-              fit is weak, confidence is low, or the time investment
-              doesn't justify the expected outcome. NOT a hard stop.
+PASS       — low-value application right now. Hard blockers are absent,
+              but fit is weak, confidence is low, or the time investment
+              doesn't justify the expected outcome.
 BLOCKED    — hard-blocked. Do not apply. Fatal signals: company
               dissolved, active Gazette insolvency notice, confirmed
               non-sponsor for a visa holder, SOC ineligible, etc.
@@ -92,9 +92,9 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
 1. sponsor_register.status == NOT_LISTED -> HARD BLOCKER
    (type: NOT_ON_SPONSOR_REGISTER).
 
-   **AMBIGUITY TIER OVERRIDE (added 2026-05-22):** NOT_LISTED alone
+   **AMBIGUITY TIER OVERRIDE:** NOT_LISTED alone
    is NOT a hard blocker when ANY of these conditions are true
-   (architecture gaps #1 + #2):
+   (entity ambiguity):
 
    - sponsor_register.match_confidence < 0.95
    - sponsor_register.alternative_matches is non-empty
@@ -115,7 +115,7 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
    by the parent (a common arrangement) or whether the subsidiary
    has its own separate licence (it usually doesn't).
 
-   **AGENCY POSTING TIER OVERRIDE (added 2026-05-22):** when
+   **AGENCY POSTING TIER OVERRIDE:** when
    extracted_jd.is_agency_post == true, the Sponsor Register lookup
    ran against the recruitment agency, not the actual employer.
    NOT_LISTED becomes a stretch concern AGENCY_POSTING (not a hard
@@ -124,7 +124,7 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
    the client and recommend the user search the Sponsor Register
    for that name themselves before applying. If the client is
    anonymous, recommend they ask the recruiter for the client's
-   legal name before committing time. Architecture gap #5.
+   legal name before committing time.
 
 2. sponsor_register.status in {B_RATED, SUSPENDED} -> HARD BLOCKER
    (type: SPONSOR_B_RATED or SPONSOR_SUSPENDED).
@@ -139,10 +139,9 @@ ADDITIONAL HARD BLOCKERS - VISA HOLDER USERS (all → BLOCKED when confirmed):
 4. soc_check.soc_code not in appendix_skilled_occupations
    -> HARD BLOCKER (type: SOC_INELIGIBLE).
 
-NOTE: Salary-vs-market floor checks are NOT hard blockers (removed
-2026-05-22). Most UK JDs don't post a band so the comparison fired
-on absent data. The on-demand salary_strategist still computes
-ASHE-anchored advice when the user asks.
+NOTE: Salary-vs-market floor checks are advisory. Most UK JDs omit a band, so
+the on-demand salary_strategist computes ASHE-anchored advice when the user
+asks.
 
 STRETCH CONCERNS (NOT HARD BLOCKERS — they can downgrade the decision
 from STRONG_GO → GO → TRY_ANYWAY → ASK_FIRST → PASS but alone never
@@ -194,8 +193,8 @@ COMPOUND DISTRESS HEURISTIC:
 When TWO OR MORE of {COMPANIES_HOUSE_DISTRESS, DIRECTOR_CHURN,
 CHARGES_FLURRY, PSC_CHURN} fire together, treat that as a single
 compound signal worth dropping confidence by at least 20 points.
-A company isn't on fire because of one of these — it's on fire
-when several light up at once.
+One weak signal is advisory. Several simultaneous distress signals justify a
+larger confidence drop.
 
 MOTIVATION FIT CHECK (mandatory, regardless of user_type):
 

@@ -33,7 +33,7 @@ When you've gathered enough evidence, emit the final CV via the
    ≤ 8.
 5. Emit the final CVOutput via `emit_structured_output`.
 
-# Hard rules — same as the legacy path
+# Hard rules
 
 1. Every bullet cites a specific career_entry. Use inline cite markers
    `[ce:entry_id]` in the bullet text during generation — the formatter

@@ -1,14 +1,4 @@
-"""Regression tests for pre-migration bug fixes.
-
-Bug 1: `good_role_signal` was missing from `CareerEntry.kind` Literal,
-       so onboarding finalisation died with ValidationError every time
-       the user supplied a green-flag answer.
-
-Bug 2: orchestrator's `run_ghost` re-raised on detector failure inside
-       `asyncio.gather(..., return_exceptions=False)`, killing the
-       entire verdict pipeline. Sibling agents catch + return a
-       fallback; ghost should match.
-"""
+"""Schema and pipeline contracts."""
 
 from __future__ import annotations
 
@@ -20,13 +10,13 @@ from askpicky.schemas import CareerEntry
 
 
 # ---------------------------------------------------------------------------
-# Bug 1 — kind Literal must accept "good_role_signal"
+# Career-entry schema contracts
 # ---------------------------------------------------------------------------
 
 
 def test_career_entry_accepts_good_role_signal_kind():
     """The onboarding finaliser writes CareerEntry rows with
-    kind='good_role_signal' — this must validate."""
+    kind='good_role_signal'."""
     entry = CareerEntry(
         entry_id="test-id",
         user_id="u1",
@@ -49,8 +39,7 @@ def test_career_entry_kind_literal_covers_all_onboarding_writes():
     }
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     for kind in onboarding_kinds:
-        # Construction = validation in pydantic v2; just instantiating
-        # would-be-invalid kinds raises ValidationError.
+        # Construction performs validation in pydantic v2.
         CareerEntry(
             entry_id=f"test-{kind}",
             user_id="u1",
@@ -61,20 +50,19 @@ def test_career_entry_kind_literal_covers_all_onboarding_writes():
 
 
 # ---------------------------------------------------------------------------
-# Bug 2 — ghost detector failure must not abort Phase 1
+# Ghost detector degradation contract
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_ghost_detector_failure_yields_fallback_not_raise(monkeypatch):
     """Force `ghost_job_detector.score` to raise; verify run_ghost
-    returns a `GhostJobAssessment` fallback rather than propagating.
+    returns a `GhostJobAssessment` fallback.
 
     We exercise the closure indirectly: import orchestrator, build a
     minimal `run_ghost` by re-using the same try/except shape via
-    monkeypatch on the agent. The contract under test is "the
-    asyncio.gather(..., return_exceptions=False) caller does not see
-    an exception when the detector fails."
+    monkeypatch on the agent. The contract under test is independent
+    degradation when the detector fails.
     """
     from askpicky.schemas import GhostJobAssessment
     from askpicky.sub_agents import ghost_job_detector
@@ -84,9 +72,7 @@ async def test_ghost_detector_failure_yields_fallback_not_raise(monkeypatch):
 
     monkeypatch.setattr(ghost_job_detector, "score", _boom)
 
-    # Replicate the closure shape from orchestrator.handle_forward_job —
-    # if this test goes red it means someone changed the closure to
-    # re-raise again.
+    # Replicate the closure shape from orchestrator.handle_forward_job.
     async def run_ghost():
         try:
             return await ghost_job_detector.score()

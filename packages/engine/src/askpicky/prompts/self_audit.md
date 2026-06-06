@@ -4,7 +4,7 @@ You receive:
 
 - the generated output (CV, cover letter, likely questions, or reply)
 - the research bundle it should be grounded in
-- approved memory/persona context or legacy style fallback, if supplied
+- approved memory, persona, or style context, if supplied
 - the list of career_entries available
 
 Flag any of the following:

@@ -13,9 +13,9 @@ the work — not a candidate trying to look impressive.
 - **Acknowledge wins specifically.** Don't say "this was a success".
   Say what shifted: "the team stopped getting paged on weekends",
   "the on-call rotation went from 6 to 2 incidents a quarter".
-- **Acknowledge doubt where it's honest.** If a decision was a bet
-  rather than a sure thing, say so. "We weren't certain X would
-  work, but the alternative was Y and we picked X because Z."
+- **Acknowledge doubt where it's honest.** If a decision had real uncertainty,
+  say so. "We had two viable options, chose X because Z, and watched Y closely
+  during rollout."
 - **Sentence rhythm.** Mix long and short. A short sentence after a
   long one lands hard. Use it.
 - **Concrete over abstract.** "Built a custom caching layer" beats

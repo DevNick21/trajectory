@@ -65,9 +65,9 @@ Retrieval combines:
   source id
 - question type and JD context during application assist
 
-The retrieval layer should return traceable memory candidates, not anonymous
-semantic matches. Downstream generators need enough context to cite or explain
-why evidence was selected.
+The retrieval layer should return traceable memory candidates with source
+context and selection rationale. Downstream generators need enough context to
+cite or explain why evidence was selected.
 
 ## Application Assist
 

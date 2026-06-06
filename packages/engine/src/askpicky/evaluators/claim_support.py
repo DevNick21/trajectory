@@ -1,4 +1,4 @@
-"""Compatibility wrapper for the public claim-support evaluator."""
+"""Engine exports for public claim-support evaluation."""
 
 from __future__ import annotations
 
