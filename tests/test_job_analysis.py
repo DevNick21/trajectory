@@ -17,3 +17,8 @@ def test_local_jd_analysis_detects_skills_and_filters() -> None:
     assert "typescript" in analysis.required_skills
     assert "right to work" in {item.label for item in analysis.hard_filters}
     assert analysis.application_priority == "maybe_apply_after_checking_filters"
+    assert analysis.role_breakdown
+    assert analysis.evidence_checkpoints
+    assert any("python" in item.requirement for item in analysis.evidence_checkpoints)
+    assert analysis.missing_evidence_prompts
+    assert analysis.unsupported_claim_warnings

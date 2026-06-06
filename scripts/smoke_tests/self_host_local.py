@@ -16,6 +16,11 @@ async def run() -> SmokeResult:
         tmp = prepare_environment()
 
         from askpicky.evaluators import evaluate_answer_claim_support
+        from askpicky.applications import (
+            create_application_record,
+            list_applications,
+            update_application_status,
+        )
         from askpicky.parsers import analyse_job_description
         from askpicky.privacy import export_user_data, hard_delete_user_data
         from askpicky.schemas import AnswerAttempt, CareerEntry, MemorySuggestion, UserProfile
@@ -95,6 +100,20 @@ async def run() -> SmokeResult:
                 updated_at=now,
             )
         )
+        await create_application_record(
+            user_id=user_id,
+            session_id="self-host-session",
+            company_name="Local Company",
+            role_title=analysis.role_title,
+            job_url=None,
+            verdict_decision="TRY_ANYWAY",
+        )
+        updated_application = await update_application_status(
+            session_id="self-host-session",
+            new_status="applied",
+            notes="Submitted manually from the local tracker.",
+        )
+        applications = await list_applications(user_id=user_id)
 
         exported = await export_user_data(user_id=user_id)
         deleted = await hard_delete_user_data(user_id=user_id)
@@ -107,8 +126,14 @@ async def run() -> SmokeResult:
             failures.append("Claim support did not classify the evidence-backed answer as supported.")
         if not exported["career_entries"] or not exported["answer_attempts"]:
             failures.append("Privacy export did not include local CV and answer records.")
+        if not exported["application_tracker"]:
+            failures.append("Privacy export did not include the local application tracker row.")
+        if not applications or updated_application is None or updated_application.status != "applied":
+            failures.append("Manual tracker did not create and update the local application row.")
         if deleted.get("career_entries", 0) < 1 or deleted.get("answer_attempts", 0) < 1:
             failures.append("Privacy hard-delete did not remove local CV and answer records.")
+        if deleted.get("application_tracker", 0) < 1:
+            failures.append("Privacy hard-delete did not remove the local application tracker row.")
 
         messages = [f"local SQLite path: {tmp / 'smoke.db'}"]
         return messages, failures, 0.0

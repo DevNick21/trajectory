@@ -1314,6 +1314,33 @@
         "title": "CritiqueDraftResponse",
         "type": "object"
       },
+      "EvidenceCheckpoint": {
+        "properties": {
+          "requirement": {
+            "title": "Requirement",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "needs_profile",
+              "needs_confirmation"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suggested_evidence": {
+            "title": "Suggested Evidence",
+            "type": "string"
+          }
+        },
+        "required": [
+          "requirement",
+          "status",
+          "suggested_evidence"
+        ],
+        "title": "EvidenceCheckpoint",
+        "type": "object"
+      },
       "ExperienceAtom": {
         "description": "Smallest sourced memory unit used by application-assist recall.",
         "properties": {
@@ -1621,6 +1648,13 @@
             "title": "Application Priority",
             "type": "string"
           },
+          "evidence_checkpoints": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceCheckpoint"
+            },
+            "title": "Evidence Checkpoints",
+            "type": "array"
+          },
           "hard_filters": {
             "items": {
               "$ref": "#/components/schemas/HardFilter"
@@ -1642,9 +1676,23 @@
             "title": "Required Skills",
             "type": "array"
           },
+          "role_breakdown": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Role Breakdown",
+            "type": "array"
+          },
           "role_title": {
             "title": "Role Title",
             "type": "string"
+          },
+          "unsupported_claim_warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unsupported Claim Warnings",
+            "type": "array"
           }
         },
         "required": [

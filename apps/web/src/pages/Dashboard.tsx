@@ -421,6 +421,18 @@ export default function Dashboard() {
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Role</p>
                   <p className="text-white font-medium">{localAnalysis.role_title}</p>
                 </div>
+                {localAnalysis.role_breakdown.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Role breakdown</p>
+                    <ul className="mt-2 space-y-2">
+                      {localAnalysis.role_breakdown.map((item) => (
+                        <li key={item} className="rounded-md border border-canvas bg-background/40 p-3 text-muted-foreground">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Application priority</p>
                   <p className="font-mono text-primary">{localAnalysis.application_priority.replace(/_/g, " ")}</p>
@@ -449,6 +461,46 @@ export default function Dashboard() {
                         </span>
                       ))}
                     </div>
+                  </div>
+                )}
+                {localAnalysis.evidence_checkpoints.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Evidence checkpoints</p>
+                    <ul className="mt-2 space-y-2">
+                      {localAnalysis.evidence_checkpoints.map((item) => (
+                        <li key={`${item.requirement}-${item.status}`} className="rounded-md border border-primary/20 bg-primary/5 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-white">{item.requirement}</span>
+                            <span className="rounded border border-primary/20 px-1.5 py-0.5 text-[10px] uppercase tracking-widest text-primary">
+                              {item.status.replace(/_/g, " ")}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-muted-foreground">{item.suggested_evidence}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {localAnalysis.missing_evidence_prompts.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Missing evidence</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">
+                      {localAnalysis.missing_evidence_prompts.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {localAnalysis.unsupported_claim_warnings.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Unsupported-claim warnings</p>
+                    <ul className="mt-2 space-y-2">
+                      {localAnalysis.unsupported_claim_warnings.map((item) => (
+                        <li key={item} className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-muted-foreground">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 <div>

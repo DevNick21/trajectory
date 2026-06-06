@@ -139,11 +139,14 @@ cp .env.example .env
 # Set ASKPICKY_LOCAL_MODE=1 for self-hosted mode without managed AI credentials.
 
 # Web frontend
-cd apps/web && npm install && npm run dev
+cd apps/web && npm install && cd ../..
 
-# Backend (in another shell)
-uvicorn askpicky.api.app:app --reload --port 8000
+# API + web together
+python scripts/run_local_dev.py
 ```
+
+For split terminals, run `python scripts/run_api.py` and
+`npm run --prefix apps/web dev`.
 
 ---
 
@@ -155,6 +158,9 @@ python -m scripts.smoke_tests.run_all --cheap
 
 # Local self-host path only
 python -m scripts.smoke_tests.run_all --only self_host_local
+
+# Current-tree public-surface guardrail
+python scripts/check_public_surface.py
 
 # Application-assist memory/API contract only
 python -m scripts.smoke_tests.run_all --only application_memory,api_assist,api_contract

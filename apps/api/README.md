@@ -11,3 +11,9 @@ Run locally from the repository root:
 ```bash
 python scripts/run_api.py
 ```
+
+Run the API and web app together:
+
+```bash
+python scripts/run_local_dev.py
+```

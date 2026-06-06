@@ -5,16 +5,22 @@ The local engine runs from the repository root:
 ```bash
 pip install -e .
 pip install -r requirements.txt
-export ASKPICKY_LOCAL_MODE=1
-python scripts/run_api.py
-cd apps/web && npm install && npm run dev
+cd apps/web && npm install && cd ../..
+python scripts/run_local_dev.py
 ```
 
-On Windows PowerShell use:
+`scripts/run_local_dev.py` sets `ASKPICKY_LOCAL_MODE=1` and
+`DEMO_USER_ID=local-user` when they are not already set. It starts:
+
+- FastAPI at `http://127.0.0.1:8000`
+- Vite at `http://127.0.0.1:5173`
+
+For split terminals, run:
 
 ```powershell
 $env:ASKPICKY_LOCAL_MODE = "1"
 python scripts/run_api.py
+npm run --prefix apps/web dev
 ```
 
 The FastAPI application package lives at `packages/engine/src`. Public package

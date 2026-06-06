@@ -626,11 +626,20 @@ export interface LocalHardFilter {
   severity: "hard" | "check";
 }
 
+export interface LocalEvidenceCheckpoint {
+  requirement: string;
+  status: "needs_profile" | "needs_confirmation";
+  suggested_evidence: string;
+}
+
 export interface LocalJobAnalysis {
   role_title: string;
+  role_breakdown: string[];
   required_skills: string[];
   hard_filters: LocalHardFilter[];
+  evidence_checkpoints: LocalEvidenceCheckpoint[];
   missing_evidence_prompts: string[];
+  unsupported_claim_warnings: string[];
   application_priority: ApplicationPriority;
   answer_strategy: string[];
 }

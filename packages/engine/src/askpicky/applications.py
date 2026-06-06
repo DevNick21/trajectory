@@ -12,8 +12,7 @@ from typing import Any, Literal, Optional
 import aiosqlite
 from pydantic import BaseModel
 
-from .config import settings
-from .storage import _ensure_db
+from .storage import _connect, _ensure_db
 
 
 ApplicationStatus = Literal[
@@ -78,7 +77,7 @@ async def create_application_record(
     """
     await _ensure_db()
     now = _now()
-    async with aiosqlite.connect(settings.sqlite_db_path) as db:
+    async with await _connect() as db:
         async with db.execute(
             "SELECT id FROM application_tracker WHERE session_id = ?",
             (session_id,),
@@ -122,7 +121,7 @@ async def update_application_status(
     """Set a tracker row's status. Returns the updated row or None."""
     await _ensure_db()
     now = _now()
-    async with aiosqlite.connect(settings.sqlite_db_path) as db:
+    async with await _connect() as db:
         applied_at_clause = ""
         if new_status == "applied":
             applied_at_clause = ", applied_at = COALESCE(applied_at, ?)"
@@ -160,7 +159,7 @@ async def list_applications(
 ) -> list[ApplicationRecord]:
     """List a user's applications, newest first."""
     await _ensure_db()
-    async with aiosqlite.connect(settings.sqlite_db_path) as db:
+    async with await _connect() as db:
         if status_in:
             placeholders = ",".join("?" * len(status_in))
             sql = (
