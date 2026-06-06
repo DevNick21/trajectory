@@ -3,11 +3,9 @@
 .env.local
 
 # Docs
-# Keep local/generated notes ignored, but track the canonical pipeline doc.
+# Keep local/generated notes ignored. Public docs must be explicitly unignored.
 docs/*
 !docs/
-!docs/WORKING_PIPELINE.md
-!docs/OPEN_CORE_STRATEGY.md
 !docs/architecture/
 !docs/architecture/**
 !docs/self-hosting/
@@ -85,7 +83,7 @@ desktop.ini
 *.swp
 *.swo
 
-# Claude Code runtime artefacts (settings.json + skills directory stay tracked)
-.claude/scheduled_tasks.lock
-.claude/scheduled_tasks/
-.claude/plans/
+# Agent/runtime configuration
+.claude/
+.agents/
+.github/
