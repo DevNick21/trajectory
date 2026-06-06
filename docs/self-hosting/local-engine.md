@@ -23,6 +23,19 @@ python scripts/run_api.py
 npm run --prefix apps/web dev
 ```
 
+In Git Bash, use shell environment syntax:
+
+```bash
+export ASKPICKY_LOCAL_MODE=1
+python scripts/run_local_dev.py
+```
+
+If Windows blocks port 8000, choose another API port:
+
+```bash
+API_PORT=8011 python scripts/run_local_dev.py
+```
+
 The FastAPI application package lives at `packages/engine/src`. Public package
 boundaries live under `packages/core`, `packages/parsers`,
 `packages/evaluators`, `packages/privacy`, and `packages/ai`. The frontend

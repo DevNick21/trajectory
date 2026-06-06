@@ -21,6 +21,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "apps" / "web"
+PACKAGE_SRC_DIRS = [
+    ROOT / "packages" / "engine" / "src",
+    ROOT / "packages" / "core" / "src",
+    ROOT / "packages" / "parsers" / "src",
+    ROOT / "packages" / "retrieval" / "src",
+    ROOT / "packages" / "evaluators" / "src",
+    ROOT / "packages" / "privacy" / "src",
+    ROOT / "packages" / "ai" / "src",
+]
 
 
 def _npm() -> str:
@@ -52,6 +61,15 @@ def main() -> int:
     env.setdefault("DEMO_USER_ID", "local-user")
     env.setdefault("API_PORT", "8000")
     env.setdefault("API_RELOAD", "1")
+    env.setdefault("VITE_API_TARGET", f"http://127.0.0.1:{env['API_PORT']}")
+
+    package_path = os.pathsep.join(str(path) for path in PACKAGE_SRC_DIRS)
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        f"{package_path}{os.pathsep}{existing_pythonpath}"
+        if existing_pythonpath
+        else package_path
+    )
 
     api = _spawn(
         "api",
@@ -67,7 +85,7 @@ def main() -> int:
     )
 
     print("[local-dev] web: http://127.0.0.1:5173", flush=True)
-    print("[local-dev] api: http://127.0.0.1:8000/health", flush=True)
+    print(f"[local-dev] api: http://127.0.0.1:{env['API_PORT']}/health", flush=True)
     print("[local-dev] press Ctrl+C to stop both processes", flush=True)
 
     try:

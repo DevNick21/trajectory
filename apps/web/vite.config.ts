@@ -2,7 +2,9 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Vite dev server proxies /api → FastAPI on :8000. SSE works natively
+const apiTarget = process.env.VITE_API_TARGET ?? "http://localhost:8000";
+
+// Vite dev server proxies /api → FastAPI. SSE works natively
 // over the proxy as long as we don't enable buffering. The plain
 // http-proxy adapter Vite uses respects Cache-Control: no-cache,
 // which is the only header SSE streams need.
@@ -17,11 +19,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: apiTarget,
         changeOrigin: true,
       },
       "/health": {
-        target: "http://localhost:8000",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
