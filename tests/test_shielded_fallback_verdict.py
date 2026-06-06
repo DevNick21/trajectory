@@ -1,7 +1,7 @@
 """Test the Content Shield REJECT → fallback verdict path.
 
 Per AGENTS.md §18, when Tier 2 returns recommended_action=REJECT for a
-forward_job run, the orchestrator must produce a minimal NO_GO verdict
+forward_job run, the orchestrator must produce a minimal BLOCKED verdict
 with CONTENT_INTEGRITY_CONCERN as a stretch concern — not bail, not
 ship an agent-generated verdict against shielded input.
 
@@ -34,7 +34,7 @@ def _load_bundle() -> ResearchBundle:
     return ResearchBundle.model_validate(data)
 
 
-def test_fallback_verdict_is_no_go_with_content_integrity_concern() -> None:
+def test_fallback_verdict_is_blocked_with_content_integrity_concern() -> None:
     bundle = _load_bundle()
     shield_verdict = ContentShieldVerdict(
         classification="MALICIOUS",
@@ -45,7 +45,7 @@ def test_fallback_verdict_is_no_go_with_content_integrity_concern() -> None:
 
     verdict = _build_shielded_fallback_verdict(bundle, shield_verdict)
 
-    assert verdict.decision == "NO_GO"
+    assert verdict.decision == "BLOCKED"
     assert verdict.hard_blockers == []
     assert len(verdict.stretch_concerns) == 1
     assert verdict.stretch_concerns[0].type == "CONTENT_INTEGRITY_CONCERN"

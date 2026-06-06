@@ -21,7 +21,7 @@ class HardFilter(BaseModel):
 
 class EvidenceCheckpoint(BaseModel):
     requirement: str
-    status: Literal["needs_profile", "needs_confirmation"]
+    status: Literal["matched", "missing", "needs_profile", "needs_confirmation"]
     suggested_evidence: str
 
 

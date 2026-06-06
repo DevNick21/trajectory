@@ -573,6 +573,22 @@ export const openApiSchema = {
       "ApplicationRecord": {
         "description": "The user-visible application-tracker row.",
         "properties": {
+          "application_priority": {
+            "anyOf": [
+              {
+                "enum": [
+                  "worth_applying_with_tailoring",
+                  "maybe_apply_after_checking_filters",
+                  "low_priority"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Priority"
+          },
           "applied_at": {
             "anyOf": [
               {
@@ -593,6 +609,16 @@ export const openApiSchema = {
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "evidence_snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalJobAnalysis"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "anyOf": [
@@ -621,6 +647,16 @@ export const openApiSchema = {
             "title": "Last Status At",
             "type": "string"
           },
+          "local_analysis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocalJobAnalysis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "notes": {
             "anyOf": [
               {
@@ -632,12 +668,32 @@ export const openApiSchema = {
             ],
             "title": "Notes"
           },
+          "raw_jd_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Jd Text"
+          },
           "role_title": {
             "title": "Role Title",
             "type": "string"
           },
           "session_id": {
             "title": "Session Id",
+            "type": "string"
+          },
+          "source": {
+            "default": "forward_job",
+            "enum": [
+              "forward_job",
+              "local_jd"
+            ],
+            "title": "Source",
             "type": "string"
           },
           "status": {
@@ -681,6 +737,54 @@ export const openApiSchema = {
           "created_at"
         ],
         "title": "ApplicationRecord",
+        "type": "object"
+      },
+      "ApplicationResponse": {
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRecord"
+          }
+        },
+        "required": [
+          "application"
+        ],
+        "title": "ApplicationResponse",
+        "type": "object"
+      },
+      "ApplicationStatusRequest": {
+        "properties": {
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "status": {
+            "enum": [
+              "forwarded",
+              "applied",
+              "no_response",
+              "rejected_screen",
+              "rejected_interview",
+              "rejected_offer",
+              "offer_received",
+              "offer_accepted",
+              "offer_declined"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ApplicationStatusRequest",
         "type": "object"
       },
       "ApproveAnswerRequest": {
@@ -1323,6 +1427,8 @@ export const openApiSchema = {
           },
           "status": {
             "enum": [
+              "matched",
+              "missing",
               "needs_profile",
               "needs_confirmation"
             ],
@@ -1629,6 +1735,33 @@ export const openApiSchema = {
           "analysis"
         ],
         "title": "JobAnalysisResponse",
+        "type": "object"
+      },
+      "LocalApplicationRequest": {
+        "properties": {
+          "company_name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Name"
+          },
+          "jd_text": {
+            "maxLength": 120000,
+            "minLength": 40,
+            "title": "Jd Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jd_text"
+        ],
+        "title": "LocalApplicationRequest",
         "type": "object"
       },
       "LocalJobAnalysis": {
@@ -3372,6 +3505,95 @@ export const openApiSchema = {
           }
         },
         "summary": "Get Applications"
+      }
+    },
+    "/api/applications/local": {
+      "post": {
+        "description": "Save a pasted job description into the manual tracker.",
+        "operationId": "save_local_application_api_applications_local_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalApplicationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Local Application"
+      }
+    },
+    "/api/applications/{session_id}/status": {
+      "patch": {
+        "description": "Update a manual tracker row owned by the current user.",
+        "operationId": "set_application_status_api_applications__session_id__status_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Application Status"
       }
     },
     "/api/assist/approve": {

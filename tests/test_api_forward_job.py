@@ -4,7 +4,7 @@ handle_forward_job is fully mocked — no real LLM, no scrape. The mock
 emits a few `agent_complete` events through the supplied emitter and
 returns a synthetic verdict. Tests assert:
 
-  - Auth gate: 404 when no profile, 422 when body missing
+  - Local default profile path, 422 when body missing
   - Happy path: stream contains agent_complete events + verdict + done
   - Error path: handle_forward_job raises → stream contains error + done
   - Verdict event: shape matches Verdict.model_dump(mode="json")
@@ -147,15 +147,22 @@ def _read_sse_events(response) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_forward_job_404_when_no_profile(client):
-    """Without a profile, the demo user can't start a job — frontend
-    should redirect to onboarding instead."""
-    resp = client.post(
+def test_forward_job_uses_default_local_profile(client, mock_handle_forward_job):
+    """A local-first user can start URL research before onboarding."""
+    with client.stream(
+        "POST",
         "/api/sessions/forward_job",
         json={"job_url": "https://example.com/jobs/x"},
-    )
-    assert resp.status_code == 404
-    assert resp.json()["detail"]["code"] == "profile_not_found"
+    ) as resp:
+        assert resp.status_code == 200
+        body = resp.read().decode("utf-8")
+
+    class _R:
+        text = body
+
+    events = _read_sse_events(_R())
+    assert events[0]["type"] == "session_started"
+    assert mock_handle_forward_job[0]["user"].user_id == "demo-user-1"
 
 
 def test_forward_job_422_when_body_missing(client):

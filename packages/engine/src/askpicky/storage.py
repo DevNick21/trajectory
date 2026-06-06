@@ -16,7 +16,7 @@ import json
 import logging
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -164,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_user_company_role
 
 CREATE TABLE IF NOT EXISTS application_tracker (
     -- The user-visible "what's happening with my applications" surface
-    -- 1:1 with the source forward_job session.
+    -- for forwarded jobs and locally pasted job descriptions.
     -- Status moves through: forwarded -> applied -> {no_response,
     -- rejected_screen, rejected_interview, rejected_offer,
     -- offer_received -> {offer_accepted, offer_declined}}.
@@ -175,6 +175,11 @@ CREATE TABLE IF NOT EXISTS application_tracker (
     role_title TEXT NOT NULL,
     job_url TEXT,
     verdict_decision TEXT,
+    source TEXT NOT NULL DEFAULT 'forward_job',
+    raw_jd_text TEXT,
+    local_analysis_json TEXT,
+    evidence_snapshot_json TEXT,
+    application_priority TEXT,
     status TEXT NOT NULL DEFAULT 'forwarded',
     applied_at TEXT,
     last_status_at TEXT NOT NULL,
@@ -364,6 +369,32 @@ _ADDITIVE_COLUMN_MIGRATIONS: list[tuple[str, str, str]] = [
         "cache_creation_tokens",
         "ALTER TABLE llm_cost_log ADD COLUMN "
         "cache_creation_tokens INTEGER NOT NULL DEFAULT 0",
+    ),
+    (
+        "application_tracker",
+        "source",
+        "ALTER TABLE application_tracker ADD COLUMN "
+        "source TEXT NOT NULL DEFAULT 'forward_job'",
+    ),
+    (
+        "application_tracker",
+        "raw_jd_text",
+        "ALTER TABLE application_tracker ADD COLUMN raw_jd_text TEXT",
+    ),
+    (
+        "application_tracker",
+        "local_analysis_json",
+        "ALTER TABLE application_tracker ADD COLUMN local_analysis_json TEXT",
+    ),
+    (
+        "application_tracker",
+        "evidence_snapshot_json",
+        "ALTER TABLE application_tracker ADD COLUMN evidence_snapshot_json TEXT",
+    ),
+    (
+        "application_tracker",
+        "application_priority",
+        "ALTER TABLE application_tracker ADD COLUMN application_priority TEXT",
     ),
 ]
 

@@ -717,7 +717,7 @@ class CompaniesHouseSnapshot(BaseModel):
     # Confidence that this CRN actually belongs to the company the user
     # is asking about (0.0-1.0). Resolver confidence below 0.5 means
     # we may have anchored on the wrong entity — verdict should surface
-    # as CONTENT_INTEGRITY_CONCERN rather than confident NO_GO.
+    # as CONTENT_INTEGRITY_CONCERN rather than a confident blocked verdict.
     # Architecture gaps #1 + #2.
     match_confidence: float = 1.0
     match_path: MatchPath = "EXACT_NAME"
@@ -899,7 +899,7 @@ class ResearchBundle(BaseModel):
     red_flags: RedFlagsReport
     # Gazette insolvency notices for the resolved entity. Empty list
     # when nothing's been filed (the common case). When present, any
-    # active 2410/2441/2450 entry is a hard NO_GO.
+    # active 2410/2441/2450 entry is a hard blocker.
     gazette_signals: list[GazetteSignal] = Field(default_factory=list)
     bundle_completed_at: datetime
     # Names of source fields whose text was truncated by the content
@@ -923,7 +923,7 @@ HardBlockerType = Literal[
     # appointment of administrators, or resolution to wind up has been
     # published in The Gazette. The official UK public record — when
     # a creditor files a petition or a board passes a resolution, this
-    # is the legally-binding paper trail. Auto-NO_GO.
+    # is the legally-binding paper trail. Automatic hard blocker.
     "GAZETTE_INSOLVENCY_NOTICE",
     "DEAL_BREAKER_TRIGGERED",
     # Visa holder only
@@ -1041,7 +1041,7 @@ class TriageResult(BaseModel):
     obvious_signals: list[str] = Field(default_factory=list)
 
 
-# Finite recommendation taxonomy replacing the old binary GO / NO_GO.
+# Finite recommendation taxonomy replacing the old binary verdict.
 # Each label maps to a candidate-agnostic next-action category.
 # ── Positive (apply-worthy) ──
 #   STRONG_GO  – clear fit, no hard blockers, high confidence

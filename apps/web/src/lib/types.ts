@@ -628,7 +628,7 @@ export interface LocalHardFilter {
 
 export interface LocalEvidenceCheckpoint {
   requirement: string;
-  status: "needs_profile" | "needs_confirmation";
+  status: "matched" | "missing" | "needs_profile" | "needs_confirmation";
   suggested_evidence: string;
 }
 
@@ -730,6 +730,8 @@ export type ApplicationStatus =
   | "offer_accepted"
   | "offer_declined";
 
+export type ApplicationSource = "forward_job" | "local_jd";
+
 export interface ApplicationRecord {
   id: number;
   user_id: string;
@@ -738,6 +740,11 @@ export interface ApplicationRecord {
   role_title: string;
   job_url: string | null;
   verdict_decision: string | null;
+  source: ApplicationSource;
+  raw_jd_text: string | null;
+  local_analysis: LocalJobAnalysis | null;
+  evidence_snapshot: LocalJobAnalysis | null;
+  application_priority: ApplicationPriority | null;
   status: ApplicationStatus;
   applied_at: string | null;
   last_status_at: string;
@@ -747,6 +754,10 @@ export interface ApplicationRecord {
 
 export interface ApplicationListResponse {
   applications: ApplicationRecord[];
+}
+
+export interface ApplicationResponse {
+  application: ApplicationRecord;
 }
 
 export type OutcomeKind = Exclude<ApplicationStatus, "forwarded">;

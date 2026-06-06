@@ -455,7 +455,7 @@ export function StageDealBreakers({ answers, update }: StageProps) {
       <div>
         <p className="text-sm font-medium">Deal-breakers</p>
         <p className="text-xs text-muted-foreground">
-          Things that flip a role to NO_GO regardless of salary.
+          Things that should block a role regardless of salary.
         </p>
         <Textarea
           rows={4}

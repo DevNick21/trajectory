@@ -1,9 +1,9 @@
 import { MascotSlot, useMascot } from "@/components/MascotContext";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { ApiError, analyseJobDescription, getProfile, getSession, listSessions } from "@/lib/api";
+import { ApiError, analyseJobDescription, getProfile, getSession, listSessions, saveLocalApplication } from "@/lib/api";
 import { streamForwardJob } from "@/lib/sse";
 import type { ForwardJobEvent, LocalJobAnalysis, SessionListResponse, VerdictPayload } from "@/lib/types";
 import { isPositiveVerdict, isBlockingVerdict } from "@/lib/verdict";
@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 const RECOVERY_KEY = "askpicky_active_session_id";
 const STREAM_TIMEOUT_MS = 5 * 60 * 1000; // 5 min — server-side Phase 1 hard deadline
@@ -173,6 +174,8 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [stream, dispatch] = useReducer(reducer, initial);
   const [localAnalysis, setLocalAnalysis] = useState<LocalJobAnalysis | null>(null);
+  const [localJdText, setLocalJdText] = useState<string | null>(null);
+  const [savedLocalApplicationId, setSavedLocalApplicationId] = useState<string | null>(null);
   const lastSessionIdRef = useRef<string | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
     try { return localStorage.getItem(RECOVERY_KEY); } catch { return null; }
@@ -252,13 +255,36 @@ export default function Dashboard() {
     profile.isError && profileError?.code === "profile_not_found";
   const canForward = !profile.isPending;
 
+  const saveLocalMutation = useMutation({
+    mutationFn: () => {
+      if (!localJdText) {
+        throw new Error("Paste a job description before saving.");
+      }
+      return saveLocalApplication(localJdText);
+    },
+    onSuccess: (response) => {
+      setSavedLocalApplicationId(response.application.session_id);
+      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+      toast.success("Application saved", {
+        description: "It is now in the manual tracker.",
+      });
+    },
+    onError: (err) => {
+      const message = err instanceof Error ? err.message : "Save failed.";
+      toast.error("Save failed", { description: message });
+    },
+  });
+
   const handleSubmit = async (input: string) => {
     setLocalAnalysis(null);
+    setLocalJdText(null);
+    setSavedLocalApplicationId(null);
     if (!/^https?:\/\//i.test(input)) {
       dispatch({ kind: "clearRecovery" });
       try {
         const response = await analyseJobDescription(input);
         setLocalAnalysis(response.analysis);
+        setLocalJdText(input);
         toast.success("Local analysis complete", {
           description: "Upload a CV or finish the profile when you want evidence matching.",
         });
@@ -412,9 +438,29 @@ export default function Dashboard() {
           {localAnalysis && (
             <Card className="border-primary/20 bg-[#0b101e]">
               <CardHeader>
-                <CardTitle className="font-serif text-xl text-white">
-                  First-pass role analysis
-                </CardTitle>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <CardTitle className="font-serif text-xl text-white">
+                    First-pass role analysis
+                  </CardTitle>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={saveLocalMutation.isPending || savedLocalApplicationId !== null}
+                      onClick={() => saveLocalMutation.mutate()}
+                    >
+                      {savedLocalApplicationId ? "Saved" : saveLocalMutation.isPending ? "Saving..." : "Save application"}
+                    </Button>
+                    {savedLocalApplicationId && (
+                      <a
+                        href="/applications"
+                        className="inline-flex h-9 items-center rounded-md border border-primary/20 px-3 text-xs font-semibold text-primary hover:bg-primary/10"
+                      >
+                        Open tracker
+                      </a>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-5 text-sm">
                 <div>

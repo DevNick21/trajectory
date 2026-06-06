@@ -145,8 +145,8 @@ _NOTICE_PATTERNS: list[tuple[re.Pattern, str, str]] = [
 ]
 
 
-# Codes that are the strongest pre-failure signal — the verdict treats
-# any active one as a hard NO_GO.
+# Codes that are the strongest pre-failure signal; the verdict treats
+# any active one as a hard blocker.
 HARD_BLOCKER_CODES = {"2410", "2440", "2441", "2450", "2451"}
 
 
@@ -506,7 +506,7 @@ async def check(
 
 
 def has_hard_blocker(signals: list[GazetteSignal]) -> Optional[GazetteSignal]:
-    """Return the first active signal that warrants a NO_GO, or None."""
+    """Return the first active signal that warrants a hard blocker, or None."""
     for s in signals:
         if s.active and s.notice_code in HARD_BLOCKER_CODES:
             return s

@@ -156,7 +156,7 @@ def _vague_jd_signal(
         return None
     # When the JD couldn't be fetched at all (Oracle HCM, Workday, etc.),
     # the ghost signals are artefacts of missing data, not real ghost posts.
-    # Downgrade to SOFT so the detector doesn't auto-NO_GO on fetch failures.
+    # Downgrade to SOFT so fetch failures do not become hard blockers.
     severity = "HARD" if score.specificity_score < 1.5 and not jd_missing else "SOFT"
     evidence = (
         f"JD specificity score {score.specificity_score:.1f}/5. "
@@ -264,7 +264,7 @@ async def score(
             # When the JD couldn't be fetched at all (Oracle HCM, Workday,
             # session-walled ATSes), JD-derived ghost signals are artefacts
             # of missing data. Downgrade HARD→SOFT so the ghost-job detector
-            # doesn't auto-NO_GO on a fetch failure.
+            # does not hard-block on a fetch failure.
             # COMPANY_DISTRESS is excluded — Companies House data is
             # independently sourced and a dissolved company is a real risk
             # regardless of whether the JD text was retrievable.

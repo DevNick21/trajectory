@@ -603,9 +603,8 @@ async def handle_forward_job(
 
     # Architecture gap #3 — outcome-to-verdict calibration. Before the
     # verdict reasons about a company, recall the user's prior application
-    # outcomes so the agent can calibrate its confidence. The user who has
-    # ignored 5 NO_GOs and succeeded anyway gets a different verdict from
-    # the user with zero history.
+    # outcomes so the agent can calibrate its confidence. Repeated outcomes
+    # after blocked/pass verdicts affect future confidence.
     prior_outcomes_text: Optional[str] = None
     try:
         from .memory.recall import recall_as_text

@@ -4,11 +4,9 @@ Runs between Phase 1 (research) and Phase 2 (verdict). Takes the raw
 ResearchBundle and produces a QualityGatedBundle that declares which
 signals are reliable and which hard-blocker rules can actually fire.
 
-This is the same pattern social media realtime systems use: a firehose
-filter (deterministic, fast, handles 99% of quality decisions) before the
-ranking model (expensive, only sees clean data). The verdict currently
-does both jobs — it has to evaluate data quality AND make a GO/NO_GO
-decision in a single call. That's why verdicts are inconsistent.
+The gate keeps source-quality checks deterministic before the verdict
+agent reasons over recommendation labels. This reduces inconsistent
+hard-blocker decisions caused by incomplete or low-confidence signals.
 
 No LLM. No API calls. Runs in <1ms. Pure functions, testable in isolation.
 """

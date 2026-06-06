@@ -4,6 +4,7 @@
 
 import type {
   ApplicationListResponse,
+  ApplicationResponse,
   ApplicationStatus,
   ApproveAssistResponse,
   AssistStartResponse,
@@ -449,6 +450,25 @@ export const listApplications = (
     `/api/applications${qs ? `?${qs}` : ""}`,
   );
 };
+
+export const saveLocalApplication = (
+  jdText: string,
+  companyName?: string,
+): Promise<ApplicationResponse> =>
+  request("/api/applications/local", {
+    method: "POST",
+    body: JSON.stringify({ jd_text: jdText, company_name: companyName }),
+  });
+
+export const updateApplicationStatus = (
+  sessionId: string,
+  status: ApplicationStatus,
+  notes?: string,
+): Promise<ApplicationResponse> =>
+  request(`/api/applications/${encodeURIComponent(sessionId)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, notes }),
+  });
 
 export const recordOutcome = (
   sessionId: string,

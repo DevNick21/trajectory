@@ -128,6 +128,9 @@ class Settings(BaseSettings):
 
     # LangGraph orchestrator (opt-in)
     enable_langgraph_orchestrator: bool = False
+    # Queue batch runner can either process jobs directly in-process or call
+    # the API runner path; keep the direct local path as the default.
+    enable_batch_queue_runner: bool = False
     # Application-assist background memory extraction. The deterministic
     # extractor runs immediately; this opt-in flag controls whether the
     # richer LLM extractor runs after approval when the operator opts into

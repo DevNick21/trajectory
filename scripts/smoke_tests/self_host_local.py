@@ -17,7 +17,7 @@ async def run() -> SmokeResult:
 
         from askpicky.evaluators import evaluate_answer_claim_support
         from askpicky.applications import (
-            create_application_record,
+            create_local_application_from_jd,
             list_applications,
             update_application_status,
         )
@@ -63,14 +63,13 @@ async def run() -> SmokeResult:
             )
         )
 
-        analysis = analyse_job_description(
-            """
+        jd_text = """
             Backend Engineer
 
             Build Python services with FastAPI and PostgreSQL. Candidates must
             have the right to work in the UK and should be comfortable with SQL.
             """
-        )
+        analysis = analyse_job_description(jd_text)
         evidence = [
             MemorySuggestion(
                 memory_id="cv-python-fastapi",
@@ -100,16 +99,13 @@ async def run() -> SmokeResult:
                 updated_at=now,
             )
         )
-        await create_application_record(
+        local_application = await create_local_application_from_jd(
             user_id=user_id,
-            session_id="self-host-session",
+            jd_text=jd_text,
             company_name="Local Company",
-            role_title=analysis.role_title,
-            job_url=None,
-            verdict_decision="TRY_ANYWAY",
         )
         updated_application = await update_application_status(
-            session_id="self-host-session",
+            session_id=local_application.session_id,
             new_status="applied",
             notes="Submitted manually from the local tracker.",
         )
@@ -130,6 +126,15 @@ async def run() -> SmokeResult:
             failures.append("Privacy export did not include the local application tracker row.")
         if not applications or updated_application is None or updated_application.status != "applied":
             failures.append("Manual tracker did not create and update the local application row.")
+        if (
+            not applications
+            or applications[0].evidence_snapshot is None
+            or not any(
+                item.status == "matched"
+                for item in applications[0].evidence_snapshot.evidence_checkpoints
+            )
+        ):
+            failures.append("Local tracker did not refresh saved CV evidence against the pasted JD.")
         if deleted.get("career_entries", 0) < 1 or deleted.get("answer_attempts", 0) < 1:
             failures.append("Privacy hard-delete did not remove local CV and answer records.")
         if deleted.get("application_tracker", 0) < 1:

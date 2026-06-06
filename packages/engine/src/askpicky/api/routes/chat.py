@@ -122,7 +122,7 @@ async def chat(
     if routed.blocked_by_verdict:
         return ChatResponse(
             **base, reply_kind="text",
-            text="The last verdict was NO_GO — I won't generate a pack for that role.",
+            text="The last verdict was BLOCKED, so I won't generate a pack for that role.",
         )
 
     # Single-shot dispatches — return cards / text inline.
