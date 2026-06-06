@@ -5,5 +5,5 @@ from pathlib import Path
 
 # Allow public packages to import without installing the monorepo.
 ROOT = Path(__file__).parent.parent
-for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     sys.path.insert(0, str(ROOT / "packages" / package / "src"))

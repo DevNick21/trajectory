@@ -5,6 +5,7 @@ import { Link, NavLink, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import ChatDrawer from "@/components/ChatDrawer";
 import OnboardingGate from "@/components/OnboardingGate";
+import ApplicationDetail from "@/pages/ApplicationDetail";
 import Applications from "@/pages/Applications";
 import Assist from "@/pages/Assist";
 import Dashboard from "@/pages/Dashboard";
@@ -88,6 +89,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/applications" element={<Applications />} />
+              <Route path="/applications/:sessionId" element={<ApplicationDetail />} />
               <Route path="/assist" element={<Assist />} />
               <Route path="/queue" element={<Queue />} />
               <Route path="/offer" element={<Offer />} />

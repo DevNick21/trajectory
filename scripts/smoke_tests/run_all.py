@@ -27,7 +27,7 @@ from pathlib import Path
 # Ensure sys.path has package source roots BEFORE any askpicky imports
 # land from the individual smoke modules.
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     sys.path.insert(0, str(_REPO_ROOT / "packages" / package / "src"))
 
 # Windows console is cp1252 by default — coerce stdout to UTF-8 so the

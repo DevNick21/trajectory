@@ -115,6 +115,9 @@ function ApplicationRow({ record }: { record: ApplicationRecord }) {
     (item) => item.status === "needs_confirmation",
   ).length ?? 0;
   const linkedTitle = record.source === "forward_job" && !record.session_id.startsWith("local:");
+  const titleTarget = linkedTitle
+    ? `/sessions/${record.session_id}`
+    : `/applications/${encodeURIComponent(record.session_id)}`;
   const priority = priorityLabel(record.application_priority ?? snapshot?.application_priority ?? null);
 
   return (
@@ -122,18 +125,12 @@ function ApplicationRow({ record }: { record: ApplicationRecord }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 flex-wrap">
-            {linkedTitle ? (
-              <Link
-                to={`/sessions/${record.session_id}`}
-                className="font-semibold text-card-foreground hover:text-primary"
-              >
-                {record.role_title}
-              </Link>
-            ) : (
-              <span className="font-semibold text-card-foreground">
-                {record.role_title}
-              </span>
-            )}
+            <Link
+              to={titleTarget}
+              className="font-semibold text-card-foreground hover:text-primary"
+            >
+              {record.role_title}
+            </Link>
             <span className="text-sm text-card-foreground/60">
               · {record.company_name}
             </span>

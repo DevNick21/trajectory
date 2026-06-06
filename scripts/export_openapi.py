@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     src = ROOT / "packages" / package / "src"
     if str(src) not in sys.path:
         sys.path.insert(0, str(src))

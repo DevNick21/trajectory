@@ -16,7 +16,8 @@ interface Props {
 export default function OnboardingGate({ children }: Props) {
   const location = useLocation();
   const isOnboarding = location.pathname.startsWith("/onboarding");
-  const isJdFirstPath = location.pathname === "/";
+  const isJdFirstPath =
+    location.pathname === "/" || location.pathname.startsWith("/applications");
 
   const { isPending, isError, error } = useQuery({
     queryKey: ["profile"],

@@ -211,7 +211,7 @@ async def run_task(
 
     try:
         root = Path(__file__).resolve().parents[2]
-        for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+        for package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
             sys.path.insert(0, str(root / "packages" / package / "src"))
         from askpicky.config import settings
 

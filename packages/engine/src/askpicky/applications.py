@@ -18,9 +18,9 @@ from pydantic import BaseModel
 from .parsers import analyse_job_description
 from .parsers.jd_analysis import (
     ApplicationPriority,
-    EvidenceCheckpoint,
     LocalJobAnalysis,
 )
+from .retrieval import EvidenceDocument, build_evidence_snapshot
 from .schemas import CareerEntry
 from .storage import _connect, _ensure_db, get_all_career_entries_for_user
 
@@ -92,123 +92,23 @@ def _parse_analysis(value: Optional[str]) -> Optional[LocalJobAnalysis]:
         return None
 
 
-def _entry_search_text(entry: CareerEntry) -> str:
-    structured = ""
-    if entry.structured is not None:
-        try:
-            structured = json.dumps(entry.structured, sort_keys=True)
-        except TypeError:
-            structured = str(entry.structured)
-    return f"{entry.raw_text} {structured}".lower()
-
-
-def _requirement_aliases(requirement: str) -> list[str]:
-    lowered = requirement.lower().strip()
-    aliases: dict[str, list[str]] = {
-        "sql": ["sql", "postgresql", "postgres", "mysql", "sqlite"],
-        "postgres": ["postgres", "postgresql"],
-        "javascript": ["javascript", "js"],
-        "typescript": ["typescript", "ts"],
-        "machine learning": ["machine learning", "ml"],
-        "llm": ["llm", "large language model", "language model"],
-        "rag": ["rag", "retrieval augmented generation", "retrieval-augmented generation"],
-        "data engineering": ["data engineering", "data pipelines", "etl"],
-    }
-    return [lowered, *aliases.get(lowered, [])]
-
-
-def _matches_requirement(requirement: str, text: str) -> bool:
-    for alias in _requirement_aliases(requirement):
-        if len(alias) <= 3:
-            if re.search(rf"\b{re.escape(alias)}\b", text):
-                return True
-        elif alias in text:
-            return True
-    return False
-
-
-def _supporting_entry(
-    requirement: str,
-    entries: list[CareerEntry],
-) -> Optional[CareerEntry]:
+def _evidence_documents(entries: list[CareerEntry]) -> list[EvidenceDocument]:
+    documents: list[EvidenceDocument] = []
     for entry in entries:
-        if _matches_requirement(requirement, _entry_search_text(entry)):
-            return entry
-    return None
-
-
-def build_evidence_snapshot(
-    analysis: LocalJobAnalysis,
-    entries: list[CareerEntry],
-) -> LocalJobAnalysis:
-    """Refresh claim-support states from saved local career evidence."""
-
-    checkpoints: list[EvidenceCheckpoint] = []
-    for checkpoint in analysis.evidence_checkpoints:
-        if checkpoint.status == "needs_confirmation":
-            checkpoints.append(checkpoint)
-            continue
-
-        supporting = _supporting_entry(checkpoint.requirement, entries)
-        if supporting is not None:
-            snippet = supporting.raw_text.strip().replace("\n", " ")
-            if len(snippet) > 220:
-                snippet = f"{snippet[:217]}..."
-            checkpoints.append(
-                EvidenceCheckpoint(
-                    requirement=checkpoint.requirement,
-                    status="matched",
-                    suggested_evidence=(
-                        f"Matched career evidence {supporting.entry_id}: {snippet}"
-                    ),
-                )
+        structured = ""
+        if entry.structured is not None:
+            try:
+                structured = json.dumps(entry.structured, sort_keys=True)
+            except TypeError:
+                structured = str(entry.structured)
+        documents.append(
+            EvidenceDocument(
+                evidence_id=entry.entry_id,
+                text=entry.raw_text,
+                structured_text=structured,
             )
-        elif entries:
-            checkpoints.append(
-                EvidenceCheckpoint(
-                    requirement=checkpoint.requirement,
-                    status="missing",
-                    suggested_evidence=(
-                        "No saved CV/profile evidence matches this requirement yet. "
-                        "Add or approve evidence before using this claim."
-                    ),
-                )
-            )
-        else:
-            checkpoints.append(
-                EvidenceCheckpoint(
-                    requirement=checkpoint.requirement,
-                    status="needs_profile",
-                    suggested_evidence=checkpoint.suggested_evidence,
-                )
-            )
-
-    missing_requirements = [
-        item.requirement
-        for item in checkpoints
-        if item.status in {"missing", "needs_profile"}
-    ]
-    missing_prompts = [
-        f"Add confirmed evidence for {requirement} before claiming it."
-        for requirement in missing_requirements
-    ]
-    unsupported = [
-        f"Do not claim {requirement} experience until it is backed by CV or memory evidence."
-        for requirement in missing_requirements
-    ]
-    if any(item.status == "needs_confirmation" for item in checkpoints):
-        unsupported.append(
-            "Do not imply you clear hard filters until the right-to-work, "
-            "location, seniority, or clearance requirement has been confirmed."
         )
-
-    return analysis.model_copy(
-        update={
-            "evidence_checkpoints": checkpoints,
-            "missing_evidence_prompts": missing_prompts,
-            "unsupported_claim_warnings": unsupported,
-        }
-    )
+    return documents
 
 
 def _derive_company_name(jd_text: str, explicit: Optional[str] = None) -> str:
@@ -285,7 +185,7 @@ async def create_local_application_from_jd(
     now = _now()
     analysis = analyse_job_description(jd_text)
     entries = await get_all_career_entries_for_user(user_id)
-    evidence_snapshot = build_evidence_snapshot(analysis, entries)
+    evidence_snapshot = build_evidence_snapshot(analysis, _evidence_documents(entries))
     session_id = f"local:{uuid4().hex}"
     async with await _connect() as db:
         await db.execute(
@@ -365,6 +265,97 @@ async def update_application_status(
         return await _fetch_application(db, row[0])
 
 
+async def get_application(
+    *,
+    user_id: str,
+    session_id: str,
+) -> Optional[ApplicationRecord]:
+    """Fetch one tracker row owned by a user."""
+
+    await _ensure_db()
+    async with await _connect() as db:
+        record = await _fetch_application_by_session(db, user_id, session_id)
+        if record is None:
+            return None
+        if record.source == "local_jd":
+            return (await _refresh_local_evidence_snapshots(db, user_id, [record]))[0]
+        return record
+
+
+async def update_application_metadata(
+    *,
+    user_id: str,
+    session_id: str,
+    company_name: Optional[str] = None,
+    role_title: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> Optional[ApplicationRecord]:
+    """Edit user-controlled tracker metadata."""
+
+    await _ensure_db()
+    now = _now()
+    async with await _connect() as db:
+        await db.execute(
+            """
+            UPDATE application_tracker
+            SET company_name = COALESCE(?, company_name),
+                role_title = COALESCE(?, role_title),
+                notes = COALESCE(?, notes),
+                last_status_at = ?
+            WHERE session_id = ? AND user_id = ?
+            """,
+            (
+                company_name.strip()[:120] if company_name and company_name.strip() else None,
+                role_title.strip()[:160] if role_title and role_title.strip() else None,
+                notes.strip()[:2000] if notes is not None else None,
+                _iso(now),
+                session_id,
+                user_id,
+            ),
+        )
+        await db.commit()
+        record = await _fetch_application_by_session(db, user_id, session_id)
+        if record is None:
+            return None
+        if record.source == "local_jd":
+            return (await _refresh_local_evidence_snapshots(db, user_id, [record]))[0]
+        return record
+
+
+async def refresh_application_evidence(
+    *,
+    user_id: str,
+    session_id: str,
+) -> Optional[ApplicationRecord]:
+    """Force-refresh a saved application's local evidence snapshot."""
+
+    await _ensure_db()
+    async with await _connect() as db:
+        record = await _fetch_application_by_session(db, user_id, session_id)
+        if record is None:
+            return None
+        if record.source != "local_jd":
+            return record
+        return (await _refresh_local_evidence_snapshots(db, user_id, [record]))[0]
+
+
+async def delete_application(
+    *,
+    user_id: str,
+    session_id: str,
+) -> bool:
+    """Delete one manual tracker row owned by the current user."""
+
+    await _ensure_db()
+    async with await _connect() as db:
+        cur = await db.execute(
+            "DELETE FROM application_tracker WHERE session_id = ? AND user_id = ?",
+            (session_id, user_id),
+        )
+        await db.commit()
+        return cur.rowcount > 0
+
+
 async def list_applications(
     *,
     user_id: str,
@@ -396,12 +387,28 @@ async def list_applications(
         return records
 
 
+async def _fetch_application_by_session(
+    db: aiosqlite.Connection,
+    user_id: str,
+    session_id: str,
+) -> Optional[ApplicationRecord]:
+    async with db.execute(
+        "SELECT id FROM application_tracker WHERE session_id = ? AND user_id = ?",
+        (session_id, user_id),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        return None
+    return await _fetch_application(db, row[0])
+
+
 async def _refresh_local_evidence_snapshots(
     db: aiosqlite.Connection,
     user_id: str,
     records: list[ApplicationRecord],
 ) -> list[ApplicationRecord]:
     entries = await get_all_career_entries_for_user(user_id)
+    documents = _evidence_documents(entries)
     refreshed_records: list[ApplicationRecord] = []
     changed = False
 
@@ -416,7 +423,7 @@ async def _refresh_local_evidence_snapshots(
             refreshed_records.append(record)
             continue
 
-        snapshot = build_evidence_snapshot(base_analysis, entries)
+        snapshot = build_evidence_snapshot(base_analysis, documents)
         old_payload = (
             record.evidence_snapshot.model_dump(mode="json")
             if record.evidence_snapshot is not None

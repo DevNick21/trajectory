@@ -70,6 +70,9 @@ async function request<T>(
     }
     throw new ApiError(resp.status, code, message);
   }
+  if (resp.status === 204) {
+    return undefined as T;
+  }
   return (await resp.json()) as T;
 }
 
@@ -451,6 +454,9 @@ export const listApplications = (
   );
 };
 
+export const getApplication = (sessionId: string): Promise<ApplicationResponse> =>
+  request(`/api/applications/${encodeURIComponent(sessionId)}`);
+
 export const saveLocalApplication = (
   jdText: string,
   companyName?: string,
@@ -458,6 +464,22 @@ export const saveLocalApplication = (
   request("/api/applications/local", {
     method: "POST",
     body: JSON.stringify({ jd_text: jdText, company_name: companyName }),
+  });
+
+export const updateApplication = (
+  sessionId: string,
+  payload: { company_name?: string; role_title?: string; notes?: string },
+): Promise<ApplicationResponse> =>
+  request(`/api/applications/${encodeURIComponent(sessionId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+export const refreshApplicationEvidence = (
+  sessionId: string,
+): Promise<ApplicationResponse> =>
+  request(`/api/applications/${encodeURIComponent(sessionId)}/refresh-evidence`, {
+    method: "POST",
   });
 
 export const updateApplicationStatus = (
@@ -468,6 +490,11 @@ export const updateApplicationStatus = (
   request(`/api/applications/${encodeURIComponent(sessionId)}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status, notes }),
+  });
+
+export const deleteApplication = (sessionId: string): Promise<void> =>
+  request(`/api/applications/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
   });
 
 export const recordOutcome = (

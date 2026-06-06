@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 _ROOT = Path(__file__).parent.parent
-for _package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for _package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     sys.path.insert(0, str(_ROOT / "packages" / _package / "src"))
 
 log = logging.getLogger(__name__)

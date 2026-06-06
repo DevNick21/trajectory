@@ -37,7 +37,7 @@ from typing import Any, Awaitable, Callable, Optional
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-for package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     src = _REPO_ROOT / "packages" / package / "src"
     if str(src) not in sys.path:
         sys.path.insert(0, str(src))

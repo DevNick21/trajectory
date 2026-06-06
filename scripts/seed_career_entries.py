@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 # without install.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
-for _package in ("engine", "core", "parsers", "evaluators", "privacy", "ai"):
+for _package in ("engine", "core", "parsers", "retrieval", "evaluators", "privacy", "ai"):
     sys.path.insert(0, os.path.join(_ROOT, "packages", _package, "src"))
 
 from askpicky.schemas import CareerEntry  # noqa: E402
