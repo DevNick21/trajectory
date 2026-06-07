@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from io import BytesIO
 
 from ._common import (
     SmokeResult,
@@ -91,6 +92,18 @@ async def _body() -> tuple[list[str], list[str], float]:
         failures.append(f"extract_text(.txt) round-trip mismatch: {out!r}")
     else:
         messages.append("extract_text(.txt) round-trip OK")
+
+    try:
+        from pypdf import PdfWriter
+
+        pdf_buf = BytesIO()
+        writer = PdfWriter()
+        writer.add_blank_page(width=72, height=72)
+        writer.write(pdf_buf)
+        extract_text(data=pdf_buf.getvalue(), filename="resume.pdf")
+        messages.append("extract_text(.pdf) pypdf dispatch OK")
+    except Exception as exc:
+        failures.append(f"extract_text(.pdf) failed: {exc!r}")
 
     mock = os.getenv("SMOKE_CV_PARSER_MOCK", "").lower() in {"1", "true", "yes"}
     if mock:

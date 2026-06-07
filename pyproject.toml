@@ -7,9 +7,13 @@ name = "askpicky"
 version = "1.0.0"
 description = "AskPicky — UK-first, visa-aware, agent-powered job search assistant. Verify roles before you apply."
 requires-python = ">=3.11"
-# Runtime deps live in requirements.txt so pip-install-from-source and
-# the smoke-test venv agree on a single source of truth. `pip install -e .`
-# installs the package without re-declaring them here.
+dependencies = [
+    # PDF CV and offer-letter extraction import pypdf directly. Keep it in
+    # package metadata so `pip install -e .` supports that upload path.
+    "pypdf>=4.0.0",
+]
+# Full app/runtime deps live in requirements.txt so local development and
+# smoke-test environments agree on one source for the complete stack.
 
 [tool.setuptools.packages.find]
 where = [
